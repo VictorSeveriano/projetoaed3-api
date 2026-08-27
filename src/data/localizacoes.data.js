@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Dados das localizacoes cadastradas no sistema.
  * Estas localizacoes sao utilizadas como VERTICES do grafo.
  *

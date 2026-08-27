@@ -1,4 +1,4 @@
-﻿const Grafo = require('./Grafo');
+const Grafo = require('./Grafo');
 const Vertice = require('./Vertice');
 const Dijkstra = require('./Dijkstra');
 const localizacoes = require('../data/localizacoes.data');

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Algoritmo de Dijkstra — Caminho Minimo em Grafos Ponderados
  *
  * DESCRICAO:

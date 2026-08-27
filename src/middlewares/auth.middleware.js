@@ -1,4 +1,4 @@
-﻿const AppError = require('../utils/AppError');
+const AppError = require('../utils/AppError');
 
 /**
  * Middleware de autenticacao simulado.

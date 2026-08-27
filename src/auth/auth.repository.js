@@ -1,4 +1,4 @@
-﻿const usuarios = require('../data/usuarios.data');
+const usuarios = require('../data/usuarios.data');
 
 /**
  * AuthRepository — Camada de acesso a dados de usuarios.

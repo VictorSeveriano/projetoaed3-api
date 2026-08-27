@@ -1,4 +1,4 @@
-﻿const { Router } = require('express');
+const { Router } = require('express');
 const { login } = require('./auth.controller');
 const { validateFields } = require('../middlewares/validate');
 

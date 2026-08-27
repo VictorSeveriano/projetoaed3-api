@@ -1,4 +1,4 @@
-﻿const authRepository = require('./auth.repository');
+const authRepository = require('./auth.repository');
 const AppError = require('../utils/AppError');
 
 /**

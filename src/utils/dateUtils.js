@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Utilitarios para manipulacao de datas.
  */
 

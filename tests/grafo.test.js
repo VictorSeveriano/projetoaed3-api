@@ -1,4 +1,4 @@
-﻿const Grafo = require('../src/grafo/Grafo');
+const Grafo = require('../src/grafo/Grafo');
 const Vertice = require('../src/grafo/Vertice');
 const Aresta = require('../src/grafo/Aresta');
 const Dijkstra = require('../src/grafo/Dijkstra');

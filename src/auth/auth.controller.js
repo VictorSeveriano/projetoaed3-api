@@ -1,4 +1,4 @@
-﻿const authService = require('./auth.service');
+const authService = require('./auth.service');
 const { success } = require('../utils/responseHelper');
 
 /**

@@ -1,4 +1,4 @@
-﻿const carros = require('../data/carros.data');
+const carros = require('../data/carros.data');
 
 /**
  * CarrosRepository — Camada de acesso a dados de carros.

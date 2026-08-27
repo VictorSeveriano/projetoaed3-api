@@ -1,4 +1,4 @@
-﻿const localizacoesRepository = require('./localizacoes.repository');
+const localizacoesRepository = require('./localizacoes.repository');
 const AppError = require('../utils/AppError');
 
 /**

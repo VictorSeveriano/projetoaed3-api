@@ -1,4 +1,4 @@
-﻿const AppError = require('../utils/AppError');
+const AppError = require('../utils/AppError');
 
 /**
  * Factory para validacao de campos obrigatorios no body da requisicao.

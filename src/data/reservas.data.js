@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Dados iniciais de reservas do sistema.
  * Status possíveis: ATIVA | CANCELADA | FINALIZADA
  */

@@ -1,4 +1,4 @@
-﻿const reservas = require('../data/reservas.data');
+const reservas = require('../data/reservas.data');
 const { v4: uuidv4 } = { v4: () => Date.now().toString(36) + Math.random().toString(36).substr(2) };
 
 /**

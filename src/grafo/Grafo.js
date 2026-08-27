@@ -1,4 +1,4 @@
-﻿const Vertice = require('./Vertice');
+const Vertice = require('./Vertice');
 const Aresta = require('./Aresta');
 
 /**

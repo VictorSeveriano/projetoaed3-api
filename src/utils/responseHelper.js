@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Helpers para padronizar respostas da API.
  */
 

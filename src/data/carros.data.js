@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Dados ficticios dos carros disponíveis no sistema.
  * Carros distribuídos entre as 6 localizacoes do grafo.
  *

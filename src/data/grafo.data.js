@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Definicao das ARESTAS do grafo de localizacoes.
  *
  * ESTRUTURA DO GRAFO:

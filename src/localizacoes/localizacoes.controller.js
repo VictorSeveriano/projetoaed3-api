@@ -1,4 +1,4 @@
-﻿const localizacoesService = require('./localizacoes.service');
+const localizacoesService = require('./localizacoes.service');
 const { success } = require('../utils/responseHelper');
 
 /**

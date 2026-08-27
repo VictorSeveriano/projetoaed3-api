@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Classe de erro customizado da aplicacao.
  * Permite diferenciar erros operacionais de erros de programacao.
  */

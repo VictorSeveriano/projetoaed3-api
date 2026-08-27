@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Classe Aresta - representa uma conexao entre dois vertices do grafo.
  *
  * No sistema de reservas, cada aresta conecta duas localizacoes

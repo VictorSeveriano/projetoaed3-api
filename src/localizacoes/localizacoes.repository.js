@@ -1,4 +1,4 @@
-﻿const localizacoes = require('../data/localizacoes.data');
+const localizacoes = require('../data/localizacoes.data');
 
 /**
  * LocalizacoesRepository — Camada de acesso a dados de localizacoes.

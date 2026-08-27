@@ -1,4 +1,4 @@
-﻿const { Router } = require('express');
+const { Router } = require('express');
 const { listarTodas, buscarPorId, criar, atualizar, cancelar, deletar } = require('./reservas.controller');
 const { validateFields } = require('../middlewares/validate');
 

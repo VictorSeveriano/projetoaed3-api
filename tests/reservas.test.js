@@ -1,4 +1,4 @@
-﻿// Mock do grafo service para testes de reservas
+// Mock do grafo service para testes de reservas
 jest.mock('../src/grafo/grafo.service', () => ({
   localizacaoExiste: (nome) => ['Centro', 'Shopping', 'Aeroporto', 'Rodoviaria', 'Praia', 'Universidade'].includes(nome),
   calcularRota: (origem, destino) => ({

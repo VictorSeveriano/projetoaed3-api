@@ -1,4 +1,4 @@
-﻿const { Router } = require('express');
+const { Router } = require('express');
 const { listarTodos, listarDisponiveis, buscarPorId } = require('./carros.controller');
 
 const router = Router();

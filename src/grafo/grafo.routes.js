@@ -1,4 +1,4 @@
-﻿const { Router } = require('express');
+const { Router } = require('express');
 const { obterGrafo, calcularRota } = require('./grafo.controller');
 
 const router = Router();

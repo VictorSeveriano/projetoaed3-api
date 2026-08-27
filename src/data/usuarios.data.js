@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Dados dos usuarios do sistema.
  * NOTA: Senhas em texto plano apenas para demonstracao academica.
  * Em producao, utilizar bcrypt para hash de senhas.

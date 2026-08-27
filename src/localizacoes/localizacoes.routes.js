@@ -1,4 +1,4 @@
-﻿const { Router } = require('express');
+const { Router } = require('express');
 const { listarTodas, buscarPorId } = require('./localizacoes.controller');
 
 const router = Router();

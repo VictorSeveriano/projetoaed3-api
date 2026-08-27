@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Classe Vertice - representa uma localidade no grafo.
  *
  * No sistema de reservas, cada vertice corresponde a uma localizacao
