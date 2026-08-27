@@ -7,6 +7,7 @@ const carrosRoutes = require('./carros/carros.routes');
 const reservasRoutes = require('./reservas/reservas.routes');
 const localizacoesRoutes = require('./localizacoes/localizacoes.routes');
 const grafoRoutes = require('./grafo/grafo.routes');
+const dashboardRoutes = require('./dashboard/dashboard.routes');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/carros', carrosRoutes);
 app.use('/api/reservas', reservasRoutes);
 app.use('/api/localizacoes', localizacoesRoutes);
 app.use('/api/grafo', grafoRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // --- Rota nao encontrada ---
 app.use((req, res) => {
