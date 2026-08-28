@@ -5,10 +5,13 @@ const localizacoes = require('../data/localizacoes.data');
 const arestasData = require('../data/grafo.data');
 
 /**
- * GrafoService — Servico responsavel por gerenciar o grafo de localizacoes.
+ * GrafoService — Serviço responsável por gerenciar o grafo de locais.
  *
- * Inicializa o grafo com as localizacoes e arestas definidas nos dados,
- * e expoe metodos para consulta e calculo de rotas.
+ * Inicializa o grafo com os locais reais do Espírito Santo e as conexões
+ * (distâncias rodoviárias) definidas nos dados, expondo métodos para
+ * consulta e cálculo de rotas via algoritmo de Dijkstra.
+ *
+ * Este serviço é um Singleton: uma única instância para toda a aplicação.
  */
 class GrafoService {
   constructor() {
@@ -17,27 +20,44 @@ class GrafoService {
   }
 
   /**
-   * Inicializa o grafo adicionando vertices (localizacoes) e arestas (distancias).
+   * Inicializa o grafo adicionando vértices (locais) e arestas (distâncias).
    * Chamado automaticamente no construtor.
    */
   _inicializar() {
-    // Adiciona vertices (localizacoes como vertices do grafo)
+    // Adiciona vértices (locais reais como vértices do grafo)
     for (const loc of localizacoes) {
-      const vertice = new Vertice(loc.id, loc.nome, loc.descricao);
+      const vertice = new Vertice(
+        loc.id,
+        loc.nome,
+        loc.cidade,
+        loc.estado,
+        loc.categoria,
+        loc.latitude,
+        loc.longitude,
+      );
       this.grafo.adicionarVertice(vertice);
     }
 
-    // Adiciona arestas bidirecionais (conexoes entre localizacoes)
+    // Adiciona arestas bidirecionais (conexões entre locais com distância em km)
     for (const aresta of arestasData) {
       this.grafo.adicionarAresta(aresta.origem, aresta.destino, aresta.peso);
     }
   }
 
   /**
-   * Retorna todos os vertices do grafo.
+   * Retorna todos os vértices do grafo com informações completas.
+   * @returns {{ id, nome, cidade, estado, categoria, latitude, longitude }[]}
    */
   obterVertices() {
-    return this.grafo.obterVertices();
+    return this.grafo.obterVertices().map((v) => ({
+      id: v.id,
+      nome: v.nome,
+      cidade: v.cidade,
+      estado: v.estado,
+      categoria: v.categoria,
+      latitude: v.latitude,
+      longitude: v.longitude,
+    }));
   }
 
   /**
@@ -48,26 +68,22 @@ class GrafoService {
   }
 
   /**
-   * Retorna a estrutura completa do grafo (lista de adjacencia).
+   * Retorna a estrutura completa do grafo (vértices, arestas, lista de adjacência).
    */
   obterGrafoCompleto() {
     return {
-      vertices: this.grafo.obterVertices().map((v) => ({
-        id: v.id,
-        nome: v.nome,
-        descricao: v.descricao,
-      })),
+      vertices: this.obterVertices(),
       arestas: this.grafo.obterArestas(),
       adjacencia: this.grafo.paraObjeto(),
     };
   }
 
   /**
-   * Calcula o menor caminho entre dois vertices usando Dijkstra.
+   * Calcula o caminho de menor distância entre dois locais usando Dijkstra.
    *
-   * @param {string} origem - Nome da localizacao de origem
-   * @param {string} destino - Nome da localizacao de destino
-   * @returns {{ origem, destino, caminho, distanciaTotal } | null}
+   * @param {string} origem  - Nome do local de origem
+   * @param {string} destino - Nome do local de destino
+   * @returns {{ origem, destino, caminho, distanciaTotal, pontos } | null}
    */
   calcularRota(origem, destino) {
     const resultado = Dijkstra.calcularMenorCaminho(this.grafo, origem, destino);
@@ -76,16 +92,30 @@ class GrafoService {
       return null;
     }
 
+    // Enriquece o caminho com as coordenadas de cada ponto
+    const pontos = resultado.caminho.map((nome) => {
+      const v = this.grafo.vertices.get(nome);
+      return {
+        nome: v.nome,
+        cidade: v.cidade,
+        estado: v.estado,
+        categoria: v.categoria,
+        latitude: v.latitude,
+        longitude: v.longitude,
+      };
+    });
+
     return {
       origem,
       destino,
       caminho: resultado.caminho,
       distanciaTotal: resultado.distanciaTotal,
+      pontos,
     };
   }
 
   /**
-   * Verifica se uma localizacao existe no grafo.
+   * Verifica se um local existe no grafo.
    * @param {string} nome
    * @returns {boolean}
    */
@@ -94,7 +124,7 @@ class GrafoService {
   }
 }
 
-// Singleton: uma unica instancia do grafo para toda a aplicacao
+// Singleton: uma única instância do grafo para toda a aplicação
 const grafoService = new GrafoService();
 
 module.exports = grafoService;

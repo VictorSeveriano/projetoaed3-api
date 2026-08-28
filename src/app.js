@@ -7,6 +7,7 @@ const carrosRoutes = require('./carros/carros.routes');
 const reservasRoutes = require('./reservas/reservas.routes');
 const localizacoesRoutes = require('./localizacoes/localizacoes.routes');
 const grafoRoutes = require('./grafo/grafo.routes');
+const rotasRoutes = require('./rotas/rotas.routes');
 const dashboardRoutes = require('./dashboard/dashboard.routes');
 const errorHandler = require('./middlewares/errorHandler');
 
@@ -14,9 +15,8 @@ const app = express();
 
 // --- Configuracao CORS ---
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'x-auth-token'],
 };
 app.use(cors(corsOptions));
 
@@ -35,6 +35,7 @@ app.use('/api/carros', carrosRoutes);
 app.use('/api/reservas', reservasRoutes);
 app.use('/api/localizacoes', localizacoesRoutes);
 app.use('/api/grafo', grafoRoutes);
+app.use('/api/rotas', rotasRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 // --- Rota nao encontrada ---
