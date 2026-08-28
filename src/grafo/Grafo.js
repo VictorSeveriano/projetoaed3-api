@@ -118,6 +118,32 @@ class Grafo {
     }
     return resultado;
   }
+
+  /**
+   * Remove um vertice e todas as arestas associadas a ele.
+   * Utilizado para nos temporarios (ex: localizacao do usuario).
+   * @param {string} nome
+   */
+  removerVertice(nome) {
+    if (!this.vertices.has(nome)) return;
+
+    // Remove as arestas dos vizinhos que apontam para este vertice
+    const vizinhos = this.adjacencia.get(nome) || [];
+    for (const aresta of vizinhos) {
+      const vizinhoNome = aresta.destino;
+      if (this.adjacencia.has(vizinhoNome)) {
+        const arestasVizinho = this.adjacencia.get(vizinhoNome);
+        this.adjacencia.set(
+          vizinhoNome,
+          arestasVizinho.filter((a) => a.destino !== nome)
+        );
+      }
+    }
+
+    // Remove o vertice e sua lista de adjacencia
+    this.vertices.delete(nome);
+    this.adjacencia.delete(nome);
+  }
 }
 
 module.exports = Grafo;

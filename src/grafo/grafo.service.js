@@ -122,6 +122,113 @@ class GrafoService {
   localizacaoExiste(nome) {
     return this.grafo.possuiVertice(nome);
   }
+
+  /**
+   * Calcula a distancia em linha reta (Haversine) entre duas coordenadas.
+   * Retorna a distancia em km.
+   */
+  _calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Raio da Terra em km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Encontra a agencia (no do grafo) mais proxima a uma coordenada (latitude/longitude).
+   * Para respeitar o trabalho de AED3, criamos um no temporario, conectamos aos
+   * nos mais proximos (linha reta), rodamos o Dijkstra para todos os destinos,
+   * e retornamos o que tem o menor caminho total.
+   */
+  calcularLocalMaisProximo(lat, lng) {
+    const nomeTemp = 'USER_TEMP_LOC';
+    
+    // 1. Cria o vertice temporario
+    const verticeTemp = new Vertice(
+      'temp_id',
+      nomeTemp,
+      'Desconhecida',
+      'ES',
+      'LocalAtual',
+      lat,
+      lng
+    );
+    
+    this.grafo.adicionarVertice(verticeTemp);
+
+    // 2. Conecta aos 3 nos mais proximos usando distancia em linha reta
+    const todosVertices = this.obterVertices().filter((v) => v.nome !== nomeTemp);
+    const distancias = todosVertices.map((v) => ({
+      nome: v.nome,
+      dist: this._calcularDistanciaHaversine(lat, lng, v.latitude, v.longitude),
+    }));
+    
+    // Ordena pela menor distancia
+    distancias.sort((a, b) => a.dist - b.dist);
+    
+    // Conecta aos 3 mais proximos
+    const k = Math.min(3, distancias.length);
+    for (let i = 0; i < k; i++) {
+      this.grafo.adicionarAresta(nomeTemp, distancias[i].nome, distancias[i].dist);
+    }
+
+    // 3. Roda Dijkstra para todos os destinos e encontra a menor rota real
+    let menorDistancia = Infinity;
+    let melhorRota = null;
+
+    for (const destino of todosVertices) {
+      const rota = Dijkstra.calcularMenorCaminho(this.grafo, nomeTemp, destino.nome);
+      if (rota && rota.distanciaTotal < menorDistancia) {
+        menorDistancia = rota.distanciaTotal;
+        melhorRota = rota;
+      }
+    }
+
+    // 4. Remove o vertice temporario para nao sujar o grafo original
+    this.grafo.removerVertice(nomeTemp);
+
+    if (!melhorRota) return null;
+
+    // Formata o resultado similar ao calcularRota
+    const pontos = melhorRota.caminho.map((nome) => {
+      // O vertice temporario nao estara mais no grafo quando iterarmos aqui, 
+      // entao usamos a referencia de verticeTemp se for ele
+      if (nome === nomeTemp) {
+        return {
+          nome: verticeTemp.nome,
+          cidade: verticeTemp.cidade,
+          estado: verticeTemp.estado,
+          categoria: verticeTemp.categoria,
+          latitude: verticeTemp.latitude,
+          longitude: verticeTemp.longitude,
+        };
+      }
+      const v = this.grafo.vertices.get(nome);
+      return {
+        nome: v.nome,
+        cidade: v.cidade,
+        estado: v.estado,
+        categoria: v.categoria,
+        latitude: v.latitude,
+        longitude: v.longitude,
+      };
+    });
+
+    return {
+      origem: nomeTemp,
+      destino: melhorRota.destino,
+      caminho: melhorRota.caminho,
+      distanciaTotal: melhorRota.distanciaTotal,
+      pontos,
+    };
+  }
 }
 
 // Singleton: uma única instância do grafo para toda a aplicação

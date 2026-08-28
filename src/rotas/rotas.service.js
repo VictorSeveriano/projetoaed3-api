@@ -218,6 +218,104 @@ class RotasService {
       fonte: usandoGoogleMaps ? 'google_maps' : 'grafo_interno',
     };
   }
+
+  /**
+   * Converte um endereco ou CEP em Latitude/Longitude.
+   * Usa Google Maps se houver API Key, caso contrario usa Nominatim (OpenStreetMap).
+   */
+  _geocode(endereco, apiKey) {
+    return new Promise((resolve, reject) => {
+      if (apiKey) {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(endereco)}&key=${apiKey}`;
+        https.get(url, (res) => {
+          let raw = '';
+          res.on('data', (c) => { raw += c; });
+          res.on('end', () => {
+            try {
+              const data = JSON.parse(raw);
+              if (data.status === 'OK' && data.results.length > 0) {
+                const loc = data.results[0].geometry.location;
+                resolve({ lat: loc.lat, lng: loc.lng, address: data.results[0].formatted_address });
+              } else {
+                reject(new Error('Endereço não encontrado pelo Google Maps.'));
+              }
+            } catch (e) {
+              reject(new Error('Erro ao processar resposta do Geocoding.'));
+            }
+          });
+        }).on('error', reject);
+      } else {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endereco + ', Espirito Santo, Brasil')}&limit=1`;
+        const options = { headers: { 'User-Agent': 'ReservaCar-AED3/1.0' } };
+        https.get(url, options, (res) => {
+          let raw = '';
+          res.on('data', (c) => { raw += c; });
+          res.on('end', () => {
+            try {
+              const data = JSON.parse(raw);
+              if (data && data.length > 0) {
+                resolve({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), address: data[0].display_name });
+              } else {
+                reject(new Error('Endereço não encontrado no Nominatim.'));
+              }
+            } catch (e) {
+              reject(new Error('Erro ao processar resposta do Nominatim.'));
+            }
+          });
+        }).on('error', reject);
+      }
+    });
+  }
+
+  /**
+   * Encontra a agencia mais proxima da localizacao do usuario e calcula a rota ate ela.
+   */
+  async calcularRotaMaisProxima({ cepOuEndereco, lat, lng }) {
+    let origemLat = lat;
+    let origemLng = lng;
+    let nomeOrigemFormatado = 'Sua Localização';
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+    if (!origemLat || !origemLng) {
+      if (!cepOuEndereco) throw new Error('É necessário fornecer CEP/Endereço ou Latitude/Longitude.');
+      const geo = await this._geocode(cepOuEndereco, apiKey);
+      origemLat = geo.lat;
+      origemLng = geo.lng;
+      nomeOrigemFormatado = geo.address;
+    }
+
+    const rotaInterna = grafoService.calcularLocalMaisProximo(origemLat, origemLng);
+
+    if (!rotaInterna) {
+      const err = new Error('Não foi possível encontrar uma agência de devolução próxima.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Substitui o nome temporario pelo nome amigavel
+    rotaInterna.origem = nomeOrigemFormatado;
+    rotaInterna.caminho[0] = 'Origem'; 
+    rotaInterna.pontos[0].nome = 'Origem';
+
+    const origem = rotaInterna.pontos[0];
+    const destino = rotaInterna.pontos[rotaInterna.pontos.length - 1];
+
+    let dadosGoogleMaps = null;
+    if (apiKey) {
+      try {
+        dadosGoogleMaps = await this._consultarRoutesAPI(
+          { lat: origem.latitude, lng: origem.longitude },
+          { lat: destino.latitude, lng: destino.longitude },
+          apiKey,
+        );
+      } catch (apiError) {
+        console.warn('[RotasService] Google Maps API indisponível:', apiError.message);
+      }
+    }
+
+    return this._montarResposta(rotaInterna, dadosGoogleMaps);
+  }
 }
 
 module.exports = new RotasService();

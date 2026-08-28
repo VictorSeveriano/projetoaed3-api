@@ -70,4 +70,29 @@ const listarLocais = (req, res, next) => {
   }
 };
 
-module.exports = { calcularRota, listarLocais };
+/**
+ * POST /api/rotas/mais-proximo
+ * Body: { cepOuEndereco, lat, lng }
+ * 
+ * Calcula a agência de devolução mais próxima.
+ */
+const calcularMaisProximo = async (req, res, next) => {
+  try {
+    const { cepOuEndereco, lat, lng } = req.body;
+
+    if (!cepOuEndereco && (!lat || !lng)) {
+      return next(new AppError('Informe o CEP/Endereço ou as coordenadas geográficas.', 400));
+    }
+
+    const rota = await rotasService.calcularRotaMaisProxima({ cepOuEndereco, lat, lng });
+
+    return success(res, rota, 'Agência mais próxima encontrada com sucesso.');
+  } catch (err) {
+    if (err.statusCode) {
+      return next(new AppError(err.message, err.statusCode));
+    }
+    next(err);
+  }
+};
+
+module.exports = { calcularRota, listarLocais, calcularMaisProximo };
