@@ -220,66 +220,175 @@ class RotasService {
   }
 
   /**
-   * Converte um endereco ou CEP em Latitude/Longitude.
-   * Usa Google Maps se houver API Key, caso contrario usa Nominatim (OpenStreetMap).
+   * Converte um CEP ou endereço em Latitude/Longitude.
+   *
+   * Fluxo para CEP (8 dígitos):
+   *   1. ViaCEP → valida e retorna endereço estruturado
+   *   2. Nominatim com endereço completo (logradouro + bairro + cidade + UF)
+   *   3. Fallback: logradouro + cidade + UF
+   *   4. Fallback: bairro + cidade + UF
+   *   5. Fallback: cidade + UF
+   *
+   * Fluxo para endereço livre:
+   *   1. Nominatim com endereço + Espírito Santo + Brasil
+   *
+   * Nota sobre Google Geocoding API:
+   *   Requer Billing habilitado no Google Cloud Console (diferente da
+   *   Maps JavaScript API que tem cota gratuita para exibição de mapa).
+   *   Por isso utilizamos Nominatim (OpenStreetMap) como geocoder — gratuito,
+   *   sem necessidade de billing, preciso para endereços brasileiros.
+   *
+   * @param {string} entrada - CEP (com ou sem hífen) ou endereço livre
+   * @returns {Promise<{ lat: number, lng: number, address: string }>}
    */
-  _geocode(endereco, apiKey) {
+  _geocode(entrada) {
     return new Promise((resolve, reject) => {
-      if (apiKey) {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(endereco)}&key=${apiKey}`;
-        https.get(url, (res) => {
-          let raw = '';
-          res.on('data', (c) => { raw += c; });
-          res.on('end', () => {
-            try {
-              const data = JSON.parse(raw);
-              if (data.status === 'OK' && data.results.length > 0) {
-                const loc = data.results[0].geometry.location;
-                resolve({ lat: loc.lat, lng: loc.lng, address: data.results[0].formatted_address });
-              } else {
-                reject(new Error('Endereço não encontrado pelo Google Maps.'));
+      const texto = entrada.trim();
+      const apenasNumeros = texto.replace(/\D/g, '');
+      const ehCep = apenasNumeros.length === 8;
+
+      const erroComStatus = (msg, status = 404) => {
+        const err = new Error(msg);
+        err.statusCode = status;
+        reject(err);
+      };
+
+      // Agente HTTPS: respeita NODE_TLS_REJECT_UNAUTHORIZED do ambiente.
+      // Em produção, essa variável não deve ser definida (segurança default).
+      // Em ambientes com proxy corporativo SSL-interceptor, defina como '0' no .env.
+      const agent = new (require('https').Agent)({
+        rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
+      });
+
+      /**
+       * Consulta Nominatim com uma query e resolve se encontrar resultado.
+       * @param {string} q
+       * @returns {Promise<{ lat, lng, address }>}
+       */
+      const consultarNominatim = (q) =>
+        new Promise((res, rej) => {
+          const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=1&q=${encodeURIComponent(q)}`;
+          const opts = {
+            headers: { 'User-Agent': 'ReservaCar-AED3/1.0 (projeto academico)' },
+            agent,
+          };
+          const https = require('https');
+          https
+            .get(url, opts, (response) => {
+              let raw = '';
+              response.on('data', (c) => { raw += c; });
+              response.on('end', () => {
+                try {
+                  const data = JSON.parse(raw);
+                  if (Array.isArray(data) && data.length > 0) {
+                    res({
+                      lat: parseFloat(data[0].lat),
+                      lng: parseFloat(data[0].lon),
+                      address: data[0].display_name,
+                    });
+                  } else {
+                    rej(new Error('sem_resultado'));
+                  }
+                } catch (e) {
+                  rej(new Error('parse_error'));
+                }
+              });
+            })
+            .on('error', (e) => rej(e));
+        });
+
+      /**
+       * Tenta consultar Nominatim com múltiplas queries em cascata.
+       * Retorna o primeiro resultado encontrado, ou rejeita se nenhum funcionar.
+       */
+      const tentarNominatimEmCascata = async (queries) => {
+        for (const q of queries) {
+          try {
+            const resultado = await consultarNominatim(q);
+            return resultado;
+          } catch (e) {
+            // Continua para o próximo fallback
+          }
+        }
+        erroComStatus('Não foi possível localizar o endereço informado.');
+      };
+
+      if (ehCep) {
+        // --- Fluxo CEP: ViaCEP → endereço estruturado → Nominatim em cascata ---
+        const https = require('https');
+        const urlViaCep = `https://viacep.com.br/ws/${apenasNumeros}/json/`;
+
+        https
+          .get(urlViaCep, { agent }, (res) => {
+            let raw = '';
+            res.on('data', (c) => { raw += c; });
+            res.on('end', async () => {
+              try {
+                const dados = JSON.parse(raw);
+
+                if (dados.erro === true || dados.erro === 'true') {
+                  return erroComStatus('CEP não encontrado. Verifique o número digitado.');
+                }
+
+                const logradouro = dados.logradouro || '';
+                const bairro     = dados.bairro     || '';
+                const cidade     = dados.localidade  || '';
+                const uf         = dados.uf          || 'ES';
+
+                if (!cidade) {
+                  return erroComStatus('CEP válido, mas sem dados de localidade no ViaCEP.');
+                }
+
+                // Queries em cascata: do mais específico ao mais genérico
+                const queries = [];
+                if (logradouro && bairro) queries.push(`${logradouro}, ${bairro}, ${cidade}, ${uf}, Brasil`);
+                if (logradouro)           queries.push(`${logradouro}, ${cidade}, ${uf}, Brasil`);
+                if (bairro)               queries.push(`${bairro}, ${cidade}, ${uf}, Brasil`);
+                queries.push(`${cidade}, ${uf}, Brasil`);
+
+                const resultado = await tentarNominatimEmCascata(queries);
+                if (resultado) resolve(resultado);
+              } catch (e) {
+                erroComStatus('Erro ao processar resposta do ViaCEP.', 500);
               }
-            } catch (e) {
-              reject(new Error('Erro ao processar resposta do Geocoding.'));
-            }
+            });
+          })
+          .on('error', () => {
+            erroComStatus('Não foi possível consultar o ViaCEP. Verifique sua conexão.', 503);
           });
-        }).on('error', reject);
       } else {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endereco + ', Espirito Santo, Brasil')}&limit=1`;
-        const options = { headers: { 'User-Agent': 'ReservaCar-AED3/1.0' } };
-        https.get(url, options, (res) => {
-          let raw = '';
-          res.on('data', (c) => { raw += c; });
-          res.on('end', () => {
-            try {
-              const data = JSON.parse(raw);
-              if (data && data.length > 0) {
-                resolve({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), address: data[0].display_name });
-              } else {
-                reject(new Error('Endereço não encontrado no Nominatim.'));
-              }
-            } catch (e) {
-              reject(new Error('Erro ao processar resposta do Nominatim.'));
-            }
-          });
-        }).on('error', reject);
+        // --- Fluxo endereço livre: Nominatim direto ---
+        const queries = [
+          `${texto}, Espírito Santo, Brasil`,
+          `${texto}, Brasil`,
+        ];
+        tentarNominatimEmCascata(queries).then((r) => { if (r) resolve(r); });
       }
     });
   }
 
   /**
-   * Encontra a agencia mais proxima da localizacao do usuario e calcula a rota ate ela.
+   * Encontra a agência mais próxima da localização do usuário e calcula a rota até ela.
+   *
+   * Fluxo:
+   * 1. Se GPS disponível: usa lat/lng diretamente
+   * 2. Se CEP/endereço: geocodifica via ViaCEP + Nominatim
+   * 3. Encontra agência mais próxima via Dijkstra no grafo interno
+   * 4. Enriquece com dados da Google Routes API (distância/tempo reais), se disponível
    */
   async calcularRotaMaisProxima({ cepOuEndereco, lat, lng }) {
     let origemLat = lat;
     let origemLng = lng;
     let nomeOrigemFormatado = 'Sua Localização';
 
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-
+    // Geocodifica apenas se não tiver coordenadas GPS
     if (!origemLat || !origemLng) {
-      if (!cepOuEndereco) throw new Error('É necessário fornecer CEP/Endereço ou Latitude/Longitude.');
-      const geo = await this._geocode(cepOuEndereco, apiKey);
+      if (!cepOuEndereco) {
+        const err = new Error('Informe o CEP/Endereço ou permita o acesso à sua localização.');
+        err.statusCode = 400;
+        throw err;
+      }
+      const geo = await this._geocode(cepOuEndereco);
       origemLat = geo.lat;
       origemLng = geo.lng;
       nomeOrigemFormatado = geo.address;
@@ -293,15 +402,18 @@ class RotasService {
       throw err;
     }
 
-    // Substitui o nome temporario pelo nome amigavel
+    // Substitui o identificador interno pelo nome amigável para o usuário
     rotaInterna.origem = nomeOrigemFormatado;
-    rotaInterna.caminho[0] = 'Origem'; 
+    rotaInterna.caminho[0] = 'Origem';
     rotaInterna.pontos[0].nome = 'Origem';
 
     const origem = rotaInterna.pontos[0];
     const destino = rotaInterna.pontos[rotaInterna.pontos.length - 1];
 
+    // Google Routes API: fornece distância real e tempo estimado (requer billing habilitado)
+    // Se não disponível, fallback gracioso para dados do grafo interno
     let dadosGoogleMaps = null;
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
     if (apiKey) {
       try {
         dadosGoogleMaps = await this._consultarRoutesAPI(
@@ -310,7 +422,7 @@ class RotasService {
           apiKey,
         );
       } catch (apiError) {
-        console.warn('[RotasService] Google Maps API indisponível:', apiError.message);
+        console.warn('[RotasService] Google Routes API indisponível (distância aproximada será usada):', apiError.message);
       }
     }
 

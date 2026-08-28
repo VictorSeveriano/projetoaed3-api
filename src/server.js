@@ -3,7 +3,7 @@ const app = require('./app');
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n========================================`);
   console.log(` projetoaed3-api rodando na porta ${PORT}`);
   console.log(`========================================`);
@@ -13,3 +13,16 @@ app.listen(PORT, () => {
   console.log(` Rota     : http://localhost:${PORT}/api/grafo/rota?origem=Centro&destino=Aeroporto`);
   console.log(`========================================\n`);
 });
+
+// Solução para o EADDRINUSE com nodemon no Windows
+const gracefulShutdown = (signal) => {
+  console.log(`\n[${signal}] Desligando o servidor graciosamente...`);
+  server.close(() => {
+    console.log('Servidor encerrado. Processo finalizado.');
+    process.exit(0);
+  });
+};
+
+process.once('SIGINT', () => gracefulShutdown('SIGINT'));
+process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.once('SIGUSR2', () => gracefulShutdown('SIGUSR2'));
