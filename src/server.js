@@ -10,7 +10,7 @@ const server = app.listen(PORT, () => {
   console.log(` Ambiente : ${process.env.NODE_ENV || 'development'}`);
   console.log(` Health   : http://localhost:${PORT}/api/health`);
   console.log(` Grafo    : http://localhost:${PORT}/api/grafo`);
-  console.log(` Rota     : http://localhost:${PORT}/api/grafo/rota?origem=Centro&destino=Aeroporto`);
+  console.log(` Rota     : http://localhost:${PORT}/api/grafo/rota?origem=Rodoviária de Vitória&destino=Aeroporto de Vitória`);
   console.log(`========================================\n`);
 });
 
