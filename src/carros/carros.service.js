@@ -14,9 +14,6 @@ class CarrosService {
     if (filtros.marca) {
       carros = carros.filter((c) => c.marca.toLowerCase() === filtros.marca.toLowerCase());
     }
-    if (filtros.localizacao) {
-      carros = carros.filter((c) => c.localizacao === filtros.localizacao);
-    }
     if (filtros.status) {
       carros = carros.filter((c) => c.status === filtros.status.toUpperCase());
     }
@@ -37,7 +34,7 @@ class CarrosService {
   }
 
   atualizarStatus(id, status) {
-    const statusValidos = ['DISPONIVEL', 'RESERVADO'];
+    const statusValidos = ['DISPONIVEL', 'EM_CORRIDA', 'RESERVADO'];
     if (!statusValidos.includes(status)) {
       throw new AppError(`Status invalido: ${status}. Valores aceitos: ${statusValidos.join(', ')}`, 400);
     }

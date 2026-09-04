@@ -1,20 +1,20 @@
 const { Router } = require('express');
-const { calcularRota, listarLocais, calcularMaisProximo } = require('./rotas.controller');
+const { listarLocais, calcularCorrida, geocodificar } = require('./rotas.controller');
 
 const router = Router();
 
 /**
- * Rotas do módulo Rotas
+ * Rotas do modulo Rotas
  * Base: /api/rotas
  */
 
-// GET /api/rotas/locais — Retorna todos os locais disponíveis com coordenadas
+// GET  /api/rotas/locais           — Lista todos os locais com coordenadas
 router.get('/locais', listarLocais);
 
-// GET /api/rotas?origem=X&destino=Y — Calcula a melhor rota entre dois locais
-router.get('/', calcularRota);
+// POST /api/rotas/calcular-corrida — Calcula multiplas rotas (BFS + Dijkstra)
+router.post('/calcular-corrida', calcularCorrida);
 
-// POST /api/rotas/mais-proximo — Calcula a agência mais próxima de um CEP/Coordenada
-router.post('/mais-proximo', calcularMaisProximo);
+// POST /api/rotas/geocodificar     — CEP/endereco -> JSON + lat/lng
+router.post('/geocodificar', geocodificar);
 
 module.exports = router;

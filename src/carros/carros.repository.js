@@ -17,9 +17,10 @@ class CarrosRepository {
     return carros.filter((c) => c.status === 'DISPONIVEL');
   }
 
-  findByLocalizacao(localizacao) {
-    return carros.filter((c) => c.localizacao === localizacao);
+  findByStatus(status) {
+    return carros.filter((c) => c.status === status);
   }
+
 
   updateStatus(id, status) {
     const index = carros.findIndex((c) => c.id === id);

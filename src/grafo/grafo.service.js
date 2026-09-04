@@ -1,6 +1,7 @@
 const Grafo = require('./Grafo');
 const Vertice = require('./Vertice');
 const Dijkstra = require('./Dijkstra');
+const { RouteSearchTree } = require('./RouteSearchTree');
 const localizacoes = require('../data/localizacoes.data');
 const arestasData = require('../data/grafo.data');
 
@@ -115,6 +116,84 @@ class GrafoService {
   }
 
   /**
+   * Calcula multiplas rotas alternativas entre origem e destino.
+   *
+   * Fluxo:
+   * 1. RouteSearchTree.buscarCaminhos() explora o grafo via BFS,
+   *    construindo uma arvore de possibilidades e retornando ate maxRotas caminhos
+   * 2. Para cada caminho candidato da arvore, calcula a distancia total
+   *    somando os pesos das arestas (sem re-executar Dijkstra — soma direta)
+   * 3. Ordena por distancia crescente (melhor rota primeiro)
+   * 4. Enriquece cada rota com coordenadas dos pontos
+   *
+   * @param {string} origem  - Nome do local de origem
+   * @param {string} destino - Nome do local de destino
+   * @param {number} maxRotas - Maximo de rotas alternativas (padrao: 3)
+   * @returns {Array<{ id, caminho, pontos, distanciaTotal }>}
+   */
+  calcularMultiplasRotas(origem, destino, maxRotas = 3) {
+    // 1. BFS na arvore para obter caminhos candidatos
+    const caminhosCandidatos = RouteSearchTree.buscarCaminhos(
+      this.grafo,
+      origem,
+      destino,
+      maxRotas,
+    );
+
+    // 2. Para cada caminho, calcula distancia total somando pesos das arestas
+    const rotas = caminhosCandidatos
+      .map((caminho, index) => {
+        let distanciaTotal = 0;
+        let valida = true;
+
+        for (let i = 0; i < caminho.length - 1; i++) {
+          const noAtual = caminho[i];
+          const noProximo = caminho[i + 1];
+          const vizinhos = this.grafo.obterVizinhos(noAtual);
+          const aresta = vizinhos.find((a) => a.destino === noProximo);
+
+          if (!aresta) {
+            valida = false;
+            break;
+          }
+          distanciaTotal += aresta.peso;
+        }
+
+        if (!valida) return null;
+
+        // Enriquece com coordenadas dos pontos
+        const pontos = caminho.map((nome) => {
+          const v = this.grafo.vertices.get(nome);
+          if (!v) return { nome, latitude: null, longitude: null };
+          return {
+            nome: v.nome,
+            cidade: v.cidade,
+            estado: v.estado,
+            categoria: v.categoria,
+            latitude: v.latitude,
+            longitude: v.longitude,
+          };
+        });
+
+        return {
+          id: index + 1,
+          caminho,
+          pontos,
+          distanciaTotal: parseFloat(distanciaTotal.toFixed(2)),
+        };
+      })
+      .filter(Boolean); // Remove rotas invalidas
+
+    // 3. Ordena por distancia crescente (melhor rota = menor distancia = primeira)
+    rotas.sort((a, b) => a.distanciaTotal - b.distanciaTotal);
+
+    // 4. Re-numera IDs apos ordenacao
+    rotas.forEach((r, i) => { r.id = i + 1; });
+
+    return rotas;
+  }
+
+  /**
    * Verifica se um local existe no grafo.
    * @param {string} nome
    * @returns {boolean}
@@ -142,17 +221,17 @@ class GrafoService {
   }
 
   /**
-   * Encontra a agencia (no do grafo) mais proxima a uma coordenada (latitude/longitude).
-   * Para respeitar o trabalho de AED3, criamos um no temporario, conectamos aos
-   * nos mais proximos (linha reta), rodamos o Dijkstra para todos os destinos,
-   * e retornamos o que tem o menor caminho total.
+   * Adiciona um vertice temporario ao grafo (para Origem ou Destino dinamicos)
+   * conectando-o aos 3 nós mais próximos usando distancia Haversine.
+   *
+   * @param {string} nomeTemp - Nome ou identificador unico do no (ex: 'TEMP_ORIGEM')
+   * @param {number} lat - Latitude
+   * @param {number} lng - Longitude
    */
-  calcularLocalMaisProximo(lat, lng) {
-    const nomeTemp = 'USER_TEMP_LOC';
-    
+  adicionarNoTemporario(nomeTemp, lat, lng) {
     // 1. Cria o vertice temporario
     const verticeTemp = new Vertice(
-      'temp_id',
+      'temp_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
       nomeTemp,
       'Desconhecida',
       'ES',
@@ -163,8 +242,8 @@ class GrafoService {
     
     this.grafo.adicionarVertice(verticeTemp);
 
-    // 2. Conecta aos 3 nos mais proximos usando distancia em linha reta
-    const todosVertices = this.obterVertices().filter((v) => v.nome !== nomeTemp);
+    // 2. Conecta aos 3 nos permanentes mais proximos (linha reta)
+    const todosVertices = this.obterVertices().filter((v) => v.nome !== nomeTemp && !v.nome.startsWith('TEMP_'));
     const distancias = todosVertices.map((v) => ({
       nome: v.nome,
       dist: this._calcularDistanciaHaversine(lat, lng, v.latitude, v.longitude),
@@ -178,57 +257,19 @@ class GrafoService {
     for (let i = 0; i < k; i++) {
       this.grafo.adicionarAresta(nomeTemp, distancias[i].nome, distancias[i].dist);
     }
-
-    // 3. Roda Dijkstra para todos os destinos e encontra a menor rota real
-    let menorDistancia = Infinity;
-    let melhorRota = null;
-
-    for (const destino of todosVertices) {
-      const rota = Dijkstra.calcularMenorCaminho(this.grafo, nomeTemp, destino.nome);
-      if (rota && rota.distanciaTotal < menorDistancia) {
-        menorDistancia = rota.distanciaTotal;
-        melhorRota = rota;
-      }
-    }
-
-    // 4. Remove o vertice temporario para nao sujar o grafo original
-    this.grafo.removerVertice(nomeTemp);
-
-    if (!melhorRota) return null;
-
-    // Formata o resultado similar ao calcularRota
-    const pontos = melhorRota.caminho.map((nome) => {
-      // O vertice temporario nao estara mais no grafo quando iterarmos aqui, 
-      // entao usamos a referencia de verticeTemp se for ele
-      if (nome === nomeTemp) {
-        return {
-          nome: verticeTemp.nome,
-          cidade: verticeTemp.cidade,
-          estado: verticeTemp.estado,
-          categoria: verticeTemp.categoria,
-          latitude: verticeTemp.latitude,
-          longitude: verticeTemp.longitude,
-        };
-      }
-      const v = this.grafo.vertices.get(nome);
-      return {
-        nome: v.nome,
-        cidade: v.cidade,
-        estado: v.estado,
-        categoria: v.categoria,
-        latitude: v.latitude,
-        longitude: v.longitude,
-      };
-    });
-
-    return {
-      origem: nomeTemp,
-      destino: melhorRota.destino,
-      caminho: melhorRota.caminho,
-      distanciaTotal: melhorRota.distanciaTotal,
-      pontos,
-    };
   }
+
+  /**
+   * Remove um vertice temporario do grafo.
+   *
+   * @param {string} nomeTemp - O nome do no a ser removido
+   */
+  removerNoTemporario(nomeTemp) {
+    if (this.grafo.possuiVertice(nomeTemp)) {
+      this.grafo.removerVertice(nomeTemp);
+    }
+  }
+
 }
 
 // Singleton: uma única instância do grafo para toda a aplicação

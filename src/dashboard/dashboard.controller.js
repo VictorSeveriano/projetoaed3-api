@@ -1,50 +1,49 @@
-const dashboardService = require('./dashboard.service');
-const AppError = require('../utils/AppError');
+﻿const dashboardService = require('./dashboard.service');
 
+/**
+ * DashboardController — Endpoints de metricas do sistema de corridas.
+ */
 class DashboardController {
-  async getResumo(req, res, next) {
+  getResumo(req, res, next) {
     try {
-      const resumo = dashboardService.getResumo();
-      res.json({ success: true, data: resumo });
-    } catch (err) {
-      next(err);
-    }
+      res.json({ success: true, data: dashboardService.getResumo() });
+    } catch (err) { next(err); }
   }
 
-  async getReservas(req, res, next) {
+  getCorridas(req, res, next) {
     try {
-      const dados = dashboardService.getReservasPorMes();
-      res.json({ success: true, data: dados });
-    } catch (err) {
-      next(err);
-    }
+      res.json({ success: true, data: dashboardService.getCorridasPorMes() });
+    } catch (err) { next(err); }
   }
 
-  async getLocais(req, res, next) {
+  getOrigens(req, res, next) {
     try {
-      const dados = dashboardService.getLocaisMaisSolicitados();
-      res.json({ success: true, data: dados });
-    } catch (err) {
-      next(err);
-    }
+      res.json({ success: true, data: dashboardService.getOrigensMaisSolicitadas() });
+    } catch (err) { next(err); }
   }
 
-  async getCarros(req, res, next) {
+  getDestinos(req, res, next) {
     try {
-      const dados = dashboardService.getCarrosMaisReservados();
-      res.json({ success: true, data: dados });
-    } catch (err) {
-      next(err);
-    }
+      res.json({ success: true, data: dashboardService.getDestinosMaisSolicitados() });
+    } catch (err) { next(err); }
   }
 
-  async getReceitas(req, res, next) {
+  getRotas(req, res, next) {
     try {
-      const dados = dashboardService.getReceitasPorMes();
-      res.json({ success: true, data: dados });
-    } catch (err) {
-      next(err);
-    }
+      res.json({ success: true, data: dashboardService.getRotasMaisUtilizadas() });
+    } catch (err) { next(err); }
+  }
+
+  getVeiculos(req, res, next) {
+    try {
+      res.json({ success: true, data: dashboardService.getVeiculosMaisUtilizados() });
+    } catch (err) { next(err); }
+  }
+
+  getFaturamento(req, res, next) {
+    try {
+      res.json({ success: true, data: dashboardService.getFaturamentoMensal() });
+    } catch (err) { next(err); }
   }
 }
 

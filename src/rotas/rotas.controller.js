@@ -6,60 +6,15 @@ const { success } = require('../utils/responseHelper');
 /**
  * RotasController — Controlador para endpoints de rotas.
  *
- * Responsável exclusivamente por:
- * - Receber e validar os parâmetros da requisição
- * - Delegar ao RotasService
- * - Formatar e retornar a resposta
- *
- * Não contém regras de negócio.
+ * Endpoints:
+ * - GET  /api/rotas/locais            — Lista todos os locais cadastrados
+ * - POST /api/rotas/calcular-corrida  — Calcula multiplas rotas entre origem e destino
+ * - POST /api/rotas/geocodificar      — Geocodifica um CEP/endereco (ViaCEP + Nominatim)
  */
-
-/**
- * GET /api/rotas?origem=X&destino=Y
- *
- * Calcula a melhor rota entre dois locais.
- * Utiliza o algoritmo de Dijkstra internamente e enriquece o resultado
- * com dados reais da Google Maps Directions API quando disponível.
- */
-const calcularRota = async (req, res, next) => {
-  try {
-    const { origem, destino } = req.query;
-
-    // Validação de parâmetros obrigatórios
-    if (!origem || !destino) {
-      return next(new AppError('Os parâmetros "origem" e "destino" são obrigatórios.', 400));
-    }
-
-    // Validação: origem e destino devem ser diferentes
-    if (origem.trim().toLowerCase() === destino.trim().toLowerCase()) {
-      return next(new AppError('Origem e destino devem ser diferentes.', 400));
-    }
-
-    // Validação: locais existem no sistema
-    if (!grafoService.localizacaoExiste(origem)) {
-      return next(new AppError(`Local de origem '${origem}' não encontrado.`, 404));
-    }
-
-    if (!grafoService.localizacaoExiste(destino)) {
-      return next(new AppError(`Local de destino '${destino}' não encontrado.`, 404));
-    }
-
-    const rota = await rotasService.calcularRota(origem, destino);
-
-    return success(res, rota, 'Rota calculada com sucesso.');
-  } catch (err) {
-    if (err.statusCode) {
-      return next(new AppError(err.message, err.statusCode));
-    }
-    next(err);
-  }
-};
 
 /**
  * GET /api/rotas/locais
- *
- * Retorna todos os locais disponíveis para seleção de origem/destino,
- * incluindo coordenadas geográficas reais para exibição no mapa.
+ * Retorna todos os locais disponiveis com coordenadas geograficas.
  */
 const listarLocais = (req, res, next) => {
   try {
@@ -71,28 +26,61 @@ const listarLocais = (req, res, next) => {
 };
 
 /**
- * POST /api/rotas/mais-proximo
- * Body: { cepOuEndereco, lat, lng }
- * 
- * Calcula a agência de devolução mais próxima.
+ * POST /api/rotas/calcular-corrida
+ * Body: { origem: { nome, lat, lng }, destino: { nome, lat, lng } }
+ *
+ * Calcula multiplas rotas entre dois locais usando:
+ * 1. RouteSearchTree (BFS) para encontrar caminhos alternativos
+ * 2. Dijkstra para calcular distancias
+ * 3. Google Routes API para enriquecer a melhor rota (se disponivel)
+ *
+ * Retorna: { origemNome, destinoNome, rotas: [], melhorRota: {} }
  */
-const calcularMaisProximo = async (req, res, next) => {
+const calcularCorrida = async (req, res, next) => {
   try {
-    const { cepOuEndereco, lat, lng } = req.body;
+    const { origem, destino } = req.body;
 
-    if (!cepOuEndereco && (!lat || !lng)) {
-      return next(new AppError('Informe o CEP/Endereço ou as coordenadas geográficas.', 400));
+    if (!origem || !destino || !origem.lat || !destino.lat) {
+      return next(new AppError('Origem e destino com latitude e longitude sao obrigatorios.', 400));
     }
 
-    const rota = await rotasService.calcularRotaMaisProxima({ cepOuEndereco, lat, lng });
+    if (origem.nome.trim().toLowerCase() === destino.nome.trim().toLowerCase() && origem.nome !== '') {
+      return next(new AppError('Origem e destino devem ser diferentes.', 400));
+    }
 
-    return success(res, rota, 'Agência mais próxima encontrada com sucesso.');
+    const resultado = await rotasService.calcularCorrida(origem, destino);
+    return success(res, resultado, 'Rotas calculadas com sucesso.');
   } catch (err) {
-    if (err.statusCode) {
-      return next(new AppError(err.message, err.statusCode));
-    }
+    if (err.statusCode) return next(new AppError(err.message, err.statusCode));
     next(err);
   }
 };
 
-module.exports = { calcularRota, listarLocais, calcularMaisProximo };
+/**
+ * POST /api/rotas/geocodificar
+ * Body: { cep } ou { endereco }
+ *
+ * Fluxo completo:
+ *   CEP -> ViaCEP -> endereco estruturado em JSON -> Nominatim -> lat/lng
+ *
+ * Retorna: { endereco: { cep, logradouro, bairro, cidade, uf, pais }, latitude, longitude }
+ */
+const geocodificar = async (req, res, next) => {
+  try {
+    const { cep, endereco } = req.body;
+    const entrada = cep || endereco;
+
+    if (!entrada) {
+      return next(new AppError('Informe um CEP ou endereco para geocodificar.', 400));
+    }
+
+    const resultado = await rotasService.geocodificar(entrada);
+    return success(res, resultado, 'Geocodificacao realizada com sucesso.');
+  } catch (err) {
+    if (err.statusCode) return next(new AppError(err.message, err.statusCode));
+    next(err);
+  }
+};
+
+module.exports = { listarLocais, calcularCorrida, geocodificar };
+
