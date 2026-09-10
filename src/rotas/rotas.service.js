@@ -5,10 +5,12 @@ const grafoService = require('../grafo/grafo.service');
  * RotasService — Servico responsavel pelo calculo e enriquecimento de rotas.
  *
  * Responsabilidades:
- * 1. Calcular multiplas rotas via GrafoService (Dijkstra + RouteSearchTree)
- * 2. Geocodificar CEPs via ViaCEP + Nominatim
- * 3. Enriquecer a melhor rota com dados reais da Google Maps Routes API v2
- * 4. Retornar array de rotas para o usuario escolher
+ * 1. Consultar a Google Maps Routes API v2 com computeAlternativeRoutes=true
+ *    para obter rotas reais pela malha viaria
+ * 2. Validar cada rota recebida (geometria, distancia, duracao, polyline)
+ * 3. Delegar ao GrafoService a ordenacao via grafo dinamico + Dijkstra
+ * 4. Geocodificar CEPs/enderecos via ViaCEP + Nominatim
+ * 5. Retornar somente rotas validas (1, 2 ou 3 — nunca artificiais)
  *
  * Seguranca:
  * - A chave da API (GOOGLE_MAPS_API_KEY) nunca e exposta ao frontend
@@ -18,96 +20,81 @@ const grafoService = require('../grafo/grafo.service');
  */
 class RotasService {
   /**
-   * Calcula multiplas rotas entre dois locais (agora aceitando coordenadas dinamicas).
+   * Calcula multiplas rotas reais entre dois locais dinamicos.
    *
    * Fluxo:
-   * 1. Injeta nos temporarios (Origem e Destino) no grafo, ligando aos vizinhos mais proximos
-   * 2. GrafoService.calcularMultiplasRotas() gera array de rotas via BFS + Dijkstra
-   * 3. Remove os nos temporarios do grafo
-   * 4. Enriquece a melhor rota (id=1) com dados reais da Google Routes API
-   * 5. Retorna todas as rotas com distancias e a melhor destacada
+   * 1. Consulta Google Routes API com computeAlternativeRoutes=true
+   *    -> Recebe geometria REAL da malha viaria (polyline encodada)
+   * 2. Valida cada rota recebida (_validarRota)
+   *    -> Descarta rotas sem geometria, distancia ou duracao invalidos
+   * 3. GrafoService.ordenarRotasReais() constroi grafo dinamico e executa Dijkstra
+   *    -> Ordena as rotas validas pela melhor (menor distancia)
+   * 4. Formata e retorna as rotas com dados reais
+   *
+   * IMPORTANTE: Nao ha fallback de linha reta ou criacao artificial de rotas.
+   * Se o servico de roteamento nao encontrar rotas validas, retorna erro.
    *
    * @param {{ nome: string, lat: number, lng: number }} origem
    * @param {{ nome: string, lat: number, lng: number }} destino
    * @returns {Promise<{ rotas: Array, melhorRota: object }>}
    */
   async calcularCorrida(origem, destino) {
-    const idOrigem = `ORIGEM_${Date.now()}`;
-    const idDestino = `DESTINO_${Date.now()}`;
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
-    // 1. Injeta os locais do usuario no grafo
-    grafoService.adicionarNoTemporario(idOrigem, origem.lat, origem.lng);
-    grafoService.adicionarNoTemporario(idDestino, destino.lat, destino.lng);
+    if (!apiKey) {
+      const err = new Error(
+        'Servico de roteamento nao configurado. Configure a variavel GOOGLE_MAPS_API_KEY.',
+      );
+      err.statusCode = 503;
+      throw err;
+    }
 
-    // 2. Calcula as rotas internamente
-    const rotasInternas = grafoService.calcularMultiplasRotas(idOrigem, idDestino);
+    // 1. Consultar a Google Routes API solicitando rotas alternativas reais
+    let rotasAPI;
+    try {
+      rotasAPI = await this._consultarRoutesAPI(
+        { lat: origem.lat, lng: origem.lng },
+        { lat: destino.lat, lng: destino.lng },
+        apiKey,
+      );
+    } catch (apiError) {
+      const err = new Error(
+        'Nao foi possivel calcular a rota pelas vias disponiveis: ' + apiError.message,
+      );
+      err.statusCode = 502;
+      throw err;
+    }
 
-    // 3. Limpa o grafo
-    grafoService.removerNoTemporario(idOrigem);
-    grafoService.removerNoTemporario(idDestino);
+    // 2. Validar cada rota recebida — descartar rotas sem geometria ou dados invalidos
+    const rotasValidas = (rotasAPI || []).filter((r) => this._validarRota(r));
 
-    if (!rotasInternas || rotasInternas.length === 0) {
-      const err = new Error('Nenhum trajeto encontrado entre a origem e o destino.');
+    if (rotasValidas.length === 0) {
+      const err = new Error(
+        'Nenhuma rota valida encontrada pelas vias disponiveis entre a origem e o destino.',
+      );
       err.statusCode = 404;
       throw err;
     }
 
-    // Tenta enriquecer a melhor rota com dados reais da Google Routes API
-    const melhorRota = rotasInternas[0];
-    let dadosGoogleMaps = null;
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+    // 3. Ordenar as rotas validas via grafo dinamico + Dijkstra (exigencia academica)
+    //    O grafo e construido com os dados reais da API — nao com distancias Haversine.
+    const rotasOrdenadas = grafoService.ordenarRotasReais(rotasValidas);
 
-    if (apiKey && melhorRota.pontos.length >= 2) {
-      const pontoOrigem = melhorRota.pontos[0];
-      const pontoDestino = melhorRota.pontos[melhorRota.pontos.length - 1];
-
-      if (pontoOrigem.latitude && pontoDestino.latitude) {
-        try {
-          dadosGoogleMaps = await this._consultarRoutesAPI(
-            { lat: pontoOrigem.latitude, lng: pontoOrigem.longitude },
-            { lat: pontoDestino.latitude, lng: pontoDestino.longitude },
-            apiKey,
-          );
-        } catch (apiError) {
-          console.warn('[RotasService] Google Routes API indisponivel:', apiError.message);
-        }
-      }
-    }
-
-    // Formata cada rota para retorno ao frontend
-    const rotasFormatadas = rotasInternas.map((rota) => {
-      const caminhoFormatado = rota.caminho.map(nome => 
-        nome === idOrigem ? origem.nome : (nome === idDestino ? destino.nome : nome)
-      );
-      const pontosFormatados = rota.pontos.map(p => {
-        if (p.nome === idOrigem) return { ...p, nome: origem.nome };
-        if (p.nome === idDestino) return { ...p, nome: destino.nome };
-        return p;
-      });
-
-      return {
-        id: rota.id,
-        caminho: caminhoFormatado,
-        pontos: pontosFormatados,
-        distanciaKm: rota.distanciaTotal,
-        distanciaFormatada: rota.distanciaTotal.toFixed(1).replace('.', ',') + ' km',
-        duracaoMin: Math.round((rota.distanciaTotal / 30) * 60),
-        duracaoFormatada: this._formatarDuracao(Math.round((rota.distanciaTotal / 30) * 60) * 60),
-      };
-    });
-
-    // Sobrescreve duracao e polyline da melhor rota com dados reais quando disponivel
-    if (dadosGoogleMaps) {
-      rotasFormatadas[0].duracaoMin = Math.round(dadosGoogleMaps.duracaoSegundos / 60);
-      rotasFormatadas[0].duracaoFormatada = dadosGoogleMaps.duracaoFormatada;
-      rotasFormatadas[0].distanciaKm = parseFloat((dadosGoogleMaps.distanciaMetros / 1000).toFixed(2));
-      rotasFormatadas[0].distanciaFormatada = dadosGoogleMaps.distanciaFormatada;
-      rotasFormatadas[0].polyline = dadosGoogleMaps.polyline;
-      rotasFormatadas[0].fonte = 'google_maps';
-    } else {
-      rotasFormatadas[0].polyline = null;
-      rotasFormatadas[0].fonte = 'grafo_interno';
-    }
+    // 4. Formatar para retorno ao frontend
+    const rotasFormatadas = rotasOrdenadas.map((rota, index) => ({
+      id: index + 1,
+      caminho: [origem.nome, destino.nome],
+      pontos: [
+        { nome: origem.nome, latitude: origem.lat, longitude: origem.lng },
+        { nome: destino.nome, latitude: destino.lat, longitude: destino.lng },
+      ],
+      distanciaKm: parseFloat((rota.distanciaMetros / 1000).toFixed(2)),
+      distanciaFormatada: rota.distanciaFormatada,
+      duracaoMin: Math.round(rota.duracaoSegundos / 60),
+      duracaoFormatada: rota.duracaoFormatada,
+      polyline: rota.polyline,
+      fonte: 'google_maps',
+    }));
 
     return {
       origemNome: origem.nome,
@@ -115,6 +102,27 @@ class RotasService {
       rotas: rotasFormatadas,
       melhorRota: rotasFormatadas[0],
     };
+  }
+
+  /**
+   * Valida uma rota recebida do servico de roteamento.
+   *
+   * Uma rota e valida somente se possuir:
+   * - distancia positiva (em metros)
+   * - duracao positiva (em segundos)
+   * - polyline valida (geometria real da malha viaria)
+   *
+   * Rotas sem polyline sao descartadas para evitar exibir linhas artificiais.
+   *
+   * @param {object} rota - Rota retornada pela Routes API
+   * @returns {boolean}
+   */
+  _validarRota(rota) {
+    if (!rota) return false;
+    if (!rota.distanciaMetros || rota.distanciaMetros <= 0) return false;
+    if (!rota.duracaoSegundos || rota.duracaoSegundos <= 0) return false;
+    if (!rota.polyline || rota.polyline.trim() === '') return false;
+    return true;
   }
 
   /**
@@ -247,10 +255,18 @@ class RotasService {
   }
 
   /**
-   * Consulta a Google Maps Routes API v2 para dados reais de rota.
+   * Consulta a Google Maps Routes API v2 para obter TODAS as rotas reais
+   * (principal + alternativas) com geometria da malha viaria.
+   *
+   * Diferenca em relacao a versao anterior:
+   * - computeAlternativeRoutes: true  -> solicita ate 3 rotas alternativas
+   * - Retorna ARRAY de rotas (antes retornava apenas a primeira)
+   * - Cada rota possui polyline real (geometria das ruas/estradas)
+   *
    * @param {{ lat, lng }} origem
    * @param {{ lat, lng }} destino
    * @param {string} apiKey
+   * @returns {Promise<Array<{ distanciaMetros, distanciaFormatada, duracaoSegundos, duracaoFormatada, polyline }>>}
    */
   _consultarRoutesAPI(origem, destino, apiKey) {
     return new Promise((resolve, reject) => {
@@ -260,6 +276,7 @@ class RotasService {
         travelMode: 'DRIVE',
         languageCode: 'pt-BR',
         units: 'METRIC',
+        computeAlternativeRoutes: true,
       });
 
       const options = {
@@ -281,30 +298,34 @@ class RotasService {
           try {
             const json = JSON.parse(raw);
             if (!json.routes || json.routes.length === 0) {
-              return reject(new Error(json.error?.message || 'Routes API sem rotas.'));
+              return reject(new Error(json.error?.message || 'Routes API nao retornou rotas.'));
             }
-            const route = json.routes[0];
-            const distanciaMetros = route.distanceMeters;
-            const duracaoSegundos = parseInt(route.duration.replace('s', ''), 10);
-            const distanciaKm = distanciaMetros / 1000;
-            const distanciaFormatada = distanciaKm >= 1
-              ? (distanciaKm.toFixed(1).replace('.', ',') + ' km')
-              : (distanciaMetros + ' m');
 
-            resolve({
-              distanciaMetros,
-              distanciaFormatada,
-              duracaoSegundos,
-              duracaoFormatada: this._formatarDuracao(duracaoSegundos),
-              polyline: route.polyline.encodedPolyline,
+            // Mapeia TODAS as rotas retornadas pela API (nao apenas a primeira)
+            const rotas = json.routes.map((route) => {
+              const distanciaMetros = route.distanceMeters;
+              const duracaoSegundos = parseInt(route.duration.replace('s', ''), 10);
+              const distanciaKm = distanciaMetros / 1000;
+              const distanciaFormatada = distanciaKm >= 1
+                ? (distanciaKm.toFixed(1).replace('.', ',') + ' km')
+                : (distanciaMetros + ' m');
+
+              return {
+                distanciaMetros,
+                distanciaFormatada,
+                duracaoSegundos,
+                duracaoFormatada: this._formatarDuracao(duracaoSegundos),
+                // Geometria real da malha viaria (nao e uma linha artificial)
+                polyline: route.polyline?.encodedPolyline || null,
+              };
             });
-          } catch (e) { reject(new Error('Erro ao processar Routes API: ' + e.message)); }
 
+            resolve(rotas);
+          } catch (e) { reject(new Error('Erro ao processar Routes API: ' + e.message)); }
         });
       });
 
       req.on('error', (err) => reject(new Error('Erro de conexao Routes API: ' + err.message)));
-
       req.setTimeout(8000, () => { req.destroy(); reject(new Error('Timeout Routes API.')); });
       req.write(requestBody);
       req.end();
@@ -322,7 +343,6 @@ class RotasService {
     if (horas === 0) return minutos + ' min';
     if (minutos === 0) return horas + ' h';
     return horas + ' h ' + minutos + ' min';
-
   }
 }
 

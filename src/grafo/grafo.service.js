@@ -270,6 +270,81 @@ class GrafoService {
     }
   }
 
+  /**
+   * Ordena um array de rotas reais (retornadas pelo servico de roteamento)
+   * utilizando um grafo dinamico e o algoritmo de Dijkstra.
+   *
+   * ESTRUTURA DO GRAFO DINAMICO:
+   *   - No ORIGEM  : ponto de partida da corrida
+   *   - No ROTA_i  : representa cada alternativa de rota (i = 0, 1, 2...)
+   *   - No DESTINO : ponto de chegada da corrida
+   *
+   * ARESTAS:
+   *   - ORIGEM  → ROTA_i  : peso = distancia real da rota i em km (dado real da API)
+   *   - ROTA_i  → DESTINO : peso = 0  (chegada ao destino e equivalente para todas)
+   *
+   * DIJKSTRA:
+   *   Executa o algoritmo do no ORIGEM ate o no DESTINO.
+   *   O caminho minimo encontrado atravessa o ROTA_i de menor distancia.
+   *   Esse e identificado como a melhor rota e posicionado no indice 0.
+   *   As demais rotas sao ordenadas por distancia crescente.
+   *
+   * IMPORTANTE: As conexoes do grafo sao baseadas nos dados reais do
+   * servico de roteamento — nao em distancias Haversine (linha reta).
+   *
+   * @param {Array<{ distanciaMetros, duracaoSegundos, polyline, ... }>} rotasAPI
+   *   Array de rotas validas retornadas e ja validadas pela Routes API.
+   * @returns {Array} Rotas ordenadas: melhor rota primeiro, restantes por distancia crescente.
+   */
+  ordenarRotasReais(rotasAPI) {
+    if (!rotasAPI || rotasAPI.length === 0) return [];
+    if (rotasAPI.length === 1) return [...rotasAPI];
+
+    // Constroi grafo temporario com os dados reais da API
+    const grafoTemp = new Grafo();
+
+    // IMPORTANTE: Grafo indexa vertices pelo campo 'nome' (segundo argumento do Vertice).
+    // O mesmo string usado aqui deve ser usado em adicionarAresta e calcularMenorCaminho.
+    grafoTemp.adicionarVertice(new Vertice('ORIGEM', 'ORIGEM', '', '', 'Origem'));
+    grafoTemp.adicionarVertice(new Vertice('DESTINO', 'DESTINO', '', '', 'Destino'));
+
+    // Cada rota alternativa vira um no intermediario com peso = distancia real
+    rotasAPI.forEach((rota, i) => {
+      const nomeNo = `ROTA_${i}`;
+      grafoTemp.adicionarVertice(new Vertice(nomeNo, nomeNo, '', '', 'Rota'));
+      // Aresta ORIGEM → ROTA_i com peso = distancia real em km (dado do servico de roteamento)
+      grafoTemp.adicionarAresta('ORIGEM', nomeNo, rota.distanciaMetros / 1000);
+      // Aresta ROTA_i → DESTINO com peso minimo (Aresta requer peso > 0)
+      grafoTemp.adicionarAresta(nomeNo, 'DESTINO', 0.001);
+    });
+
+    // Executa Dijkstra para identificar o caminho de menor custo (melhor rota)
+    let melhorIndex = 0;
+    try {
+      const resultado = Dijkstra.calcularMenorCaminho(grafoTemp, 'ORIGEM', 'DESTINO');
+      if (resultado && resultado.caminho.length >= 3) {
+        // caminho = ['ORIGEM', 'ROTA_i', 'DESTINO'] — extrai o indice i
+        const nomeNo = resultado.caminho[1];
+        const indexParsed = parseInt(nomeNo.split('_')[1], 10);
+        if (!isNaN(indexParsed)) melhorIndex = indexParsed;
+      }
+    } catch (e) {
+      // Se Dijkstra falhar, mantem a primeira rota como melhor (menor distancia da API)
+      console.warn('[GrafoService] Dijkstra falhou ao ordenar rotas reais:', e.message);
+    }
+
+    // Ordena: melhor rota (identificada pelo Dijkstra) primeiro,
+    // as demais em ordem crescente de distancia
+    return [...rotasAPI]
+      .map((r, i) => ({ ...r, _indexOriginal: i }))
+      .sort((a, b) => {
+        if (a._indexOriginal === melhorIndex) return -1;
+        if (b._indexOriginal === melhorIndex) return 1;
+        return a.distanciaMetros - b.distanciaMetros;
+      })
+      .map(({ _indexOriginal, ...r }) => r);
+  }
+
 }
 
 // Singleton: uma única instância do grafo para toda a aplicação
