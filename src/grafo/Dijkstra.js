@@ -16,9 +16,11 @@
  * - Complexidade melhor que Bellman-Ford para grafos sem pesos negativos
  *
  * APLICACAO NO SISTEMA:
- * - Usado para calcular a rota mais curta entre a localizacao do usuario
- *   e a localizacao do carro desejado durante o processo de reserva
- * - Resultado exibido ao usuario antes de confirmar a reserva
+ * 1. Calcular o menor caminho entre dois locais fixos do grafo academico do ES
+ *    (ex: /api/grafo/rota?origem=Aeroporto+de+Vitória&destino=Estação+Pedro+Nolasco)
+ * 2. Ordenar rotas alternativas reais (retornadas pela Google Routes API) via
+ *    GrafoService.ordenarRotasReais() — grafo dinamico construido com dados reais
+ *    da malha viaria, sem distancias Haversine ou linhas artificiais.
  */
 class Dijkstra {
   /**

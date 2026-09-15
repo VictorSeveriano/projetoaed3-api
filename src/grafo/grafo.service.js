@@ -116,7 +116,14 @@ class GrafoService {
   }
 
   /**
-   * Calcula multiplas rotas alternativas entre origem e destino.
+   * Calcula multiplas rotas alternativas entre dois locais DO GRAFO FIXO.
+   *
+   * CONTEXTO ACADEMICO: Este metodo opera exclusivamente sobre os 7 locais
+   * fixos do grafo do Espirito Santo (localizacoes.data.js). Nao e usado
+   * no fluxo de corridas (que usa a Google Routes API para rotas reais).
+   *
+   * E disponibilizado pelo endpoint GET /api/grafo/rota para exibicao
+   * academica do grafo e seus algoritmos.
    *
    * Fluxo:
    * 1. RouteSearchTree.buscarCaminhos() explora o grafo via BFS,
@@ -126,8 +133,8 @@ class GrafoService {
    * 3. Ordena por distancia crescente (melhor rota primeiro)
    * 4. Enriquece cada rota com coordenadas dos pontos
    *
-   * @param {string} origem  - Nome do local de origem
-   * @param {string} destino - Nome do local de destino
+   * @param {string} origem  - Nome do local de origem (deve existir no grafo fixo)
+   * @param {string} destino - Nome do local de destino (deve existir no grafo fixo)
    * @param {number} maxRotas - Maximo de rotas alternativas (padrao: 3)
    * @returns {Array<{ id, caminho, pontos, distanciaTotal }>}
    */
@@ -200,74 +207,6 @@ class GrafoService {
    */
   localizacaoExiste(nome) {
     return this.grafo.possuiVertice(nome);
-  }
-
-  /**
-   * Calcula a distancia em linha reta (Haversine) entre duas coordenadas.
-   * Retorna a distancia em km.
-   */
-  _calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Raio da Terra em km
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) *
-        Math.cos(lat2 * (Math.PI / 180)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-
-  /**
-   * Adiciona um vertice temporario ao grafo (para Origem ou Destino dinamicos)
-   * conectando-o aos 3 nós mais próximos usando distancia Haversine.
-   *
-   * @param {string} nomeTemp - Nome ou identificador unico do no (ex: 'TEMP_ORIGEM')
-   * @param {number} lat - Latitude
-   * @param {number} lng - Longitude
-   */
-  adicionarNoTemporario(nomeTemp, lat, lng) {
-    // 1. Cria o vertice temporario
-    const verticeTemp = new Vertice(
-      'temp_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-      nomeTemp,
-      'Desconhecida',
-      'ES',
-      'LocalAtual',
-      lat,
-      lng
-    );
-    
-    this.grafo.adicionarVertice(verticeTemp);
-
-    // 2. Conecta aos 3 nos permanentes mais proximos (linha reta)
-    const todosVertices = this.obterVertices().filter((v) => v.nome !== nomeTemp && !v.nome.startsWith('TEMP_'));
-    const distancias = todosVertices.map((v) => ({
-      nome: v.nome,
-      dist: this._calcularDistanciaHaversine(lat, lng, v.latitude, v.longitude),
-    }));
-    
-    // Ordena pela menor distancia
-    distancias.sort((a, b) => a.dist - b.dist);
-    
-    // Conecta aos 3 mais proximos
-    const k = Math.min(3, distancias.length);
-    for (let i = 0; i < k; i++) {
-      this.grafo.adicionarAresta(nomeTemp, distancias[i].nome, distancias[i].dist);
-    }
-  }
-
-  /**
-   * Remove um vertice temporario do grafo.
-   *
-   * @param {string} nomeTemp - O nome do no a ser removido
-   */
-  removerNoTemporario(nomeTemp) {
-    if (this.grafo.possuiVertice(nomeTemp)) {
-      this.grafo.removerVertice(nomeTemp);
-    }
   }
 
   /**

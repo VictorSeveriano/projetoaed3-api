@@ -1,4 +1,4 @@
-﻿/**
+/**
  * RouteSearchTree - Arvore de Busca de Caminhos Alternativos (BFS)
  *
  * ESTRUTURA:
@@ -14,11 +14,14 @@
  *   - DFS pode mergulhar em caminhos muito longos antes de encontrar alternativas
  *   - Para grafo com 7 nos, BFS e eficiente e gera diversidade de alternativas reais
  *
- * INTEGRACAO NO SISTEMA:
+ * INTEGRACAO NO SISTEMA (CONTEXTO ACADEMICO):
+ *   Opera exclusivamente sobre os 7 locais fixos do grafo do ES (localizacoes.data.js).
+ *   Nao e usado no fluxo de corridas (que usa a Google Routes API para rotas reais).
+ *
  *   GrafoService.calcularMultiplasRotas()
- *     RouteSearchTree.buscarCaminhos() -> caminhos candidatos
- *       Dijkstra.calcularDistancia()   -> distancia real de cada caminho
- *         Array de Rotas ordenado por eficiencia
+ *     RouteSearchTree.buscarCaminhos() -> caminhos candidatos (BFS no grafo fixo)
+ *       Soma de pesos das arestas     -> distancia total de cada caminho
+ *         Array de Rotas ordenado por distancia crescente
  */
 
 /**

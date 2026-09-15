@@ -1,6 +1,5 @@
 const corridasRepository = require('./corridas.repository');
 const carrosRepository = require('../carros/carros.repository');
-const grafoService = require('../grafo/grafo.service');
 const AppError = require('../utils/AppError');
 
 /**
@@ -73,7 +72,11 @@ class CorridasService {
       origemLng,
       destinoLat,
       destinoLng,
+      origemEndereco,
+      destinoEndereco,
       rotaCaminho,
+      rotasAlternativas,
+      polyline,
       distanciaKm,
       duracaoMin,
       dataHorario,
@@ -88,21 +91,29 @@ class CorridasService {
       throw new AppError('Distancia invalida para a corrida.', 400);
     }
 
-    // Valida veiculo se informado
+    if (duracaoMin != null && duracaoMin <= 0) {
+      throw new AppError('Duracao invalida para a corrida.', 400);
+    }
+
+    // Selecao de veiculo:
+    // - Se veiculoId informado: valida existencia e disponibilidade
+    // - Se nao informado: seleciona o mais economico disponivel (menor tarifaBase)
+    // A regra de selecao fica aqui no backend, nunca no frontend.
     let veiculo = null;
     if (veiculoId) {
-      try {
-        veiculo = carrosRepository.findById(veiculoId);
-      } catch (e) {
+      veiculo = carrosRepository.findById(veiculoId);
+      if (!veiculo) {
         throw new AppError('Veiculo ' + veiculoId + ' nao encontrado.', 404);
-
       }
-      if (veiculo && veiculo.status !== 'DISPONIVEL') {
+      if (veiculo.status !== 'DISPONIVEL') {
         throw new AppError('O veiculo nao esta disponivel para corridas.', 409);
       }
     } else {
-      // Aloca o primeiro veiculo disponivel automaticamente
-      veiculo = carrosRepository.findAll().find((c) => c.status === 'DISPONIVEL') || null;
+      // Seleciona o veiculo disponivel com menor tarifaBase (mais economico)
+      const disponiveis = carrosRepository.findAll()
+        .filter((c) => c.status === 'DISPONIVEL')
+        .sort((a, b) => (a.tarifaBase || 0) - (b.tarifaBase || 0));
+      veiculo = disponiveis[0] || null;
     }
 
     const categoriaVeiculo = veiculo ? veiculo.categoria : 'default';
@@ -117,12 +128,17 @@ class CorridasService {
       origemLng: origemLng || null,
       destinoLat: destinoLat || null,
       destinoLng: destinoLng || null,
+      origemEndereco: origemEndereco || null,
+      destinoEndereco: destinoEndereco || null,
       rotaCaminho: rotaCaminho || [origemNome, destinoNome],
+      rotasAlternativas: rotasAlternativas || [],
+      polyline: polyline || null,
       distanciaKm,
       duracaoMin: duracaoMin || null,
       valor,
       dataHorario: dataHorario || new Date().toISOString(),
-      status: 'CONFIRMADA',
+      // SOLICITADA: corrida criada pelo usuario, aguardando inicio
+      status: 'SOLICITADA',
     });
 
     // Marca o veiculo como em corrida

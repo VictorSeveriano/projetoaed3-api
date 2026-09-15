@@ -9,7 +9,7 @@ const grafoService = require('../grafo/grafo.service');
  *    para obter rotas reais pela malha viaria
  * 2. Validar cada rota recebida (geometria, distancia, duracao, polyline)
  * 3. Delegar ao GrafoService a ordenacao via grafo dinamico + Dijkstra
- * 4. Geocodificar CEPs/enderecos via ViaCEP + Nominatim
+ * 4. Geocodificar CEPs/enderecos via ViaCEP + Nominatim (com cache e rate limit)
  * 5. Retornar somente rotas validas (1, 2 ou 3 — nunca artificiais)
  *
  * Seguranca:
@@ -19,6 +19,12 @@ const grafoService = require('../grafo/grafo.service');
  * - POST https://routes.googleapis.com/directions/v2:computeRoutes
  */
 class RotasService {
+  constructor() {
+    // Cache de geocodificação Nominatim: chave = query normalizada, valor = { resultado, expiresAt }
+    // TTL de 10 minutos por entrada para respeitar o rate limit da API
+    this._geocodingCache = new Map();
+    this._CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutos
+  }
   /**
    * Calcula multiplas rotas reais entre dois locais dinamicos.
    *
@@ -80,21 +86,33 @@ class RotasService {
     //    O grafo e construido com os dados reais da API — nao com distancias Haversine.
     const rotasOrdenadas = grafoService.ordenarRotasReais(rotasValidas);
 
+    // Tarifa minima para estimativa pre-confirmacao (Hatch: R$2/km).
+    // O valor REAL e calculado pelo backend em corridas.service.criar()
+    // apos a selecao do veiculo disponivel.
+    const TARIFA_MINIMA = 2.0;
+
     // 4. Formatar para retorno ao frontend
-    const rotasFormatadas = rotasOrdenadas.map((rota, index) => ({
-      id: index + 1,
-      caminho: [origem.nome, destino.nome],
-      pontos: [
-        { nome: origem.nome, latitude: origem.lat, longitude: origem.lng },
-        { nome: destino.nome, latitude: destino.lat, longitude: destino.lng },
-      ],
-      distanciaKm: parseFloat((rota.distanciaMetros / 1000).toFixed(2)),
-      distanciaFormatada: rota.distanciaFormatada,
-      duracaoMin: Math.round(rota.duracaoSegundos / 60),
-      duracaoFormatada: rota.duracaoFormatada,
-      polyline: rota.polyline,
-      fonte: 'google_maps',
-    }));
+    const rotasFormatadas = rotasOrdenadas.map((rota, index) => {
+      const distanciaKm = parseFloat((rota.distanciaMetros / 1000).toFixed(2));
+      const valorEstimado = parseFloat((distanciaKm * TARIFA_MINIMA).toFixed(2));
+      return {
+        id: index + 1,
+        caminho: [origem.nome, destino.nome],
+        pontos: [
+          { nome: origem.nome, latitude: origem.lat, longitude: origem.lng },
+          { nome: destino.nome, latitude: destino.lat, longitude: destino.lng },
+        ],
+        distanciaKm,
+        distanciaFormatada: rota.distanciaFormatada,
+        duracaoMin: Math.round(rota.duracaoSegundos / 60),
+        duracaoFormatada: rota.duracaoFormatada,
+        polyline: rota.polyline,
+        // valorEstimado: estimativa usando tarifa minima para exibicao pre-confirmacao.
+        // Nao usar este valor para criacao da corrida — o backend recalcula com o veiculo real.
+        valorEstimado,
+        fonte: 'google_maps',
+      };
+    });
 
     return {
       origemNome: origem.nome,
@@ -179,7 +197,22 @@ class RotasService {
 
       const tentarEmCascata = async (queries) => {
         for (const q of queries) {
-          try { return await consultarNominatim(q); } catch (e) { /* continua */ }
+          try {
+            // Verifica cache antes de chamar Nominatim
+            const cacheKey = q.toLowerCase().trim();
+            const cached = this._geocodingCache.get(cacheKey);
+            if (cached && cached.expiresAt > Date.now()) {
+              return cached.resultado;
+            }
+            const resultado = await consultarNominatim(q);
+            // Salva no cache com TTL
+            this._geocodingCache.set(cacheKey, { resultado, expiresAt: Date.now() + this._CACHE_TTL_MS });
+            return resultado;
+          } catch (e) {
+            // Delay de 1 segundo entre tentativas para respeitar rate limit do Nominatim
+            // (politica de uso: max 1 req/s por User-Agent)
+            await new Promise((r) => setTimeout(r, 1000));
+          }
         }
         erroComStatus('Nao foi possivel localizar o endereco informado.');
       };

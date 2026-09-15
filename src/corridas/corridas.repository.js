@@ -1,4 +1,4 @@
-﻿const Corrida = require('./Corrida');
+const Corrida = require('./Corrida');
 const corridasData = require('../data/corridas.data');
 
 /**
@@ -12,7 +12,8 @@ class CorridasRepository {
   constructor() {
     // Carrega dados iniciais convertendo em instancias de Corrida
     this._corridas = corridasData.map((c) => new Corrida(c));
-    this._nextId = this._corridas.length + 1;
+    // _nextId = 15: mocks existentes têm ids c1..c14, portanto próximo é c15
+    this._nextId = 15;
   }
 
   /** @returns {Corrida[]} */
@@ -52,7 +53,7 @@ class CorridasRepository {
   create(dados) {
     const novaCorrida = new Corrida({
       ...dados,
-      id: c,
+      id: 'c' + String(this._nextId++),
       criadaEm: new Date().toISOString(),
     });
     this._corridas.push(novaCorrida);

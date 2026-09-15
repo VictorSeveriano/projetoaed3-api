@@ -20,11 +20,11 @@ const criarGrafoDeTeste = () => {
 };
 
 describe('Classe Vertice', () => {
-  test('deve criar um vertice com id, nome e descricao', () => {
-    const v = new Vertice('1', 'Centro', 'Regiao central');
+  test('deve criar um vertice com id, nome e cidade', () => {
+    const v = new Vertice('1', 'Centro', 'Vitória');
     expect(v.id).toBe('1');
     expect(v.nome).toBe('Centro');
-    expect(v.descricao).toBe('Regiao central');
+    expect(v.cidade).toBe('Vitória');
   });
 
   test('toString deve retornar o nome do vertice', () => {
