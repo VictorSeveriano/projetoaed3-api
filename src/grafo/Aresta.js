@@ -1,8 +1,8 @@
 /**
  * Classe Aresta - representa uma conexao entre dois vertices do grafo.
  *
- * No sistema de reservas, cada aresta conecta duas localizacoes
- * com um peso que representa a distancia em km entre elas.
+ * Cada aresta conecta dois vertices com um peso numerico positivo
+ * (distancia em km no grafo academico; distancia real em km no grafo dinamico).
  */
 class Aresta {
   constructor(origem, destino, peso) {

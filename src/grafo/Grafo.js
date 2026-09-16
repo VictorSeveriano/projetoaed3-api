@@ -8,12 +8,12 @@ const Aresta = require('./Aresta');
  * - vertices: Map<string, Vertice> — mapeia nome -> objeto Vertice
  * - adjacencia: Map<string, Aresta[]> — lista de adjacencia
  *
- * No sistema de reservas:
- * - Vertices = Localizacoes (Centro, Shopping, Aeroporto, ...)
- * - Arestas = Conexoes entre localizacoes com distancia em km
- *
- * Esta estrutura e utilizada pelo Algoritmo de Dijkstra para calcular
- * o menor caminho entre localizacoes durante o processo de reserva.
+ * Usos no sistema:
+ * 1. Grafo academico estatico: 7 locais reais do ES como vertices,
+ *    distancias rodovidades como pesos — exposto via /api/grafo
+ * 2. Grafo dinamico temporario: construido em GrafoService.ordenarRotasReais()
+ *    com as alternativas reais da Google Routes API para executar Dijkstra
+ *    e identificar a rota de menor distancia
  */
 class Grafo {
   constructor() {

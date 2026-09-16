@@ -5,8 +5,9 @@
  *
  * Estrutura baseada na entidade Corrida, preparada para migração ao banco.
  *
- * NOTA: Os nomes de origemNome/destinoNome devem coincidir com os nomes
- * em localizacoes.data.js (com acentos corretos).
+ * origemNome/destinoNome representam endereços livres (não precisam existir
+ * nos 7 locais fixos do grafo acadêmico — esses mocks usam nomes históricos
+ * do período em que o sistema operava com locais fixos).
  */
 const corridas = [
   {

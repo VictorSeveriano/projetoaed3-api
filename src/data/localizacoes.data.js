@@ -1,8 +1,10 @@
 /**
- * Dados dos locais cadastrados no sistema — Espírito Santo, Brasil.
+ * Dados dos locais do Esírito Santo — vértices do grafo acadêmico.
  *
- * Estes locais são utilizados como VÉRTICES do grafo de rotas e como
- * pontos disponíveis para origem/destino nas reservas de veículos.
+ * Estes locais são utilizados exclusivamente como VÉRTICES do grafo
+ * (para demonstração acadêmica via /api/grafo). Não são mais
+ * restrição de origem/destino das corridas — o usuário pode informar
+ * qualquer endereço, CEP ou coordenada GPS.
  *
  * Estrutura preparada para futura migração ao banco de dados:
  *   - id         : identificador único
@@ -14,7 +16,6 @@
  *   - longitude  : coordenada geográfica real (Google Maps)
  *
  * IMPORTANTE: As coordenadas abaixo são REAIS, verificadas via Google Maps.
- * Não utilize valores fictícios ou aproximados.
  */
 const localizacoes = [
   {
