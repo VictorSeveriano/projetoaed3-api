@@ -82,5 +82,32 @@ const geocodificar = async (req, res, next) => {
   }
 };
 
-module.exports = { listarLocais, calcularCorrida, geocodificar };
+/**
+ * GET /api/rotas/sugestoes?q=texto
+ *
+ * Busca sugestões de localização para autocomplete.
+ * Retorna até 5 resultados com endereço estruturado e coordenadas.
+ *
+ * Restrições:
+ * - q deve ter pelo menos 3 caracteres (validação no controller e no service)
+ * - Rate limit implícito via cache no RotasService (_geocodingCache)
+ */
+const buscarSugestoes = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.trim().length < 3) {
+      return next(new AppError('O parâmetro "q" deve ter pelo menos 3 caracteres.', 400));
+    }
+
+    const sugestoes = await rotasService.buscarSugestoes(q.trim());
+    return success(res, sugestoes, 'Sugestões retornadas com sucesso.');
+  } catch (err) {
+    if (err.statusCode) return next(new AppError(err.message, err.statusCode));
+    next(err);
+  }
+};
+
+module.exports = { listarLocais, calcularCorrida, geocodificar, buscarSugestoes };
+
 

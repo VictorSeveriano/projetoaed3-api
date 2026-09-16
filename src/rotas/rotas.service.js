@@ -158,6 +158,132 @@ class RotasService {
    * @param {string} entrada - CEP (com ou sem hifen) ou endereco livre
    * @returns {Promise<{ endereco: object, latitude: number, longitude: number }>}
    */
+  /**
+   * Busca sugestões de localização para autocomplete.
+   *
+   * Consulta Nominatim com `limit=5` e retorna múltiplos resultados formatados.
+   * Reutiliza o cache já existente (_geocodingCache) com TTL de 10 min.
+   *
+   * @param {string} query - Texto digitado pelo usuário (mínimo 3 caracteres)
+   * @returns {Promise<Array<{ descricao, logradouro, bairro, cidade, estado, cep, latitude, longitude }>>}
+   */
+  buscarSugestoes(query) {
+    return new Promise((resolve, reject) => {
+      const texto = (query || '').trim();
+
+      if (!texto || texto.length < 3) {
+        resolve([]);
+        return;
+      }
+
+      const erroComStatus = (msg, status = 503) => {
+        const err = new Error(msg);
+        err.statusCode = status;
+        reject(err);
+      };
+
+      const agent = new (require('https').Agent)({
+        rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
+      });
+
+      // Chave de cache para esta query
+      const cacheKey = ('sugestoes:' + texto).toLowerCase();
+      const cached = this._geocodingCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        resolve(cached.resultado);
+        return;
+      }
+
+      // Consulta Nominatim com múltiplos resultados e detalhes de endereço
+      const url =
+        'https://nominatim.openstreetmap.org/search' +
+        '?format=json' +
+        '&addressdetails=1' +
+        '&limit=5' +
+        '&countrycodes=br' +
+        '&q=' + encodeURIComponent(texto + ', Brasil');
+
+      const opts = {
+        headers: {
+          'User-Agent': 'ReservaCar-AED3/1.0',
+          'Accept-Language': 'pt-BR,pt;q=0.9',
+        },
+        agent,
+      };
+
+      const req = https.get(url, opts, (res) => {
+        let raw = '';
+        res.on('data', (chunk) => { raw += chunk; });
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(raw);
+
+            if (!Array.isArray(data)) {
+              resolve([]);
+              return;
+            }
+
+            const sugestoes = data
+              .filter((item) => item.lat && item.lon)
+              .map((item) => {
+                const addr = item.address || {};
+
+                // Monta logradouro a partir dos campos disponíveis
+                const logradouro = [
+                  addr.road || addr.pedestrian || addr.footway || '',
+                  addr.house_number || '',
+                ].filter(Boolean).join(', ');
+
+                const bairro = addr.suburb || addr.neighbourhood || addr.quarter || addr.city_district || '';
+                const cidade = addr.city || addr.town || addr.village || addr.municipality || '';
+                const estado = addr.state || '';
+                const cep    = (addr.postcode || '').replace(/\D/g, '');
+
+                // Descrição legível para exibição no dropdown
+                const partes = [];
+                if (logradouro) partes.push(logradouro);
+                if (bairro) partes.push(bairro);
+                if (cidade) partes.push(cidade);
+                if (estado) partes.push(estado);
+                const descricao = partes.join(', ') || item.display_name || texto;
+
+                return {
+                  descricao,
+                  logradouro,
+                  numero: addr.house_number || '',
+                  complemento: '',
+                  bairro,
+                  cidade,
+                  estado,
+                  cep: cep.length === 8
+                    ? cep.substring(0, 5) + '-' + cep.substring(5)
+                    : cep,
+                  latitude: parseFloat(item.lat),
+                  longitude: parseFloat(item.lon),
+                };
+              });
+
+            // Salva no cache
+            this._geocodingCache.set(cacheKey, {
+              resultado: sugestoes,
+              expiresAt: Date.now() + this._CACHE_TTL_MS,
+            });
+
+            resolve(sugestoes);
+          } catch (e) {
+            erroComStatus('Erro ao processar resposta de sugestoes de localizacao.');
+          }
+        });
+      });
+
+      req.on('error', () => erroComStatus('Servico de sugestoes de localizacao indisponivel.'));
+      req.setTimeout(6000, () => {
+        req.destroy();
+        erroComStatus('Timeout ao buscar sugestoes de localizacao.');
+      });
+    });
+  }
+
   geocodificar(entrada) {
     return new Promise((resolve, reject) => {
       const texto = entrada.trim();
