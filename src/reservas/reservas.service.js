@@ -22,13 +22,9 @@ class ReservasService {
     return reserva;
   }
 
-  /**
-   * Cria uma nova reserva.
-   * Validacoes:
-   * 1. Carro existe e esta DISPONIVEL
-   * 2. Datas validas e fim > inicio
-   * 3. Sem conflito de datas com reservas existentes do mesmo carro
-   */
+  
+  // Cria uma nova reserva.
+
   criar(dados) {
     const { usuarioId, carroId, dataInicio, dataFim, localRetirada, localDevolucao } = dados;
 
