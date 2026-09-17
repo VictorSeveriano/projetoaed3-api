@@ -40,10 +40,16 @@ const obterGrafo = (req, res, next) => {
     const lng = parseFloat(origemLng);
     const dLat = parseFloat(destinoLat);
     const dLng = parseFloat(destinoLng);
-    const distM = parseFloat(distanciaMetros) || 1000;
+    const distM = parseFloat(distanciaMetros);
 
-    if (isNaN(lat) || isNaN(lng) || isNaN(dLat) || isNaN(dLng)) {
-      return next(new AppError('Coordenadas inválidas. Forneça valores numéricos para lat/lng.', 400));
+    if (!Number.isFinite(distM) || distM <= 0) {
+      return next(new AppError('Distância inválida. Forneça um valor numérico maior que zero.', 400));
+    }
+
+    const isValidCoord = (l, g) => Number.isFinite(l) && l >= -90 && l <= 90 && Number.isFinite(g) && g >= -180 && g <= 180;
+
+    if (!isValidCoord(lat, lng) || !isValidCoord(dLat, dLng)) {
+      return next(new AppError('Coordenadas inválidas. Forneça valores numéricos válidos para lat/lng.', 400));
     }
 
     const grafo = grafoService.obterGrafoDaOperacao(

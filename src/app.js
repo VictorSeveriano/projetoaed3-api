@@ -5,7 +5,6 @@ const cors = require('cors');
 const authRoutes = require('./auth/auth.routes');
 const carrosRoutes = require('./carros/carros.routes');
 const reservasRoutes = require('./reservas/reservas.routes');
-const localizacoesRoutes = require('./localizacoes/localizacoes.routes');
 const grafoRoutes = require('./grafo/grafo.routes');
 const rotasRoutes = require('./rotas/rotas.routes');
 const corridasRoutes = require('./corridas/corridas.routes');
@@ -34,7 +33,6 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/carros', carrosRoutes);
 app.use('/api/reservas', reservasRoutes);
-app.use('/api/localizacoes', localizacoesRoutes);
 app.use('/api/grafo', grafoRoutes);
 app.use('/api/rotas', rotasRoutes);
 app.use('/api/corridas', corridasRoutes);

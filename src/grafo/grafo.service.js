@@ -67,9 +67,8 @@ class GrafoService {
     grafo.adicionarVertice(verticeOrigem);
     grafo.adicionarVertice(verticeDestino);
 
-    // Aresta com a distância real retornada pelo serviço de roteamento.
-    // Distância mínima de 1 m para respeitar a validação da classe Aresta (peso > 0).
-    const pesoKm = Math.max(distanciaMetros, 1) / 1000;
+    // Aresta com a distância real retornada pelo serviço de roteamento convertida para km
+    const pesoKm = distanciaMetros / 1000;
     grafo.adicionarAresta(origem.nome, destino.nome, pesoKm);
 
     return grafo;

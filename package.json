@@ -9,7 +9,7 @@
     "test": "jest --coverage",
     "test:watch": "jest --watch"
   },
-  "keywords": ["reserva", "carros", "grafo", "dijkstra", "aed3"],
+  "keywords": ["reserva", "carros", "grafo", "abb", "aed3"],
   "author": "VictorSeveriano",
   "license": "ISC",
   "dependencies": {

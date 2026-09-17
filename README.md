@@ -83,7 +83,6 @@ src/
 |   |-- ArvoreBinariaBusca.js
 |   └── grafo.service.js
 |-- reservas/       # Sistema legado (modelo de aluguel)
-|-- localizacoes/   # Módulo de localizações (lista vazia — sem pontos fixos)
 |-- dashboard/      # Métricas: corridas/mês, origens, destinos, faturamento
 |-- data/           # Dados mock em memória
 |-- middlewares/    # auth, errorHandler, validate
