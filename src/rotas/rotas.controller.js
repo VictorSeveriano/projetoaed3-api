@@ -42,21 +42,21 @@ const calcularCorrida = async (req, res, next) => {
 
     const isValidCoord = (l, g) => Number.isFinite(l) && l >= -90 && l <= 90 && Number.isFinite(g) && g >= -180 && g <= 180;
 
-    const oLat = parseFloat(origem.lat);
-    const oLng = parseFloat(origem.lng);
-    const dLat = parseFloat(destino.lat);
-    const dLng = parseFloat(destino.lng);
+    const oLat = Number(origem.lat);
+    const oLng = Number(origem.lng);
+    const dLat = Number(destino.lat);
+    const dLng = Number(destino.lng);
 
     if (!isValidCoord(oLat, oLng) || !isValidCoord(dLat, dLng)) {
       return next(new AppError('Origem e destino devem conter latitude e longitude numéricas e válidas.', 400));
     }
 
     // Verificar se origem e destino são muito próximos espacialmente (mesmo local)
-    // Tolerância de ~11 metros (0.0001 graus)
+    // Tolerância de ~11 metros (0.0001 graus), independentemente dos nomes.
     const latDiff = Math.abs(oLat - dLat);
     const lngDiff = Math.abs(oLng - dLng);
-    if (origemNomeTrim.toLowerCase() === destinoNomeTrim.toLowerCase() && latDiff < 0.0001 && lngDiff < 0.0001) {
-      return next(new AppError('Origem e destino devem ser diferentes.', 400));
+    if (latDiff < 0.0001 && lngDiff < 0.0001) {
+      return next(new AppError('Origem e destino devem ser diferentes fisicamente.', 400));
     }
 
     const resultado = await rotasService.calcularCorrida(

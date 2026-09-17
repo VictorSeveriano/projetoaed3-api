@@ -48,14 +48,14 @@ describe('RotasController - calcularCorrida Validations', () => {
     expect(next.mock.calls[0][0].message).toMatch(/válidas/);
   });
 
-  test('deve rejeitar se origem e destino forem o mesmo local (nome igual e coords proximas)', async () => {
+  test('deve rejeitar se origem e destino forem o mesmo local (mesmo com nomes diferentes)', async () => {
     req.body = {
-      origem: { nome: ' Vitoria ', lat: -20.31970, lng: -40.33760 },
-      destino: { nome: 'vitoria', lat: -20.31975, lng: -40.33765 }
+      origem: { nome: 'Rua A', lat: -20.31970, lng: -40.33760 },
+      destino: { nome: 'Local B', lat: -20.31975, lng: -40.33765 }
     };
     await calcularCorrida(req, res, next);
     expect(next).toHaveBeenCalledWith(expect.any(AppError));
-    expect(next.mock.calls[0][0].message).toMatch(/diferentes/);
+    expect(next.mock.calls[0][0].message).toMatch(/diferentes fisicamente/);
   });
 
   test('nao deve rejeitar se nomes iguais mas locais fisicos distantes', async () => {
@@ -66,6 +66,16 @@ describe('RotasController - calcularCorrida Validations', () => {
     await calcularCorrida(req, res, next);
     expect(next).not.toHaveBeenCalled();
     expect(rotasService.calcularCorrida).toHaveBeenCalled();
+  });
+
+  test('deve rejeitar coordenadas parcialmente numericas como 20abc', async () => {
+    req.body = {
+      origem: { nome: 'A', lat: '20abc', lng: '-40.5' },
+      destino: { nome: 'B', lat: -21.0, lng: -41.0 }
+    };
+    await calcularCorrida(req, res, next);
+    expect(next).toHaveBeenCalledWith(expect.any(AppError));
+    expect(next.mock.calls[0][0].message).toMatch(/numéricas e válidas/);
   });
 
   test('deve repassar ao service se valido', async () => {
