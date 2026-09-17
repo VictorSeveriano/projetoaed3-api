@@ -5,34 +5,13 @@ const { ArvoreBinariaBusca } = require('./ArvoreBinariaBusca');
 
 /**
  * GrafoService — Serviço responsável pelo grafo dinâmico e pela ABB de rotas.
- *
- * RESPONSABILIDADES:
- * 1. construirGrafoDaOperacao() — monta um grafo com os dados reais de cada
- *    operação (origem, destino, distância). O grafo começa vazio e recebe
- *    apenas os dados daquela corrida específica.
- *
- * 2. organizarAlternativasComABB() — insere as alternativas reais de rota
- *    (retornadas pelo serviço de roteamento) em uma ABB usando a distância
- *    em metros como chave, percorre em ordem e retorna as rotas organizadas.
- *
- * ARQUITETURA:
- * - O grafo representa somente relações justificadas pelos dados reais da operação.
- * - A ABB organiza as alternativas — não descobre caminhos (isso é função do
- *   serviço de roteamento).
- * - Uma ABB por operação de rota, nunca global.
- *
- * SINGLETON: uma única instância do service para toda a aplicação.
- * O estado do grafo e da ABB, no entanto, é criado por operação — sem estado global.
+ * 
+ * Responsável por construir o grafo por operação e organizar alternativas 
+ * usando a Árvore Binária de Busca.
  */
 class GrafoService {
   /**
    * Constrói um grafo dinâmico representando a operação de rota atual.
-   *
-   * O grafo contém:
-   *   - Vértice ORIGEM com as coordenadas reais do ponto de partida
-   *   - Vértice DESTINO com as coordenadas reais do ponto de chegada
-   *   - Múltiplas arestas ORIGEM → DESTINO, cada uma representando uma alternativa
-   *     real de rota, com peso = distância em metros.
    *
    * @param {{ nome: string, lat: number, lng: number }} origem
    * @param {{ nome: string, lat: number, lng: number }} destino
@@ -103,15 +82,6 @@ class GrafoService {
   /**
    * Organiza as alternativas reais de rota usando a Árvore Binária de Busca.
    *
-   * Fluxo:
-   * 1. Cria uma nova ABB para esta operação (nunca reutiliza entre corridas)
-   * 2. Insere cada rota válida usando distanciaMetros como chave
-   * 3. Percorre a ABB em ordem (in-order) → rotas do menor ao maior percurso
-   * 4. Retorna o array plano de rotas ordenadas
-   *
-   * A ABB garante a ordenação por estrutura própria — não usa Array.sort().
-   * Rotas com mesma distância são todas preservadas no mesmo nó.
-   *
    * @param {Array<{ distanciaMetros, duracaoSegundos, polyline, ... }>} rotasValidas
    *   Rotas já validadas pelo serviço de roteamento.
    * @returns {object[]} Rotas ordenadas: menor distância primeiro.
@@ -132,8 +102,6 @@ class GrafoService {
   }
 }
 
-// Singleton: uma única instância do service para toda a aplicação.
-// O estado dinâmico (grafo, ABB) é sempre criado dentro dos métodos — sem estado global.
 const grafoService = new GrafoService();
 
 module.exports = grafoService;

@@ -1,6 +1,7 @@
 const rotasService = require('./rotas.service');
 const AppError = require('../utils/AppError');
 const { success } = require('../utils/responseHelper');
+const { isValidCoord } = require('../utils/geoUtils');
 
 /**
  * RotasController — Controlador para endpoints de rotas.
@@ -13,13 +14,7 @@ const { success } = require('../utils/responseHelper');
 
 /**
  * POST /api/rotas/calcular-corrida
- * Body: { origem: { nome, lat, lng }, destino: { nome, lat, lng } }
- *
- * Calcula multiplas rotas reais entre dois locais usando:
- * 1. Google Routes API para rotas reais pela malha viaria
- * 2. ABB para organizar as alternativas por distancia crescente
- *
- * Retorna: { origemNome, destinoNome, rotas: [], melhorRota: {} }
+ * Retorna as alternativas de rotas organizadas entre origem e destino.
  */
 const calcularCorrida = async (req, res, next) => {
   try {
@@ -40,8 +35,6 @@ const calcularCorrida = async (req, res, next) => {
       return next(new AppError('Os nomes da origem e destino não podem ser vazios.', 400));
     }
 
-    const isValidCoord = (l, g) => Number.isFinite(l) && l >= -90 && l <= 90 && Number.isFinite(g) && g >= -180 && g <= 180;
-
     const oLat = Number(origem.lat);
     const oLng = Number(origem.lng);
     const dLat = Number(destino.lat);
@@ -51,8 +44,7 @@ const calcularCorrida = async (req, res, next) => {
       return next(new AppError('Origem e destino devem conter latitude e longitude numéricas e válidas.', 400));
     }
 
-    // Verificar se origem e destino são muito próximos espacialmente (mesmo local)
-    // Tolerância de ~11 metros (0.0001 graus), independentemente dos nomes.
+    // Verifica se origem e destino são o mesmo local (tolerância de ~11m)
     const latDiff = Math.abs(oLat - dLat);
     const lngDiff = Math.abs(oLng - dLng);
     if (latDiff < 0.0001 && lngDiff < 0.0001) {
@@ -72,12 +64,7 @@ const calcularCorrida = async (req, res, next) => {
 
 /**
  * POST /api/rotas/geocodificar
- * Body: { cep } ou { endereco }
- *
- * Fluxo completo:
- *   CEP -> ViaCEP -> endereco estruturado em JSON -> Nominatim -> lat/lng
- *
- * Retorna: { endereco: { cep, logradouro, bairro, cidade, uf, pais }, latitude, longitude }
+ * Converte CEP ou endereço livre em coordenadas geográficas.
  */
 const geocodificar = async (req, res, next) => {
   try {
@@ -98,13 +85,7 @@ const geocodificar = async (req, res, next) => {
 
 /**
  * GET /api/rotas/sugestoes?q=texto
- *
- * Busca sugestoes de localizacao para autocomplete.
- * Retorna ate 5 resultados com endereco estruturado e coordenadas.
- *
- * Restricoes:
- * - q deve ter pelo menos 3 caracteres (validacao no controller e no service)
- * - Rate limit implicito via cache no RotasService (_geocodingCache)
+ * Busca até 5 sugestões de localização para autocomplete.
  */
 const buscarSugestoes = async (req, res, next) => {
   try {

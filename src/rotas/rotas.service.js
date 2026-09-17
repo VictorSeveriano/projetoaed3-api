@@ -71,7 +71,7 @@ class RotasService {
       throw err;
     }
 
-    // 2. Validar cada rota recebida — descartar rotas sem geometria ou dados invalidos
+    // 2. Validar cada rota recebida
     const rotasValidas = (rotasAPI || []).filter((r) => this._validarRota(r));
 
     if (rotasValidas.length === 0) {
@@ -83,22 +83,18 @@ class RotasService {
     }
 
     // 3. Construir o grafo dinamico da operacao com TODAS as alternativas validas.
-    // O grafo tera uma aresta para cada alternativa de rota real retornada.
     const grafoOperacao = grafoService.construirGrafoDaOperacao(origem, destino, rotasValidas);
 
-    // 4. Organizar as alternativas validas via ABB:
-    //    Insere cada rota pela chave distanciaMetros, percorre in-order -> menor primeiro.
+    // 4. Organizar as alternativas validas via ABB.
     const rotasOrdenadas = grafoService.organizarAlternativasComABB(rotasValidas);
 
     // Tarifa minima para estimativa pre-confirmacao (Hatch: R$2/km).
-    // O valor REAL e calculado pelo backend em corridas.service.criar()
-    // apos a selecao do veiculo disponivel.
     const TARIFA_MINIMA = 2.0;
 
-    // 4. Formatar para retorno ao frontend
+    // 5. Formatar para retorno ao frontend
     const rotasFormatadas = rotasOrdenadas.map((rota, index) => {
-      const distanciaKm = parseFloat((rota.distanciaMetros / 1000).toFixed(2));
-      const valorEstimado = parseFloat((distanciaKm * TARIFA_MINIMA).toFixed(2));
+      const distanciaKm = Number((rota.distanciaMetros / 1000).toFixed(2));
+      const valorEstimado = Number((distanciaKm * TARIFA_MINIMA).toFixed(2));
       return {
         id: index + 1,
         caminho: [origem.nome, destino.nome],
@@ -148,21 +144,7 @@ class RotasService {
     return true;
   }
 
-  /**
-   * Geocodifica um CEP ou endereco livre.
-   *
-   * Fluxo para CEP (8 digitos):
-   *   1. ViaCEP -> valida e retorna endereco estruturado em JSON
-   *   2. Nominatim com endereco completo (logradouro + bairro + cidade + UF)
-   *   3. Fallback: logradouro + cidade + UF
-   *   4. Fallback: bairro + cidade + UF
-   *   5. Fallback: cidade + UF
-   *
-   * Retorna o endereco estruturado em JSON + coordenadas.
-   *
-   * @param {string} entrada - CEP (com ou sem hifen) ou endereco livre
-   * @returns {Promise<{ endereco: object, latitude: number, longitude: number }>}
-   */
+
   /**
    * Busca sugestões de localização para autocomplete.
    *
@@ -263,8 +245,8 @@ class RotasService {
                   cep: cep.length === 8
                     ? cep.substring(0, 5) + '-' + cep.substring(5)
                     : cep,
-                  latitude: parseFloat(item.lat),
-                  longitude: parseFloat(item.lon),
+                  latitude: Number(item.lat),
+                  longitude: Number(item.lon),
                 };
               });
 
@@ -289,6 +271,21 @@ class RotasService {
     });
   }
 
+  /**
+   * Geocodifica um CEP ou endereco livre.
+   *
+   * Fluxo para CEP (8 digitos):
+   *   1. ViaCEP -> valida e retorna endereco estruturado em JSON
+   *   2. Nominatim com endereco completo (logradouro + bairro + cidade + UF)
+   *   3. Fallback: logradouro + cidade + UF
+   *   4. Fallback: bairro + cidade + UF
+   *   5. Fallback: cidade + UF
+   *
+   * Retorna o endereco estruturado em JSON + coordenadas.
+   *
+   * @param {string} entrada - CEP (com ou sem hifen) ou endereco livre
+   * @returns {Promise<{ endereco: object, latitude: number, longitude: number }>}
+   */
   geocodificar(entrada) {
     return new Promise((resolve, reject) => {
       const texto = entrada.trim();
@@ -317,7 +314,7 @@ class RotasService {
               try {
                 const data = JSON.parse(raw);
                 if (Array.isArray(data) && data.length > 0) {
-                  res({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), displayName: data[0].display_name });
+                  res({ lat: Number(data[0].lat), lng: Number(data[0].lon), displayName: data[0].display_name });
                 } else {
                   rej(new Error('sem_resultado'));
                 }

@@ -126,7 +126,6 @@ class Grafo {
   removerVertice(nome) {
     if (!this.vertices.has(nome)) return;
 
-    // Remove as arestas dos vizinhos que apontam para este vertice
     const vizinhos = this.adjacencia.get(nome) || [];
     for (const aresta of vizinhos) {
       const vizinhoNome = aresta.destino;
@@ -139,7 +138,6 @@ class Grafo {
       }
     }
 
-    // Remove o vertice e sua lista de adjacencia
     this.vertices.delete(nome);
     this.adjacencia.delete(nome);
   }
