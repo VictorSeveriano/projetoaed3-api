@@ -71,7 +71,10 @@ class Grafo {
 
     for (const [origem, vizinhos] of this.adjacencia) {
       for (const aresta of vizinhos) {
-        const chave = [origem, aresta.destino].sort().join('-');
+        // Para suportar multiplas alternativas (multigrafo), a chave deve incluir o peso
+        // Isso evita deduplicar rotas diferentes entre os mesmos pontos, mas ainda 
+        // remove a aresta de volta (B -> A com mesmo peso).
+        const chave = [origem, aresta.destino].sort().join('-') + '-' + aresta.peso;
         if (!visitadas.has(chave)) {
           visitadas.add(chave);
           arestas.push({ origem, destino: aresta.destino, peso: aresta.peso });

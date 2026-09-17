@@ -241,20 +241,20 @@ describe('GrafoService — grafo dinamico', () => {
   const origem  = { nome: 'Rodoviária de Serra', lat: -20.12, lng: -40.30 };
   const destino = { nome: 'Terminal de Vitória', lat: -20.32, lng: -40.33 };
 
-  test('construirGrafoDaOperacao inicia com exatamente 2 vertices e 1 aresta', () => {
-    const grafo = grafoService.construirGrafoDaOperacao(origem, destino, 12500);
+  test('construirGrafoDaOperacao inicia com exatamente 2 vertices e as arestas correspondentes', () => {
+    const grafo = grafoService.construirGrafoDaOperacao(origem, destino, [{ distanciaMetros: 12500 }]);
     expect(grafo.obterVertices()).toHaveLength(2);
     expect(grafo.obterArestas()).toHaveLength(1);
   });
 
   test('vertices possuem os nomes de origem e destino fornecidos', () => {
-    const grafo = grafoService.construirGrafoDaOperacao(origem, destino, 12500);
+    const grafo = grafoService.construirGrafoDaOperacao(origem, destino, [{ distanciaMetros: 12500 }]);
     expect(grafo.possuiVertice(origem.nome)).toBe(true);
     expect(grafo.possuiVertice(destino.nome)).toBe(true);
   });
 
   test('nenhuma localizacao fixa e carregada pelo service', () => {
-    const grafo = grafoService.construirGrafoDaOperacao(origem, destino, 12500);
+    const grafo = grafoService.construirGrafoDaOperacao(origem, destino, [{ distanciaMetros: 12500 }]);
     const nomes = grafo.obterVertices().map((v) => v.nome);
     expect(nomes).not.toContain('Rodoviária de Vitória');
     expect(nomes).not.toContain('Aeroporto de Vitória');
@@ -266,7 +266,7 @@ describe('GrafoService — grafo dinamico', () => {
   });
 
   test('nenhuma aresta criada artificialmente por proximidade geografica', () => {
-    const grafo = grafoService.construirGrafoDaOperacao(origem, destino, 12500);
+    const grafo = grafoService.construirGrafoDaOperacao(origem, destino, [{ distanciaMetros: 12500 }]);
     const arestas = grafo.obterArestas();
     expect(arestas).toHaveLength(1);
     // 12500 m = 12.5 km
@@ -279,8 +279,8 @@ describe('GrafoService — grafo dinamico', () => {
     const origemB  = { nome: 'C', lat: -20.3, lng: -40.3 };
     const destinoB = { nome: 'D', lat: -20.4, lng: -40.4 };
 
-    const grafoOp1 = grafoService.construirGrafoDaOperacao(origemA, destinoA, 5000);
-    const grafoOp2 = grafoService.construirGrafoDaOperacao(origemB, destinoB, 9000);
+    const grafoOp1 = grafoService.construirGrafoDaOperacao(origemA, destinoA, [{ distanciaMetros: 5000 }]);
+    const grafoOp2 = grafoService.construirGrafoDaOperacao(origemB, destinoB, [{ distanciaMetros: 9000 }]);
 
     expect(grafoOp1.possuiVertice('A')).toBe(true);
     expect(grafoOp1.possuiVertice('C')).toBe(false);

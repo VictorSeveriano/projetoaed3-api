@@ -98,7 +98,7 @@ describe('GrafoController', () => {
     expect(grafoService.obterGrafoDaOperacao).toHaveBeenCalledWith(
       { nome: 'Origem', lat: -20.0, lng: -40.0 },
       { nome: 'Destino', lat: -20.1, lng: -40.1 },
-      1500
+      [{ distanciaMetros: 1500 }]
     );
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({

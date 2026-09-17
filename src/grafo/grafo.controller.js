@@ -55,7 +55,7 @@ const obterGrafo = (req, res, next) => {
     const grafo = grafoService.obterGrafoDaOperacao(
       { nome: origemNome, lat, lng },
       { nome: destinoNome, lat: dLat, lng: dLng },
-      distM,
+      [{ distanciaMetros: distM }]
     );
 
     return success(res, grafo, 'Grafo da operação retornado com sucesso');

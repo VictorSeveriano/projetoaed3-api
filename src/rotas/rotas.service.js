@@ -82,8 +82,12 @@ class RotasService {
       throw err;
     }
 
-    // 3. Organizar as alternativas validas via ABB:
-    //    Insere cada rota pela chave distanciaMetros, percorre in-order → menor primeiro.
+    // 3. Construir o grafo dinamico da operacao com TODAS as alternativas validas.
+    // O grafo tera uma aresta para cada alternativa de rota real retornada.
+    const grafoOperacao = grafoService.construirGrafoDaOperacao(origem, destino, rotasValidas);
+
+    // 4. Organizar as alternativas validas via ABB:
+    //    Insere cada rota pela chave distanciaMetros, percorre in-order -> menor primeiro.
     const rotasOrdenadas = grafoService.organizarAlternativasComABB(rotasValidas);
 
     // Tarifa minima para estimativa pre-confirmacao (Hatch: R$2/km).
@@ -119,6 +123,7 @@ class RotasService {
       destinoNome: destino.nome,
       rotas: rotasFormatadas,
       melhorRota: rotasFormatadas[0],
+      grafoDaOperacao: grafoOperacao.paraObjeto()
     };
   }
 

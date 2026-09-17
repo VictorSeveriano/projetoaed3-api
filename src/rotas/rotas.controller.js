@@ -25,15 +25,44 @@ const calcularCorrida = async (req, res, next) => {
   try {
     const { origem, destino } = req.body;
 
-    if (!origem || !destino || !origem.lat || !destino.lat) {
-      return next(new AppError('Origem e destino com latitude e longitude sao obrigatorios.', 400));
+    if (!origem || !destino) {
+      return next(new AppError('Origem e destino são obrigatórios.', 400));
     }
 
-    if (origem.nome.trim().toLowerCase() === destino.nome.trim().toLowerCase() && origem.nome !== '') {
+    if (typeof origem.nome !== 'string' || typeof destino.nome !== 'string') {
+      return next(new AppError('Os nomes da origem e destino devem ser textos válidos.', 400));
+    }
+
+    const origemNomeTrim = origem.nome.trim();
+    const destinoNomeTrim = destino.nome.trim();
+
+    if (!origemNomeTrim || !destinoNomeTrim) {
+      return next(new AppError('Os nomes da origem e destino não podem ser vazios.', 400));
+    }
+
+    const isValidCoord = (l, g) => Number.isFinite(l) && l >= -90 && l <= 90 && Number.isFinite(g) && g >= -180 && g <= 180;
+
+    const oLat = parseFloat(origem.lat);
+    const oLng = parseFloat(origem.lng);
+    const dLat = parseFloat(destino.lat);
+    const dLng = parseFloat(destino.lng);
+
+    if (!isValidCoord(oLat, oLng) || !isValidCoord(dLat, dLng)) {
+      return next(new AppError('Origem e destino devem conter latitude e longitude numéricas e válidas.', 400));
+    }
+
+    // Verificar se origem e destino são muito próximos espacialmente (mesmo local)
+    // Tolerância de ~11 metros (0.0001 graus)
+    const latDiff = Math.abs(oLat - dLat);
+    const lngDiff = Math.abs(oLng - dLng);
+    if (origemNomeTrim.toLowerCase() === destinoNomeTrim.toLowerCase() && latDiff < 0.0001 && lngDiff < 0.0001) {
       return next(new AppError('Origem e destino devem ser diferentes.', 400));
     }
 
-    const resultado = await rotasService.calcularCorrida(origem, destino);
+    const resultado = await rotasService.calcularCorrida(
+      { nome: origemNomeTrim, lat: oLat, lng: oLng },
+      { nome: destinoNomeTrim, lat: dLat, lng: dLng }
+    );
     return success(res, resultado, 'Rotas calculadas com sucesso.');
   } catch (err) {
     if (err.statusCode) return next(new AppError(err.message, err.statusCode));

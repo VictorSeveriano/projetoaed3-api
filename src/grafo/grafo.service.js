@@ -31,17 +31,15 @@ class GrafoService {
    * O grafo contém:
    *   - Vértice ORIGEM com as coordenadas reais do ponto de partida
    *   - Vértice DESTINO com as coordenadas reais do ponto de chegada
-   *   - Aresta ORIGEM → DESTINO com peso = distância real em metros
-   *
-   * A aresta representa a rota escolhida (melhor alternativa), justificada
-   * pelos dados reais retornados pelo serviço de roteamento.
+   *   - Múltiplas arestas ORIGEM → DESTINO, cada uma representando uma alternativa
+   *     real de rota, com peso = distância em metros.
    *
    * @param {{ nome: string, lat: number, lng: number }} origem
    * @param {{ nome: string, lat: number, lng: number }} destino
-   * @param {number} distanciaMetros - Distância real da rota selecionada
+   * @param {Array<{ distanciaMetros: number }>} rotasValidas - Rotas alternativas retornadas pela API
    * @returns {Grafo}
    */
-  construirGrafoDaOperacao(origem, destino, distanciaMetros) {
+  construirGrafoDaOperacao(origem, destino, rotasValidas) {
     const grafo = new Grafo();
 
     const verticeOrigem = new Vertice(
@@ -67,9 +65,13 @@ class GrafoService {
     grafo.adicionarVertice(verticeOrigem);
     grafo.adicionarVertice(verticeDestino);
 
-    // Aresta com a distância real retornada pelo serviço de roteamento convertida para km
-    const pesoKm = distanciaMetros / 1000;
-    grafo.adicionarAresta(origem.nome, destino.nome, pesoKm);
+    // Para cada rota válida, adiciona uma aresta no grafo
+    for (const rota of rotasValidas) {
+      if (rota && rota.distanciaMetros > 0) {
+        const pesoKm = rota.distanciaMetros / 1000;
+        grafo.adicionarAresta(origem.nome, destino.nome, pesoKm);
+      }
+    }
 
     return grafo;
   }
@@ -79,11 +81,11 @@ class GrafoService {
    *
    * @param {{ nome, lat, lng }} origem
    * @param {{ nome, lat, lng }} destino
-   * @param {number} distanciaMetros
+   * @param {Array<{ distanciaMetros: number }>} rotasValidas
    * @returns {{ vertices, arestas, adjacencia }}
    */
-  obterGrafoDaOperacao(origem, destino, distanciaMetros) {
-    const grafo = this.construirGrafoDaOperacao(origem, destino, distanciaMetros);
+  obterGrafoDaOperacao(origem, destino, rotasValidas) {
+    const grafo = this.construirGrafoDaOperacao(origem, destino, rotasValidas);
 
     return {
       vertices: grafo.obterVertices().map((v) => ({
