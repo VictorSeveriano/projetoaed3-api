@@ -56,15 +56,6 @@ describe('ReservasService', () => {
     ).toThrow('data de fim deve ser posterior');
   });
 
-  test('deve lancar erro para localizacao inexistente', () => {
-    expect(() =>
-      reservasService.criar({
-        usuarioId: '1', carroId: '3',
-        dataInicio: '2025-10-01', dataFim: '2025-10-05',
-        localRetirada: 'LocalInexistente', localDevolucao: 'Aeroporto',
-      })
-    ).toThrow('nao existe');
-  });
 
   test('deve cancelar uma reserva ativa', () => {
     const dados = {

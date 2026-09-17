@@ -8,9 +8,9 @@ const grafoService = require('../grafo/grafo.service');
  * 1. Consultar a Google Maps Routes API v2 com computeAlternativeRoutes=true
  *    para obter rotas reais pela malha viaria
  * 2. Validar cada rota recebida (geometria, distancia, duracao, polyline)
- * 3. Delegar ao GrafoService a ordenacao via grafo dinamico + Dijkstra
+ * 3. Delegar ao GrafoService a organizacao das alternativas via ABB
  * 4. Geocodificar CEPs/enderecos via ViaCEP + Nominatim (com cache e rate limit)
- * 5. Retornar somente rotas validas (1, 2 ou 3 — nunca artificiais)
+ * 5. Retornar somente rotas validas (0..N — conforme retornado pela API)
  *
  * Seguranca:
  * - A chave da API (GOOGLE_MAPS_API_KEY) nunca e exposta ao frontend
@@ -33,8 +33,8 @@ class RotasService {
    *    -> Recebe geometria REAL da malha viaria (polyline encodada)
    * 2. Valida cada rota recebida (_validarRota)
    *    -> Descarta rotas sem geometria, distancia ou duracao invalidos
-   * 3. GrafoService.ordenarRotasReais() constroi grafo dinamico e executa Dijkstra
-   *    -> Ordena as rotas validas pela melhor (menor distancia)
+   * 3. GrafoService.organizarAlternativasComABB() insere cada rota na ABB
+   *    pela chave distanciaMetros e percorre em ordem crescente
    * 4. Formata e retorna as rotas com dados reais
    *
    * IMPORTANTE: Nao ha fallback de linha reta ou criacao artificial de rotas.
@@ -82,9 +82,9 @@ class RotasService {
       throw err;
     }
 
-    // 3. Ordenar as rotas validas via grafo dinamico + Dijkstra (exigencia academica)
-    //    O grafo e construido com os dados reais da API — nao com distancias Haversine.
-    const rotasOrdenadas = grafoService.ordenarRotasReais(rotasValidas);
+    // 3. Organizar as alternativas validas via ABB:
+    //    Insere cada rota pela chave distanciaMetros, percorre in-order → menor primeiro.
+    const rotasOrdenadas = grafoService.organizarAlternativasComABB(rotasValidas);
 
     // Tarifa minima para estimativa pre-confirmacao (Hatch: R$2/km).
     // O valor REAL e calculado pelo backend em corridas.service.criar()

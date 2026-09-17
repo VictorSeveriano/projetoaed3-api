@@ -1,82 +1,96 @@
-﻿# projetoaed3-api
+# projetoaed3-api
 
 API REST do Sistema de Corridas — Projeto da disciplina AED3 (Algoritmos e Estruturas de Dados III).
 
 ## Objetivo
 
-Sistema de **solicitacao de corridas** com roteamento real pela malha viaria, geocodificacao de enderecos e uso academico de estruturas de grafos (Dijkstra e BFS via RouteSearchTree).
+Sistema de **solicitação de corridas** com roteamento real pela malha viária, geocodificação de endereços e demonstração de duas estruturas de dados dinâmicas: **Grafo** e **Árvore Binária de Busca (ABB)**.
 
-O fluxo principal:
+Fluxo principal:
 ```
-Usuario -> Origem (CEP/Endereco) -> Geocodificacao (ViaCEP + Nominatim)
-       -> Google Routes API -> Rotas reais (polyline da malha viaria)
-       -> GrafoService.ordenarRotasReais() (Dijkstra) -> Melhor rota
-       -> Selecao de veiculo -> Valor calculado -> Corrida criada
+Usuário → Origem + Destino → Geocodificação (ViaCEP + Nominatim)
+       → Google Routes API → Rotas reais (polyline da malha viária)
+       → ABB: organiza alternativas por distância (in-order)
+       → Grafo dinâmico: representa os dados da operação atual
+       → Seleção de veículo → Valor calculado → Corrida criada
 ```
 
 ## Tecnologias
 
 - **Node.js** + **Express.js**
-- **Google Maps Routes API v2** - rotas reais pela malha viaria
-- **ViaCEP** - geocodificacao de CEPs brasileiros
-- **Nominatim (OpenStreetMap)** - geocodificacao de enderecos livres
-- **Jest** - testes unitarios
-- **Sem banco de dados** - armazenamento em memoria via Repository Pattern
+- **Google Maps Routes API v2** — rotas reais pela malha viária
+- **ViaCEP** — geocodificação de CEPs brasileiros
+- **Nominatim (OpenStreetMap)** — geocodificação de endereços livres
+- **Jest** — testes unitários
+- **Sem banco de dados** — armazenamento em memória via Repository Pattern
+
+## Estruturas de Dados
+
+### Grafo Dinâmico
+
+O grafo representa os dados da **operação de rota atual**:
+- **Vértice Origem** — ponto de partida com coordenadas reais do usuário
+- **Vértice Destino** — ponto de chegada com coordenadas reais
+- **Aresta** — conecta Origem a Destino com peso = distância real em metros
+
+O grafo **começa vazio** e é construído a cada operação. Não há pontos fixos
+pré-cadastrados. Uma operação Serra → Vitória produz um grafo diferente de
+Vila Velha → Cariacica.
+
+### Árvore Binária de Busca (ABB)
+
+A ABB organiza as alternativas reais de rota retornadas pelo serviço de roteamento,
+usando a **distância em metros** como chave de ordenação:
+
+```
+inserir(5400, rotaA)
+inserir(8200, rotaB)
+inserir(11000, rotaC)
+percorrerEmOrdem() → 5.4 km → 8.2 km → 11.0 km
+```
+
+Operações disponíveis: `inserir`, `buscar`, `percorrerEmOrdem`, `obterOrdenadas`.
+
+Rotas com mesma distância são **ambas preservadas** no mesmo nó — nenhuma alternativa
+é descartada por empate.
+
+Uma ABB é criada por operação de rota — nunca global.
 
 ## Arquitetura
 
 ```
-Controller -> Service -> Repository -> Dados em Memoria (src/data/)
+Controller → Service → Repository → Dados em Memória (src/data/)
                 |
-        RotasService (Google Routes API + Geocodificacao)
+        RotasService (Google Routes API + Geocodificação)
                 |
-        GrafoService (Dijkstra + RouteSearchTree)
+        GrafoService:
+          ├── construirGrafoDaOperacao()       — grafo dinâmico por operação
+          └── organizarAlternativasComABB()    — ABB in-order para ordenar rotas
 ```
 
 ## Estrutura de Pastas
 
 ```
 src/
-|-- auth/           # Autenticacao (token fixo de sessao)
-|-- carros/         # CRUD de veiculos (DISPONIVEL / EM_CORRIDA)
+|-- auth/           # Autenticação (token fixo de sessão)
+|-- carros/         # CRUD de veículos (DISPONIVEL / EM_CORRIDA)
 |-- corridas/       # Entidade principal: Corrida.js + fluxo completo
 |-- rotas/          # Google Routes API + ViaCEP + Nominatim
-|-- grafo/          # Grafo estatico do ES + Dijkstra + RouteSearchTree
+|-- grafo/          # Grafo dinâmico + ABB
 |   |-- Grafo.js
 |   |-- Vertice.js
 |   |-- Aresta.js
-|   |-- Dijkstra.js
-|   |-- RouteSearchTree.js
-|   `-- grafo.service.js
+|   |-- ArvoreBinariaBusca.js
+|   └── grafo.service.js
 |-- reservas/       # Sistema legado (modelo de aluguel)
-|-- localizacoes/   # Lista os vertices do grafo fixo
-|-- dashboard/      # Metricas: corridas/mes, origens, destinos, faturamento
-|-- data/           # Dados mock em memoria
+|-- localizacoes/   # Módulo de localizações (lista vazia — sem pontos fixos)
+|-- dashboard/      # Métricas: corridas/mês, origens, destinos, faturamento
+|-- data/           # Dados mock em memória
 |-- middlewares/    # auth, errorHandler, validate
-`-- utils/          # AppError, dateUtils, responseHelper
+└-- utils/          # AppError, dateUtils, responseHelper
 ```
 
-## Grafo no Sistema
-
-O projeto usa grafos em **dois contextos distintos**:
-
-### 1. Grafo Estatico Academico (7 locais fixos do ES)
-
-Locais: Estacao Pedro Nolasco, Estadio Kleber Andrade, Aeroporto de Vitoria,
-Rodovaria de Vitoria, Shopping Montserrat, Terminal de Carapina, Convento da Penha.
-
-- **Dijkstra**: menor caminho entre dois locais fixos -> `GET /api/grafo/rota`
-- **RouteSearchTree (BFS)**: ate 3 rotas alternativas -> `GET /api/grafo/rotas`
-
-### 2. Grafo Dinamico para Ordenacao de Rotas Reais
-
-A Google Routes API retorna 1-3 rotas alternativas reais. O `GrafoService.ordenarRotasReais()`
-constroi um grafo temporario com essas rotas como nos e executa Dijkstra para
-identificar a de menor distancia.
-
-**Importante:** Conexoes sao baseadas em distancias reais da API, nao em Haversine.
-
-## Variaveis de Ambiente
+## Variáveis de Ambiente
 
 Crie um `.env` baseado em `.env.example`:
 
@@ -92,19 +106,19 @@ GOOGLE_MAPS_API_KEY=sua_chave_servidor_aqui
 ```bash
 npm install
 npm run dev   # desenvolvimento
-npm start     # producao
-npm test      # testes unitarios
+npm start     # produção
+npm test      # testes unitários
 ```
 
 ## Endpoints Principais
 
 ### Auth
-| Metodo | Rota            | Descricao   |
+| Método | Rota            | Descrição   |
 |--------|-----------------|-------------|
 | POST   | /api/auth/login | Fazer login |
 
 ### Corridas
-| Metodo | Rota                        | Descricao                        |
+| Método | Rota                        | Descrição                        |
 |--------|-----------------------------|----------------------------------|
 | GET    | /api/corridas               | Listar todas                     |
 | GET    | /api/corridas/:id           | Buscar por ID                    |
@@ -113,55 +127,56 @@ npm test      # testes unitarios
 | PATCH  | /api/corridas/:id/finalizar | Finalizar corrida                |
 
 ### Rotas
-| Metodo | Rota                    | Descricao                                  |
-|--------|-------------------------|--------------------------------------------|
-| POST   | /api/rotas/calcular     | Geocodifica + calcula rotas reais (Google) |
-| POST   | /api/rotas/geocodificar | Geocodifica CEP ou endereco livre          |
+| Método | Rota                        | Descrição                                        |
+|--------|-----------------------------|--------------------------------------------------|
+| POST   | /api/rotas/calcular-corrida | Routes API + ABB → rotas ordenadas por distância |
+| POST   | /api/rotas/geocodificar     | Geocodifica CEP ou endereço livre                |
+| GET    | /api/rotas/sugestoes?q=...  | Autocomplete de localização (Nominatim)          |
 
-### Grafo Academico
-| Metodo | Rota                               | Descricao                   |
-|--------|------------------------------------|-----------------------------|
-| GET    | /api/grafo                         | Estrutura completa do grafo |
-| GET    | /api/grafo/rota?origem=X&destino=Y | Menor caminho (Dijkstra)    |
-| GET    | /api/grafo/rotas?origem=X&destino=Y| Rotas alternativas (BFS)    |
-| GET    | /api/grafo/vertices                | Lista de vertices           |
+### Grafo Dinâmico
+| Método | Rota        | Descrição                                                 |
+|--------|-------------|-----------------------------------------------------------|
+| GET    | /api/grafo  | Retorna o grafo construído para os parâmetros fornecidos  |
+
+Parâmetros query para `/api/grafo`:
+`origemNome`, `origemLat`, `origemLng`, `destinoNome`, `destinoLat`, `destinoLng`, `distanciaMetros`
 
 ### Carros
-| Metodo | Rota                    | Descricao                  |
+| Método | Rota                    | Descrição                  |
 |--------|-------------------------|----------------------------|
 | GET    | /api/carros             | Listar todos (com filtros) |
-| GET    | /api/carros/disponiveis | Listar disponiveis         |
+| GET    | /api/carros/disponiveis | Listar disponíveis         |
 
 ### Dashboard
-| Metodo | Rota                       | Descricao                 |
+| Método | Rota                       | Descrição                 |
 |--------|----------------------------|---------------------------|
 | GET    | /api/dashboard/resumo      | Totais gerais             |
-| GET    | /api/dashboard/corridas    | Corridas por mes          |
+| GET    | /api/dashboard/corridas    | Corridas por mês          |
 | GET    | /api/dashboard/origens     | Origens mais solicitadas  |
 | GET    | /api/dashboard/destinos    | Destinos mais solicitados |
 | GET    | /api/dashboard/faturamento | Faturamento mensal        |
 
 ## Status de Corrida
 
-| Status       | Descricao                                |
+| Status       | Descrição                                |
 |--------------|------------------------------------------|
-| SOLICITADA   | Criada pelo usuario, aguardando inicio   |
-| CONFIRMADA   | Veiculo alocado, confirmada pelo sistema |
-| EM_ANDAMENTO | Corrida em execucao                      |
-| FINALIZADA   | Concluida com sucesso                    |
-| CANCELADA    | Cancelada pelo usuario ou sistema        |
+| SOLICITADA   | Criada pelo usuário, aguardando início   |
+| CONFIRMADA   | Veículo alocado, confirmada pelo sistema |
+| EM_ANDAMENTO | Corrida em execução                      |
+| FINALIZADA   | Concluída com sucesso                    |
+| CANCELADA    | Cancelada pelo usuário ou sistema        |
 
-## Usuario Padrao
+## Usuário Padrão
 
 ```
-Usuario: admin
+Usuário: admin
 Senha:   admin123
 ```
 
 ## Branches
 
-- `main` -> versao estavel
-- `hom`  -> homologacao/testes
-- `dev`  -> desenvolvimento ativo
+- `main` → versão estável
+- `hom`  → homologação/testes
+- `dev`  → desenvolvimento ativo
 
-Fluxo: `dev -> hom -> main`
+Fluxo: `dev → hom → main`

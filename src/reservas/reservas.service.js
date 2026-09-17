@@ -1,15 +1,13 @@
 const reservasRepository = require('./reservas.repository');
 const carrosService = require('../carros/carros.service');
-const localizacoesRepository = require('../localizacoes/localizacoes.repository');
-const grafoService = require('../grafo/grafo.service');
 const AppError = require('../utils/AppError');
 const { isValidDate, isEndAfterStart, datesOverlap } = require('../utils/dateUtils');
 
 /**
  * ReservasService — Regras de negocio de reservas.
  *
- * Integra com o GrafoService para calcular a rota entre
- * o local de retirada e o local de devolucao usando Dijkstra.
+ * Modulo legado de aluguel de veiculos.
+ * Locais de retirada e devolucao sao strings livres fornecidas pelo usuario.
  */
 class ReservasService {
   listarTodas() {
@@ -29,9 +27,7 @@ class ReservasService {
    * Validacoes:
    * 1. Carro existe e esta DISPONIVEL
    * 2. Datas validas e fim > inicio
-   * 3. Localizacoes existem no grafo
-   * 4. Sem conflito de datas com reservas existentes
-   * 5. Calcula rota via Dijkstra
+   * 3. Sem conflito de datas com reservas existentes do mesmo carro
    */
   criar(dados) {
     const { usuarioId, carroId, dataInicio, dataFim, localRetirada, localDevolucao } = dados;
@@ -50,14 +46,6 @@ class ReservasService {
       throw new AppError('A data de fim deve ser posterior a data de inicio.', 400);
     }
 
-    // Valida localizacoes
-    if (!grafoService.localizacaoExiste(localRetirada)) {
-      throw new AppError(`Localizacao de retirada '${localRetirada}' nao existe.`, 404);
-    }
-    if (!grafoService.localizacaoExiste(localDevolucao)) {
-      throw new AppError(`Localizacao de devolucao '${localDevolucao}' nao existe.`, 404);
-    }
-
     // Verifica conflito de datas com reservas ativas do mesmo carro
     const reservasAtivas = reservasRepository.findByCarro(carroId);
     const temConflito = reservasAtivas.some((r) =>
@@ -67,9 +55,6 @@ class ReservasService {
       throw new AppError('O carro ja possui uma reserva ativa nesse periodo.', 409);
     }
 
-    // Calcula rota usando Dijkstra
-    const rota = grafoService.calcularRota(localRetirada, localDevolucao);
-
     // Cria a reserva
     const novaReserva = reservasRepository.create({
       usuarioId,
@@ -78,7 +63,6 @@ class ReservasService {
       dataFim,
       localRetirada,
       localDevolucao,
-      rota: rota || null,
     });
 
     // Atualiza status do carro para RESERVADO

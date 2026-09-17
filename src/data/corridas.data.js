@@ -5,9 +5,8 @@
  *
  * Estrutura baseada na entidade Corrida, preparada para migração ao banco.
  *
- * origemNome/destinoNome representam endereços livres (não precisam existir
- * nos 7 locais fixos do grafo acadêmico — esses mocks usam nomes históricos
- * do período em que o sistema operava com locais fixos).
+ * origemNome/destinoNome representam endereços livres. Os valores abaixo são
+ * strings históricas usadas nos mocks iniciais do sistema.
  */
 const corridas = [
   {

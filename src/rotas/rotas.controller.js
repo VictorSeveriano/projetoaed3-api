@@ -1,5 +1,4 @@
 const rotasService = require('./rotas.service');
-const grafoService = require('../grafo/grafo.service');
 const AppError = require('../utils/AppError');
 const { success } = require('../utils/responseHelper');
 
@@ -7,32 +6,18 @@ const { success } = require('../utils/responseHelper');
  * RotasController — Controlador para endpoints de rotas.
  *
  * Endpoints:
- * - GET  /api/rotas/locais            — Lista todos os locais cadastrados
  * - POST /api/rotas/calcular-corrida  — Calcula multiplas rotas entre origem e destino
  * - POST /api/rotas/geocodificar      — Geocodifica um CEP/endereco (ViaCEP + Nominatim)
+ * - GET  /api/rotas/sugestoes?q=...   — Autocomplete: texto → sugestoes (Nominatim)
  */
-
-/**
- * GET /api/rotas/locais
- * Retorna todos os locais disponiveis com coordenadas geograficas.
- */
-const listarLocais = (req, res, next) => {
-  try {
-    const locais = grafoService.obterVertices();
-    return success(res, locais, 'Locais retornados com sucesso.');
-  } catch (err) {
-    next(err);
-  }
-};
 
 /**
  * POST /api/rotas/calcular-corrida
  * Body: { origem: { nome, lat, lng }, destino: { nome, lat, lng } }
  *
- * Calcula multiplas rotas entre dois locais usando:
- * 1. RouteSearchTree (BFS) para encontrar caminhos alternativos
- * 2. Dijkstra para calcular distancias
- * 3. Google Routes API para enriquecer a melhor rota (se disponivel)
+ * Calcula multiplas rotas reais entre dois locais usando:
+ * 1. Google Routes API para rotas reais pela malha viaria
+ * 2. ABB para organizar as alternativas por distancia crescente
  *
  * Retorna: { origemNome, destinoNome, rotas: [], melhorRota: {} }
  */
@@ -85,12 +70,12 @@ const geocodificar = async (req, res, next) => {
 /**
  * GET /api/rotas/sugestoes?q=texto
  *
- * Busca sugestões de localização para autocomplete.
- * Retorna até 5 resultados com endereço estruturado e coordenadas.
+ * Busca sugestoes de localizacao para autocomplete.
+ * Retorna ate 5 resultados com endereco estruturado e coordenadas.
  *
- * Restrições:
- * - q deve ter pelo menos 3 caracteres (validação no controller e no service)
- * - Rate limit implícito via cache no RotasService (_geocodingCache)
+ * Restricoes:
+ * - q deve ter pelo menos 3 caracteres (validacao no controller e no service)
+ * - Rate limit implicito via cache no RotasService (_geocodingCache)
  */
 const buscarSugestoes = async (req, res, next) => {
   try {
@@ -108,6 +93,4 @@ const buscarSugestoes = async (req, res, next) => {
   }
 };
 
-module.exports = { listarLocais, calcularCorrida, geocodificar, buscarSugestoes };
-
-
+module.exports = { calcularCorrida, geocodificar, buscarSugestoes };

@@ -1,18 +1,10 @@
 /**
- * Classe Vertice — representa um ponto de referência geográfico no grafo.
+ * Classe Vertice — representa um ponto de referencia geografico no grafo.
  *
- * No sistema de corridas, cada vértice corresponde a um local real
- * do Espírito Santo (Rodoviária, Aeroporto, Estádio, etc.) que compõe
- * o grafo estático de 7 locais usado para fins acadêmicos.
- *
- * O grafo é usado em dois contextos:
- * 1. Consulta acadêmica via /api/grafo — exibição do grafo e seus algoritmos
- * 2. Ordenação de rotas reais (Google Routes API) via GrafoService.ordenarRotasReais()
- *
- * Os campos de coordenadas (latitude, longitude) permitem a integração
- * com serviços de mapeamento para exibição visual das rotas.
- *
- * Estrutura compatível com futura migração ao banco de dados.
+ * No sistema de corridas, cada vertice corresponde a um local real
+ * fornecido pelo usuario (origem ou destino de uma operacao de rota).
+ * Coordenadas (latitude, longitude) permitem a integracao com servicos
+ * de mapeamento para exibicao visual das rotas.
  */
 class Vertice {
   /**

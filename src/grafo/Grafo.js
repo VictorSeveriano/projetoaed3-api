@@ -8,12 +8,8 @@ const Aresta = require('./Aresta');
  * - vertices: Map<string, Vertice> — mapeia nome -> objeto Vertice
  * - adjacencia: Map<string, Aresta[]> — lista de adjacencia
  *
- * Usos no sistema:
- * 1. Grafo academico estatico: 7 locais reais do ES como vertices,
- *    distancias rodovidades como pesos — exposto via /api/grafo
- * 2. Grafo dinamico temporario: construido em GrafoService.ordenarRotasReais()
- *    com as alternativas reais da Google Routes API para executar Dijkstra
- *    e identificar a rota de menor distancia
+ * O grafo e construido dinamicamente por operacao de rota:
+ * um grafo por corrida, com os dados reais de origem, destino e distancia.
  */
 class Grafo {
   constructor() {

@@ -1,20 +1,17 @@
 const { Router } = require('express');
-const { listarLocais, calcularCorrida, geocodificar, buscarSugestoes } = require('./rotas.controller');
+const { calcularCorrida, geocodificar, buscarSugestoes } = require('./rotas.controller');
 
 const router = Router();
 
 /**
- * Rotas do modulo Rotas
+ * Rotas do módulo Rotas
  * Base: /api/rotas
  */
 
-// GET  /api/rotas/locais           — Lista todos os locais com coordenadas (grafo fixo / uso acadêmico)
-router.get('/locais', listarLocais);
-
-// GET  /api/rotas/sugestoes?q=... — Autocomplete: texto → sugestões de localização (Nominatim)
+// GET  /api/rotas/sugestoes?q=... — Autocomplete: texto → sugestoes de localizacao (Nominatim)
 router.get('/sugestoes', buscarSugestoes);
 
-// POST /api/rotas/calcular-corrida — Calcula multiplas rotas (Routes API + Dijkstra dinâmico)
+// POST /api/rotas/calcular-corrida — Calcula rotas reais (Routes API) + organiza via ABB
 router.post('/calcular-corrida', calcularCorrida);
 
 // POST /api/rotas/geocodificar     — CEP/endereco -> JSON + lat/lng
