@@ -9,6 +9,6 @@ const router = Router();
  * Base: /api/auth
  */
 router.post('/login',    validateFields(['usuario', 'senha']),          login);
-router.post('/cadastrar', validateFields(['nome', 'usuario', 'senha', 'perfil']), cadastrar);
+router.post('/cadastrar', validateFields(['nome', 'cpf', 'celular', 'email', 'senha', 'perfil']), cadastrar);
 
 module.exports = router;

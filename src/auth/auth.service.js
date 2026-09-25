@@ -1,7 +1,7 @@
 const authRepository = require('./auth.repository');
 const motoristasService = require('../motoristas/motoristas.service');
 const AppError = require('../utils/AppError');
-const { validarCPF, validarEmail, validarCelular, validarCEP, normalizarCPF, normalizarEmail, normalizarCelular } = require('../utils/validators');
+const { validarCPF, validarEmail, validarCelular, validarCEP, validarSenha, normalizarCPF, normalizarEmail, normalizarCelular } = require('../utils/validators');
 
 /**
  * AuthService — Regras de negócio relacionadas à autenticação.
@@ -112,6 +112,11 @@ class AuthService {
     if (!validarCelular(celularNorm)) throw new AppError('Celular inválido.', 400);
     if (!validarEmail(emailNorm)) throw new AppError('E-mail inválido.', 400);
     if (!validarCEP(endereco.cep)) throw new AppError('CEP inválido.', 400);
+    
+    const senhaError = validarSenha(senha, nome);
+    if (senhaError) {
+      throw new AppError(senhaError, 400);
+    }
 
     // Unicidade
     if (authRepository.existsByCpf(cpfNorm)) throw new AppError('CPF já cadastrado no sistema.', 409);
