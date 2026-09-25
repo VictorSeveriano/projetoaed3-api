@@ -18,6 +18,10 @@ const ADMIN_ID = '1';
  */
 class VeiculosService {
   /**
+   * (Regra removida: A classe é definida manualmente pelo admin)
+   */
+
+  /**
    * Lista veículos pendentes de aprovação (admin).
    * @returns {object[]}
    */
@@ -32,7 +36,7 @@ class VeiculosService {
    */
   listarTodos(filtros = {}) {
     let lista = carrosRepository.findAll();
-    if (filtros.status) lista = lista.filter((v) => v.status === filtros.status.toUpperCase());
+    if (filtros.status) lista = lista.filter((v) => v.status === filtros.status.toUpperCase() || v.statusAprovacao === filtros.status.toUpperCase());
     if (filtros.motoristaId) lista = lista.filter((v) => v.motoristaId === filtros.motoristaId);
     return lista.map((v) => this._enriquecer(v));
   }
@@ -60,14 +64,13 @@ class VeiculosService {
       throw new AppError('Você já possui um veículo cadastrado. Aguarde aprovação ou entre em contato com o administrador.', 409);
     }
 
-    const { modelo, marca, ano, placa, categoria } = dados;
-    if (!modelo || !marca || !ano || !placa || !categoria) {
-      throw new AppError('modelo, marca, ano, placa e categoria são obrigatórios.', 400);
+    const { modelo, marca, ano, placa, porte } = dados;
+    if (!modelo || !marca || !ano || !placa || !porte) {
+      throw new AppError('modelo, marca, ano, placa e porte são obrigatórios.', 400);
     }
 
     const novoVeiculo = carrosRepository.create({
-      modelo, marca, ano, placa, categoria,
-      tarifaBase: dados.tarifaBase || 3.00,
+      modelo, marca, ano, placa, porte,
       motoristaId: usuarioId,
     });
 
@@ -82,17 +85,33 @@ class VeiculosService {
   }
 
   /**
-   * Aprova veículo (admin) → status DISPONIVEL (pronto para corridas).
+   * Aprova veículo (admin) e define classe.
    * @param {string} id
+   * @param {string} classe - BASICO, NORMAL ou PREMIUM
    * @returns {object}
    */
-  aprovar(id) {
+  aprovar(id, classe) {
+    if (!['BASICO', 'NORMAL', 'PREMIUM'].includes(classe)) {
+      throw new AppError('Classe de serviço inválida. Deve ser BASICO, NORMAL ou PREMIUM.', 400);
+    }
     const v = carrosRepository.findById(id);
     if (!v) throw new AppError('Veículo não encontrado.', 404);
-    if (v.status === 'DISPONIVEL' || v.status === 'EM_CORRIDA') {
+    if (v.statusAprovacao === 'APROVADO') {
       throw new AppError('Veículo já está aprovado.', 409);
     }
-    return this._enriquecer(carrosRepository.updateStatus(id, 'DISPONIVEL'));
+    return this._enriquecer(carrosRepository.updateStatusAprovacao(id, 'APROVADO', classe));
+  }
+
+  /**
+   * Edita a classe do veículo.
+   */
+  editarClasse(id, classe) {
+    if (!['BASICO', 'NORMAL', 'PREMIUM'].includes(classe)) {
+      throw new AppError('Classe de serviço inválida.', 400);
+    }
+    const v = carrosRepository.findById(id);
+    if (!v) throw new AppError('Veículo não encontrado.', 404);
+    return this._enriquecer(carrosRepository.updateClasse(id, classe));
   }
 
   /**
@@ -103,9 +122,8 @@ class VeiculosService {
   rejeitar(id) {
     const v = carrosRepository.findById(id);
     if (!v) throw new AppError('Veículo não encontrado.', 404);
-    if (v.status === 'REJEITADO') throw new AppError('Veículo já está rejeitado.', 409);
-    if (v.status === 'EM_CORRIDA') throw new AppError('Não é possível rejeitar veículo em corrida.', 409);
-    return this._enriquecer(carrosRepository.updateStatus(id, 'REJEITADO'));
+    if (v.statusAprovacao === 'REJEITADO') throw new AppError('Veículo já está rejeitado.', 409);
+    return this._enriquecer(carrosRepository.updateStatusAprovacao(id, 'REJEITADO'));
   }
 
   /** Enriquece veículo com dados do motorista (sem senha). */

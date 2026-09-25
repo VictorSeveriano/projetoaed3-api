@@ -5,13 +5,10 @@ const carros = require('../data/carros.data');
  * Opera sobre o array em memoria; substituivel por DatabaseRepository no futuro.
  *
  * MODELAGEM DE STATUS:
- * PENDENTE  — cadastrado pelo motorista, aguarda análise do administrador
- * APROVADO  — não usado diretamente (veículo aprovado fica DISPONIVEL)
- * REJEITADO — rejeitado; não pode ser usado em corridas
- * DISPONIVEL — apto para corridas
- * EM_CORRIDA — em uso atualmente
+ * statusAprovacao: PENDENTE | APROVADO | REJEITADO
+ * status: DISPONIVEL | EM_CORRIDA | INDISPONIVEL
  *
- * Regra: apenas veículos DISPONIVEL podem ser alocados para corridas.
+ * Regra: apenas veículos APROVADOS e com status DISPONIVEL podem ser alocados.
  */
 class CarrosRepository {
   findAll() {
@@ -23,7 +20,7 @@ class CarrosRepository {
   }
 
   findDisponiveis() {
-    return carros.filter((c) => c.status === 'DISPONIVEL');
+    return carros.filter((c) => c.statusAprovacao === 'APROVADO' && c.status === 'DISPONIVEL');
   }
 
   findByStatus(status) {
@@ -41,18 +38,38 @@ class CarrosRepository {
   }
 
   /**
-   * Lista veículos por status de aprovação (PENDENTE, REJEITADO, DISPONIVEL, EM_CORRIDA).
-   * @param {string} status
+   * Lista veículos por status de aprovação (PENDENTE, REJEITADO, APROVADO).
+   * @param {string} statusAprovacao
    * @returns {object[]}
    */
-  findByStatusAprovacao(status) {
-    return carros.filter((c) => c.status === status);
+  findByStatusAprovacao(statusAprovacao) {
+    return carros.filter((c) => c.statusAprovacao === statusAprovacao);
+  }
+
+  updateStatusAprovacao(id, statusAprovacao, classe = null) {
+    const index = carros.findIndex((c) => c.id === id);
+    if (index === -1) return null;
+    carros[index].statusAprovacao = statusAprovacao;
+    if (statusAprovacao === 'APROVADO') {
+      carros[index].status = 'DISPONIVEL'; // Libera para corridas
+    }
+    if (classe) {
+      carros[index].classe = classe;
+    }
+    return carros[index];
   }
 
   updateStatus(id, status) {
     const index = carros.findIndex((c) => c.id === id);
     if (index === -1) return null;
     carros[index].status = status;
+    return carros[index];
+  }
+
+  updateClasse(id, classe) {
+    const index = carros.findIndex((c) => c.id === id);
+    if (index === -1) return null;
+    carros[index].classe = classe;
     return carros[index];
   }
 
@@ -68,9 +85,11 @@ class CarrosRepository {
       marca: dados.marca,
       ano: dados.ano,
       placa: dados.placa,
-      categoria: dados.categoria,
-      status: 'PENDENTE', // sempre inicia PENDENTE para novo cadastro de motorista
-      tarifaBase: dados.tarifaBase || 3.00,
+      porte: dados.porte,
+      classe: dados.classe || null, // A ser definida pelo admin
+      statusAprovacao: 'PENDENTE',
+      status: 'INDISPONIVEL',
+      tarifaBase: dados.tarifaBase || null, // Não exibir/definir valores agora
       motoristaId: dados.motoristaId,
       criadoEm: new Date().toISOString(),
     };

@@ -16,15 +16,15 @@ const AppError = require('../utils/AppError');
  */
 class CorridasService {
   /**
-   * Tarifa base por km por categoria de veiculo (R$/km).
-   * Centraliza a regra financeira em um unico lugar.
+   * Tarifa base por km por classe de veículo (R$/km).
+   * Valores zerados nesta etapa (tarifação futura).
    */
   static get TARIFAS_KM() {
     return {
-      Hatch: 3.00,
-      Sedan: 4.00,
-      SUV: 5.00,
-      default: 3.50,
+      BASICO: 0.00,
+      NORMAL: 0.00,
+      PREMIUM: 0.00,
+      default: 0.00,
     };
   }
 
@@ -66,13 +66,14 @@ class CorridasService {
 
   /**
    * Calcula o valor estimado da corrida.
-   * Valor = distancia * tarifa por km da categoria do veiculo
-   * @param {number} distanciaKm
-   * @param {string} categoriaVeiculo
+   * Valor = distancia * tarifa por km da classe do veículo
+   * @param {object} params
+   * @param {number} params.distanciaKm
+   * @param {string} params.classe
    * @returns {number}
    */
-  calcularValor(distanciaKm, categoriaVeiculo) {
-    const tarifa = CorridasService.TARIFAS_KM[categoriaVeiculo] || CorridasService.TARIFAS_KM.default;
+  calcularValor({ distanciaKm, classe }) {
+    const tarifa = CorridasService.TARIFAS_KM[classe] || CorridasService.TARIFAS_KM.default;
     return parseFloat((distanciaKm * tarifa).toFixed(2));
   }
 
@@ -141,8 +142,8 @@ class CorridasService {
       veiculo = disponiveis[0] || null;
     }
 
-    const categoriaVeiculo = veiculo ? veiculo.categoria : 'default';
-    const valor = this.calcularValor(distanciaKm, categoriaVeiculo);
+    const classeVeiculo = veiculo ? veiculo.classe : 'default';
+    const valor = this.calcularValor({ distanciaKm, classe: classeVeiculo });
 
     const novaCorrida = corridasRepository.create({
       usuarioId,

@@ -31,8 +31,20 @@ const cadastrar = (req, res, next) => {
 /** PATCH /api/veiculos/:id/aprovar — Admin */
 const aprovar = (req, res, next) => {
   try {
-    const dados = veiculosService.aprovar(req.params.id);
+    const { classe } = req.body;
+    if (!classe) return next(new AppError('classe (BASICO, NORMAL, PREMIUM) é obrigatória para aprovação.', 400));
+    const dados = veiculosService.aprovar(req.params.id, classe);
     return success(res, dados, 'Veículo aprovado.');
+  } catch (err) { next(err); }
+};
+
+/** PATCH /api/veiculos/:id/classe — Admin */
+const editarClasse = (req, res, next) => {
+  try {
+    const { classe } = req.body;
+    if (!classe) return next(new AppError('classe é obrigatória.', 400));
+    const dados = veiculosService.editarClasse(req.params.id, classe);
+    return success(res, dados, 'Classe do veículo atualizada.');
   } catch (err) { next(err); }
 };
 
@@ -44,4 +56,4 @@ const rejeitar = (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar };
+module.exports = { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, editarClasse };
