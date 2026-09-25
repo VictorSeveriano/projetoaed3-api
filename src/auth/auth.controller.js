@@ -1,3 +1,4 @@
+'use strict';
 const authService = require('./auth.service');
 const { success } = require('../utils/responseHelper');
 const AppError = require('../utils/AppError');
@@ -5,10 +6,10 @@ const AppError = require('../utils/AppError');
 /**
  * AuthController — Controlador de autenticacao.
  */
-const login = (req, res, next) => {
+const login = async (req, res, next) => {
   try {
     const { usuario, senha } = req.body;
-    const resultado = authService.login(usuario, senha);
+    const resultado = await authService.login(usuario, senha);
     return success(res, resultado, 'Login realizado com sucesso');
   } catch (err) {
     next(err);
@@ -19,7 +20,7 @@ const login = (req, res, next) => {
  * POST /api/auth/cadastrar
  * Cria conta publica (USUARIO ou MOTORISTA — nunca ADMINISTRADOR).
  */
-const cadastrar = (req, res, next) => {
+const cadastrar = async (req, res, next) => {
   try {
     const { nome, cpf, celular, email, senha, perfil, endereco, cnh } = req.body;
     if (!nome || !senha || !perfil || !cpf || !celular || !email) {
@@ -28,7 +29,7 @@ const cadastrar = (req, res, next) => {
     if (perfil === 'ADMINISTRADOR') {
       return next(new AppError('Nao e possivel criar conta de administrador pelo cadastro publico.', 403));
     }
-    const resultado = authService.cadastrar({ nome, cpf, celular, email, senha, perfil, endereco, cnh });
+    const resultado = await authService.cadastrar({ nome, cpf, celular, email, senha, perfil, endereco, cnh });
     return res.status(201).json({ success: true, data: resultado, message: 'Conta criada com sucesso.' });
   } catch (err) {
     next(err);

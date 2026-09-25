@@ -1,105 +1,159 @@
-const motoristasData = require('../data/motoristas.data');
-
+'use strict';
 /**
- * MotoristasRepository — Acesso aos dados de motoristas.
+ * motoristas.repository.js — Repositório de motoristas com PostgreSQL.
  *
- * Implementação em memória; para migrar ao banco substituir os métodos
- * por queries ORM/SQL mantendo as mesmas assinaturas.
+ * Preserva as assinaturas originais:
+ *   findAll()
+ *   findById(id)
+ *   findByUsuarioId(usuarioId)
+ *   findByStatusCadastro(statusCadastro)
+ *   findByStatusPresenca(statusPresenca)
+ *   create(dados)
+ *   updateStatusCadastro(id, statusCadastro)
+ *   updateStatusPresenca(id, statusPresenca)
  *
- * Motorista é uma entidade separada de Usuario:
- *   Motorista.usuarioId → Usuario.id (sem duplicar dados do usuário aqui)
+ * Mapeamento: snake_case (banco) → camelCase (aplicação)
+ *   usuario_id      → usuarioId
+ *   status_cadastro → statusCadastro
+ *   status_presenca → statusPresenca
+ *   criado_em       → criadoEm
+ *   atualizado_em   → atualizadoEm
  */
-class MotoristasRepository {
-  constructor() {
-    this._motoristas = [...motoristasData];
-    this._nextId = this._motoristas.length + 1;
-  }
 
-  /** @returns {object[]} */
-  findAll() {
-    return [...this._motoristas];
+const { query } = require('../database/connection');
+
+// ---------- Helper de mapeamento ----------
+
+function rowParaDominio(row) {
+  if (!row) return null;
+  return {
+    id:             row.id,
+    usuarioId:      row.usuario_id,
+    cnh:            row.cnh,
+    statusCadastro: row.status_cadastro,
+    statusPresenca: row.status_presenca,
+    criadoEm:       row.criado_em,
+    atualizadoEm:   row.atualizado_em,
+  };
+}
+
+// ---------- MotoristasRepository ----------
+
+class MotoristasRepository {
+  /**
+   * Lista todos os motoristas.
+   * @returns {Promise<object[]>}
+   */
+  async findAll() {
+    const res = await query(
+      'SELECT * FROM motoristas ORDER BY criado_em ASC'
+    );
+    return res.rows.map(rowParaDominio);
   }
 
   /**
-   * @param {string} id - id do registro de motorista (ex: 'm1')
-   * @returns {object|null}
+   * Busca pelo id do registro de motorista.
+   * @param {string} id - UUID do registro em motoristas
+   * @returns {Promise<object|null>}
    */
-  findById(id) {
-    return this._motoristas.find((m) => m.id === id) || null;
+  async findById(id) {
+    const res = await query(
+      'SELECT * FROM motoristas WHERE id = $1 LIMIT 1',
+      [id]
+    );
+    return rowParaDominio(res.rows[0] || null);
   }
 
   /**
    * Busca pelo usuarioId — acesso típico pelo usuário autenticado.
    * @param {string} usuarioId
-   * @returns {object|null}
+   * @returns {Promise<object|null>}
    */
-  findByUsuarioId(usuarioId) {
-    return this._motoristas.find((m) => m.usuarioId === usuarioId) || null;
+  async findByUsuarioId(usuarioId) {
+    const res = await query(
+      'SELECT * FROM motoristas WHERE usuario_id = $1 LIMIT 1',
+      [usuarioId]
+    );
+    return rowParaDominio(res.rows[0] || null);
   }
 
   /**
    * Filtra por statusCadastro (PENDENTE | APROVADO | REJEITADO).
    * @param {string} statusCadastro
-   * @returns {object[]}
+   * @returns {Promise<object[]>}
    */
-  findByStatusCadastro(statusCadastro) {
-    return this._motoristas.filter((m) => m.statusCadastro === statusCadastro);
+  async findByStatusCadastro(statusCadastro) {
+    const res = await query(
+      'SELECT * FROM motoristas WHERE status_cadastro = $1 ORDER BY criado_em ASC',
+      [statusCadastro]
+    );
+    return res.rows.map(rowParaDominio);
   }
 
   /**
    * Filtra por statusPresenca (ONLINE | OFFLINE).
-   * Relevante apenas para motoristas APROVADOS.
+   * Retorna apenas motoristas APROVADOS com a presença solicitada.
    * @param {string} statusPresenca
-   * @returns {object[]}
+   * @returns {Promise<object[]>}
    */
-  findByStatusPresenca(statusPresenca) {
-    return this._motoristas.filter(
-      (m) => m.statusCadastro === 'APROVADO' && m.statusPresenca === statusPresenca
+  async findByStatusPresenca(statusPresenca) {
+    const res = await query(
+      `SELECT * FROM motoristas
+       WHERE  status_cadastro = 'APROVADO'
+         AND  status_presenca = $1
+       ORDER BY criado_em ASC`,
+      [statusPresenca]
     );
+    return res.rows.map(rowParaDominio);
   }
 
   /**
-   * Cria novo registro de motorista.
+   * Cria novo registro de motorista com statusCadastro=PENDENTE.
    * @param {object} dados - { usuarioId, cnh }
-   * @returns {object}
+   * @returns {Promise<object>}
    */
-  create(dados) {
-    const novo = {
-      id: 'm' + String(this._nextId++),
-      usuarioId: dados.usuarioId,
-      cnh: dados.cnh,
-      statusCadastro: 'PENDENTE',
-      statusPresenca: 'OFFLINE',
-      criadoEm: new Date().toISOString(),
-    };
-    this._motoristas.push(novo);
-    return novo;
+  async create(dados) {
+    const res = await query(
+      `INSERT INTO motoristas (usuario_id, cnh, status_cadastro, status_presenca)
+       VALUES ($1, $2, 'PENDENTE', 'OFFLINE')
+       RETURNING *`,
+      [dados.usuarioId, dados.cnh]
+    );
+    return rowParaDominio(res.rows[0]);
   }
 
   /**
    * Atualiza statusCadastro do motorista.
-   * @param {string} id
+   * @param {string} id - UUID do registro de motorista
    * @param {string} statusCadastro
-   * @returns {object|null}
+   * @returns {Promise<object|null>}
    */
-  updateStatusCadastro(id, statusCadastro) {
-    const m = this.findById(id);
-    if (!m) return null;
-    m.statusCadastro = statusCadastro;
-    return m;
+  async updateStatusCadastro(id, statusCadastro) {
+    const res = await query(
+      `UPDATE motoristas
+       SET status_cadastro = $1, atualizado_em = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [statusCadastro, id]
+    );
+    return rowParaDominio(res.rows[0] || null);
   }
 
   /**
    * Atualiza statusPresenca do motorista.
-   * @param {string} id
+   * @param {string} id - UUID do registro de motorista
    * @param {string} statusPresenca
-   * @returns {object|null}
+   * @returns {Promise<object|null>}
    */
-  updateStatusPresenca(id, statusPresenca) {
-    const m = this.findById(id);
-    if (!m) return null;
-    m.statusPresenca = statusPresenca;
-    return m;
+  async updateStatusPresenca(id, statusPresenca) {
+    const res = await query(
+      `UPDATE motoristas
+       SET status_presenca = $1, atualizado_em = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [statusPresenca, id]
+    );
+    return rowParaDominio(res.rows[0] || null);
   }
 }
 

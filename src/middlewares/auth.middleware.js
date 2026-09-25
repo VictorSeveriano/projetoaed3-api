@@ -1,12 +1,13 @@
-const AppError = require('../utils/AppError');
-
+'use strict';
+const AppError      = require('../utils/AppError');
 const authRepository = require('../auth/auth.repository');
 
 /**
  * Middleware de autenticacao.
  * Verifica se existe um token de sessao no header e se o usuario existe.
+ * Async para suportar o repositório PostgreSQL.
  */
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
   const token = req.headers['x-auth-token'];
 
   if (!token) {
@@ -19,14 +20,17 @@ const authMiddleware = (req, res, next) => {
   }
 
   const id = token.replace('session-token-', '');
-  const user = authRepository.encontrarPorId(id);
 
-  if (!user) {
-    return next(new AppError('Nao autorizado. Usuario nao encontrado.', 401));
+  try {
+    const user = await authRepository.encontrarPorId(id);
+    if (!user) {
+      return next(new AppError('Nao autorizado. Usuario nao encontrado.', 401));
+    }
+    req.usuario = { id: user.id, usuario: user.usuario, nome: user.nome, perfil: user.perfil };
+    next();
+  } catch (err) {
+    next(new AppError('Erro ao verificar autenticacao.', 500));
   }
-
-  req.usuario = { id: user.id, usuario: user.usuario, nome: user.nome, perfil: user.perfil };
-  next();
 };
 
 /**

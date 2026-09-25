@@ -1,48 +1,50 @@
-﻿const dashboardService = require('./dashboard.service');
+'use strict';
+const dashboardService = require('./dashboard.service');
 
 /**
  * DashboardController — Endpoints de metricas do sistema de corridas.
+ * Todos os métodos são async para suportar o service PostgreSQL.
  */
 class DashboardController {
-  getResumo(req, res, next) {
+  async getResumo(req, res, next) {
     try {
-      res.json({ success: true, data: dashboardService.getResumo() });
+      res.json({ success: true, data: await dashboardService.getResumo() });
     } catch (err) { next(err); }
   }
 
-  getCorridas(req, res, next) {
+  async getCorridas(req, res, next) {
     try {
-      res.json({ success: true, data: dashboardService.getCorridasPorMes() });
+      res.json({ success: true, data: await dashboardService.getCorridasPorMes() });
     } catch (err) { next(err); }
   }
 
-  getOrigens(req, res, next) {
+  async getOrigens(req, res, next) {
     try {
-      res.json({ success: true, data: dashboardService.getOrigensMaisSolicitadas() });
+      res.json({ success: true, data: await dashboardService.getOrigensMaisSolicitadas() });
     } catch (err) { next(err); }
   }
 
-  getDestinos(req, res, next) {
+  async getDestinos(req, res, next) {
     try {
-      res.json({ success: true, data: dashboardService.getDestinosMaisSolicitados() });
+      res.json({ success: true, data: await dashboardService.getDestinosMaisSolicitados() });
     } catch (err) { next(err); }
   }
 
-  getRotas(req, res, next) {
+  async getRotas(req, res, next) {
     try {
-      res.json({ success: true, data: dashboardService.getRotasMaisUtilizadas() });
+      res.json({ success: true, data: await dashboardService.getRotasMaisUtilizadas() });
     } catch (err) { next(err); }
   }
 
-  getVeiculos(req, res, next) {
+  async getVeiculos(req, res, next) {
     try {
-      res.json({ success: true, data: dashboardService.getVeiculosMaisUtilizados() });
+      res.json({ success: true, data: await dashboardService.getVeiculosMaisUtilizados() });
     } catch (err) { next(err); }
   }
 
-  getFaturamento(req, res, next) {
+  async getFaturamento(req, res, next) {
     try {
-      res.json({ success: true, data: dashboardService.getFaturamentoMensal() });
+      res.json({ success: true, data: await dashboardService.getFaturamentoMensal() });
     } catch (err) { next(err); }
   }
 }
