@@ -435,6 +435,7 @@ class RotasService {
         origin: { location: { latLng: { latitude: origem.lat, longitude: origem.lng } } },
         destination: { location: { latLng: { latitude: destino.lat, longitude: destino.lng } } },
         travelMode: 'DRIVE',
+        routingPreference: 'TRAFFIC_AWARE',
         languageCode: 'pt-BR',
         units: 'METRIC',
         computeAlternativeRoutes: true,
