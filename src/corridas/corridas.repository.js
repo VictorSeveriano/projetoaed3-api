@@ -76,6 +76,16 @@ class CorridasRepository {
   }
 
   /**
+   * Corridas do motorista filtradas por status.
+   * @param {string} motoristaId
+   * @param {string} status
+   * @returns {Corrida[]}
+   */
+  findByMotoristaIdAndStatus(motoristaId, status) {
+    return this._corridas.filter((c) => c.motoristaId === motoristaId && c.status === status);
+  }
+
+  /**
    * @param {string} veiculoId
    * @returns {Corrida[]}
    */

@@ -1,5 +1,6 @@
 const authService = require('./auth.service');
 const { success } = require('../utils/responseHelper');
+const AppError = require('../utils/AppError');
 
 /**
  * AuthController — Controlador de autenticacao.
@@ -14,4 +15,24 @@ const login = (req, res, next) => {
   }
 };
 
-module.exports = { login };
+/**
+ * POST /api/auth/cadastrar
+ * Cria conta publica (USUARIO ou MOTORISTA — nunca ADMINISTRADOR).
+ */
+const cadastrar = (req, res, next) => {
+  try {
+    const { nome, usuario, senha, perfil } = req.body;
+    if (!nome || !usuario || !senha || !perfil) {
+      return next(new AppError('nome, usuario, senha e perfil sao obrigatorios.', 400));
+    }
+    if (perfil === 'ADMINISTRADOR') {
+      return next(new AppError('Nao e possivel criar conta de administrador pelo cadastro publico.', 403));
+    }
+    const resultado = authService.cadastrar({ nome, usuario, senha, perfil });
+    return res.status(201).json({ success: true, data: resultado, message: 'Conta criada com sucesso.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { login, cadastrar };

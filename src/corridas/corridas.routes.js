@@ -1,9 +1,10 @@
-﻿const express = require('express');
-const { listarTodas, buscarPorId, criar, cancelar, finalizar } = require('./corridas.controller');
+const express = require('express');
+const { listarTodas, listarMinhas, buscarPorId, criar, cancelar, finalizar } = require('./corridas.controller');
 
 const router = express.Router();
 
 router.get('/',           listarTodas);
+router.get('/minhas',     listarMinhas);
 router.get('/:id',        buscarPorId);
 router.post('/',          criar);
 router.patch('/:id/cancelar',  cancelar);

@@ -32,6 +32,31 @@ class CorridasService {
     return corridasRepository.findAll();
   }
 
+  /**
+   * Lista corridas filtradas conforme perfil do usuario.
+   * A diferenciacao por perfil acontece AQUI — nunca no frontend.
+   * @param {string} usuarioId
+   * @param {string} perfil - ADMINISTRADOR | USUARIO | MOTORISTA
+   * @param {string|null} status - filtro opcional de status
+   * @returns {Corrida[]}
+   */
+  listarPorPerfil(usuarioId, perfil, status) {
+    if (perfil === 'ADMINISTRADOR') {
+      return status
+        ? corridasRepository.findAll().filter((c) => c.status === status)
+        : corridasRepository.findAll();
+    }
+    if (perfil === 'MOTORISTA') {
+      return status
+        ? corridasRepository.findByMotoristaIdAndStatus(usuarioId, status)
+        : corridasRepository.findByMotoristaId(usuarioId);
+    }
+    // USUARIO (padrao)
+    return status
+      ? corridasRepository.findByUsuarioIdAndStatus(usuarioId, status)
+      : corridasRepository.findByUsuarioId(usuarioId);
+  }
+
   buscarPorId(id) {
     const corrida = corridasRepository.findById(id);
     if (!corrida) throw new AppError('Corrida ' + id + ' nao encontrada.', 404);

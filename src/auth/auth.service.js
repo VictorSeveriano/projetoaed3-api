@@ -6,28 +6,17 @@ const AppError = require('../utils/AppError');
  *
  * NOTA: Login simulado sem JWT por enquanto.
  * Estrutura preparada para adicionar JWT e bcrypt futuramente.
- *
- * Retorna `perfil` no objeto usuario para que o frontend possa
- * montar a navegação correta sem consultar endpoint adicional.
- * Nunca retorna senha.
  */
 class AuthService {
   login(usuario, senha) {
     if (!usuario || !senha) {
       throw new AppError('Usuario e senha sao obrigatorios.', 400);
     }
-
     const user = authRepository.encontrarPorUsuario(usuario);
-
     if (!user || user.senha !== senha) {
       throw new AppError('Credenciais invalidas.', 401);
     }
-
-    // Simula emissão de token de sessão
-    // Em produção: JWT com bcrypt e payload contendo id + perfil
     const token = `session-token-${user.id}`;
-
-    // Nunca expor senha na resposta
     return {
       token,
       usuario: {
@@ -35,6 +24,37 @@ class AuthService {
         nome: user.nome,
         usuario: user.usuario,
         perfil: user.perfil,
+      },
+    };
+  }
+
+  /**
+   * Cria nova conta pública (USUARIO ou MOTORISTA).
+   * Nunca cria ADMINISTRADOR pelo fluxo público.
+   * @param {object} dados - { nome, usuario, senha, perfil }
+   * @returns {{ token, usuario }}
+   */
+  cadastrar(dados) {
+    const { nome, usuario, senha, perfil } = dados;
+
+    // Usuário já existe?
+    const existente = authRepository.encontrarPorUsuario(usuario);
+    if (existente) throw new AppError('Nome de usuário já está em uso.', 409);
+
+    const perfilValidos = ['USUARIO', 'MOTORISTA'];
+    if (!perfilValidos.includes(perfil)) {
+      throw new AppError('perfil deve ser USUARIO ou MOTORISTA.', 400);
+    }
+
+    const novoUsuario = authRepository.create({ nome, usuario, senha, perfil });
+    const token = `session-token-${novoUsuario.id}`;
+    return {
+      token,
+      usuario: {
+        id: novoUsuario.id,
+        nome: novoUsuario.nome,
+        usuario: novoUsuario.usuario,
+        perfil: novoUsuario.perfil,
       },
     };
   }
