@@ -44,6 +44,10 @@ class CarrosService {
     }
     return carro;
   }
+
+  buscarPorMotorista(motoristaId) {
+    return carrosRepository.findByMotoristaId(motoristaId);
+  }
 }
 
 module.exports = new CarrosService();

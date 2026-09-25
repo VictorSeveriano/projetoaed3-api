@@ -21,6 +21,14 @@ class CarrosRepository {
     return carros.filter((c) => c.status === status);
   }
 
+  /**
+   * Retorna o veículo associado a um motorista.
+   * @param {string} motoristaId
+   * @returns {object|null}
+   */
+  findByMotoristaId(motoristaId) {
+    return carros.find((c) => c.motoristaId === motoristaId) || null;
+  }
 
   updateStatus(id, status) {
     const index = carros.findIndex((c) => c.id === id);

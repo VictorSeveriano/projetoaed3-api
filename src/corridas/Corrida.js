@@ -22,6 +22,7 @@ class Corrida {
    * @param {object}   dados
    * @param {string}   dados.id
    * @param {string}   dados.usuarioId
+   * @param {string}   [dados.motoristaId]        - ID do usuário com perfil MOTORISTA responsável pela corrida
    * @param {string}   [dados.veiculoId]          - ID do veículo alocado (null se nenhum disponível)
    * @param {string}   dados.origemNome           - Nome/endereço de exibição da origem
    * @param {string}   dados.destinoNome          - Nome/endereço de exibição do destino
@@ -44,6 +45,7 @@ class Corrida {
   constructor(dados) {
     this.id = dados.id;
     this.usuarioId = dados.usuarioId;
+    this.motoristaId = dados.motoristaId || null;
     this.veiculoId = dados.veiculoId || null;
 
     // Origem e destino — nome para exibição
@@ -90,6 +92,7 @@ class Corrida {
     return {
       id: this.id,
       usuarioId: this.usuarioId,
+      motoristaId: this.motoristaId,
       veiculoId: this.veiculoId,
       origemNome: this.origemNome,
       destinoNome: this.destinoNome,

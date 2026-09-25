@@ -9,6 +9,8 @@ const grafoRoutes = require('./grafo/grafo.routes');
 const rotasRoutes = require('./rotas/rotas.routes');
 const corridasRoutes = require('./corridas/corridas.routes');
 const dashboardRoutes = require('./dashboard/dashboard.routes');
+const usuariosRoutes = require('./usuarios/usuarios.routes');
+const motoistasRoutes = require('./motoristas/motoristas.routes');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
@@ -37,6 +39,8 @@ app.use('/api/grafo', grafoRoutes);
 app.use('/api/rotas', rotasRoutes);
 app.use('/api/corridas', corridasRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/usuarios', usuariosRoutes);
+app.use('/api/motoristas', motoistasRoutes);
 
 // --- Rota nao encontrada ---
 app.use((req, res) => {

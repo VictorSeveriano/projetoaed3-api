@@ -2,10 +2,14 @@ const authRepository = require('./auth.repository');
 const AppError = require('../utils/AppError');
 
 /**
- * AuthService — Regras de negocio relacionadas a autenticacao.
+ * AuthService — Regras de negócio relacionadas à autenticação.
  *
  * NOTA: Login simulado sem JWT por enquanto.
  * Estrutura preparada para adicionar JWT e bcrypt futuramente.
+ *
+ * Retorna `perfil` no objeto usuario para que o frontend possa
+ * montar a navegação correta sem consultar endpoint adicional.
+ * Nunca retorna senha.
  */
 class AuthService {
   login(usuario, senha) {
@@ -19,16 +23,18 @@ class AuthService {
       throw new AppError('Credenciais invalidas.', 401);
     }
 
-    // Simula emissao de token de sessao
-    // Em producao: JWT com bcrypt
-    const token = 'session-admin-token';
+    // Simula emissão de token de sessão
+    // Em produção: JWT com bcrypt e payload contendo id + perfil
+    const token = `session-token-${user.id}`;
 
+    // Nunca expor senha na resposta
     return {
       token,
       usuario: {
         id: user.id,
         nome: user.nome,
         usuario: user.usuario,
+        perfil: user.perfil,
       },
     };
   }
