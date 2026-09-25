@@ -1,4 +1,4 @@
-const motoistasService = require('./motoristas.service');
+const motoristasService = require('./motoristas.service');
 const relatorioService = require('./relatorio.motorista.service');
 const { success } = require('../utils/responseHelper');
 const AppError = require('../utils/AppError');
@@ -12,7 +12,7 @@ const AppError = require('../utils/AppError');
 const listarTodos = (req, res, next) => {
   try {
     const { status } = req.query;
-    const dados = motoistasService.listarPorStatus(status || null);
+    const dados = motoristasService.listarPorStatus(status || null);
     return success(res, dados, 'Motoristas listados.');
   } catch (err) { next(err); }
 };
@@ -20,7 +20,7 @@ const listarTodos = (req, res, next) => {
 /** GET /api/motoristas/analise — Admin: lista pendentes */
 const listarAnalise = (req, res, next) => {
   try {
-    const dados = motoistasService.listarPorStatus('PENDENTE');
+    const dados = motoristasService.listarPorStatus('PENDENTE');
     return success(res, dados, 'Solicitações pendentes listadas.');
   } catch (err) { next(err); }
 };
@@ -28,7 +28,7 @@ const listarAnalise = (req, res, next) => {
 /** GET /api/motoristas/online — Admin: lista ONLINE */
 const listarOnline = (req, res, next) => {
   try {
-    const dados = motoistasService.listarOnline();
+    const dados = motoristasService.listarOnline();
     return success(res, dados, 'Motoristas online listados.');
   } catch (err) { next(err); }
 };
@@ -36,7 +36,7 @@ const listarOnline = (req, res, next) => {
 /** GET /api/motoristas/perfil/:usuarioId — Próprio motorista: busca pelo usuarioId */
 const buscarPerfil = (req, res, next) => {
   try {
-    const dados = motoistasService.buscarPorUsuarioId(req.params.usuarioId);
+    const dados = motoristasService.buscarPorUsuarioId(req.params.usuarioId);
     return success(res, dados, dados ? 'Perfil encontrado.' : 'Sem solicitação registrada.');
   } catch (err) { next(err); }
 };
@@ -44,7 +44,7 @@ const buscarPerfil = (req, res, next) => {
 /** GET /api/motoristas/:id — Admin: busca pelo id do registro */
 const buscarPorId = (req, res, next) => {
   try {
-    const dados = motoistasService.buscarPorId(req.params.id);
+    const dados = motoristasService.buscarPorId(req.params.id);
     return success(res, dados, 'Motorista encontrado.');
   } catch (err) { next(err); }
 };
@@ -56,7 +56,7 @@ const solicitar = (req, res, next) => {
     if (!usuarioId || !cnh) {
       return next(new AppError('usuarioId e cnh são obrigatórios.', 400));
     }
-    const motorista = motoistasService.solicitar(usuarioId, cnh);
+    const motorista = motoristasService.solicitar(usuarioId, cnh);
     return res.status(201).json({ success: true, data: motorista, message: 'Solicitação enviada.' });
   } catch (err) { next(err); }
 };

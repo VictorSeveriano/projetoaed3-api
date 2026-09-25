@@ -1,7 +1,7 @@
-const carros = require('../data/carros.data');
+const veiculos = require('../data/veiculos.data');
 
 /**
- * CarrosRepository — Camada de acesso a dados de carros.
+ * VeiculosRepository — Camada de acesso a dados de veiculos.
  * Opera sobre o array em memoria; substituivel por DatabaseRepository no futuro.
  *
  * MODELAGEM DE STATUS:
@@ -10,21 +10,21 @@ const carros = require('../data/carros.data');
  *
  * Regra: apenas veículos APROVADOS e com status DISPONIVEL podem ser alocados.
  */
-class CarrosRepository {
+class VeiculosRepository {
   findAll() {
-    return [...carros];
+    return [...veiculos];
   }
 
   findById(id) {
-    return carros.find((c) => c.id === id) || null;
+    return veiculos.find((c) => c.id === id) || null;
   }
 
   findDisponiveis() {
-    return carros.filter((c) => c.statusAprovacao === 'APROVADO' && c.status === 'DISPONIVEL');
+    return veiculos.filter((c) => c.statusAprovacao === 'APROVADO' && c.status === 'DISPONIVEL');
   }
 
   findByStatus(status) {
-    return carros.filter((c) => c.status === status);
+    return veiculos.filter((c) => c.status === status);
   }
 
   /**
@@ -34,7 +34,7 @@ class CarrosRepository {
    * @returns {object|null}
    */
   findByMotoristaId(motoristaId) {
-    return carros.find((c) => c.motoristaId === motoristaId) || null;
+    return veiculos.find((c) => c.motoristaId === motoristaId) || null;
   }
 
   /**
@@ -43,34 +43,34 @@ class CarrosRepository {
    * @returns {object[]}
    */
   findByStatusAprovacao(statusAprovacao) {
-    return carros.filter((c) => c.statusAprovacao === statusAprovacao);
+    return veiculos.filter((c) => c.statusAprovacao === statusAprovacao);
   }
 
   updateStatusAprovacao(id, statusAprovacao, classe = null) {
-    const index = carros.findIndex((c) => c.id === id);
+    const index = veiculos.findIndex((c) => c.id === id);
     if (index === -1) return null;
-    carros[index].statusAprovacao = statusAprovacao;
+    veiculos[index].statusAprovacao = statusAprovacao;
     if (statusAprovacao === 'APROVADO') {
-      carros[index].status = 'DISPONIVEL'; // Libera para corridas
+      veiculos[index].status = 'DISPONIVEL'; // Libera para corridas
     }
     if (classe) {
-      carros[index].classe = classe;
+      veiculos[index].classe = classe;
     }
-    return carros[index];
+    return veiculos[index];
   }
 
   updateStatus(id, status) {
-    const index = carros.findIndex((c) => c.id === id);
+    const index = veiculos.findIndex((c) => c.id === id);
     if (index === -1) return null;
-    carros[index].status = status;
-    return carros[index];
+    veiculos[index].status = status;
+    return veiculos[index];
   }
 
   updateClasse(id, classe) {
-    const index = carros.findIndex((c) => c.id === id);
+    const index = veiculos.findIndex((c) => c.id === id);
     if (index === -1) return null;
-    carros[index].classe = classe;
-    return carros[index];
+    veiculos[index].classe = classe;
+    return veiculos[index];
   }
 
   /**
@@ -80,22 +80,29 @@ class CarrosRepository {
    */
   create(dados) {
     const novo = {
-      id: String(carros.length + 1),
+      id: String(veiculos.length + 1),
       modelo: dados.modelo,
       marca: dados.marca,
       ano: dados.ano,
       placa: dados.placa,
       porte: dados.porte,
-      classe: dados.classe || null, // A ser definida pelo admin
+      classe: dados.classe, // Derivada no service
+      possuiArCondicionado: dados.possuiArCondicionado,
+      possuiExtintor: dados.possuiExtintor,
+      possuiCintoSeguranca: dados.possuiCintoSeguranca,
+      documentacaoRegularizada: dados.documentacaoRegularizada,
+      cor: dados.cor,
+      quilometragem: dados.quilometragem,
+      quantidadePassageiros: dados.quantidadePassageiros,
       statusAprovacao: 'PENDENTE',
       status: 'INDISPONIVEL',
-      tarifaBase: dados.tarifaBase || null, // Não exibir/definir valores agora
+      tarifaBase: null, // A ser definido futuramente
       motoristaId: dados.motoristaId,
       criadoEm: new Date().toISOString(),
     };
-    carros.push(novo);
+    veiculos.push(novo);
     return novo;
   }
 }
 
-module.exports = new CarrosRepository();
+module.exports = new VeiculosRepository();

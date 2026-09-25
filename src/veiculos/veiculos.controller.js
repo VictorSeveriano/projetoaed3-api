@@ -31,9 +31,7 @@ const cadastrar = (req, res, next) => {
 /** PATCH /api/veiculos/:id/aprovar — Admin */
 const aprovar = (req, res, next) => {
   try {
-    const { classe } = req.body;
-    if (!classe) return next(new AppError('classe (BASICO, NORMAL, PREMIUM) é obrigatória para aprovação.', 400));
-    const dados = veiculosService.aprovar(req.params.id, classe);
+    const dados = veiculosService.aprovar(req.params.id);
     return success(res, dados, 'Veículo aprovado.');
   } catch (err) { next(err); }
 };

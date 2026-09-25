@@ -1,5 +1,5 @@
 const corridasRepository = require('./corridas.repository');
-const carrosRepository = require('../carros/carros.repository');
+const veiculosRepository = require('../veiculos/veiculos.repository');
 const AppError = require('../utils/AppError');
 
 /**
@@ -127,7 +127,7 @@ class CorridasService {
     // A regra de selecao fica aqui no backend, nunca no frontend.
     let veiculo = null;
     if (veiculoId) {
-      veiculo = carrosRepository.findById(veiculoId);
+      veiculo = veiculosRepository.findById(veiculoId);
       if (!veiculo) {
         throw new AppError('Veiculo ' + veiculoId + ' nao encontrado.', 404);
       }
@@ -136,7 +136,7 @@ class CorridasService {
       }
     } else {
       // Seleciona o veiculo disponivel com menor tarifaBase (mais economico)
-      const disponiveis = carrosRepository.findAll()
+      const disponiveis = veiculosRepository.findAll()
         .filter((c) => c.status === 'DISPONIVEL')
         .sort((a, b) => (a.tarifaBase || 0) - (b.tarifaBase || 0));
       veiculo = disponiveis[0] || null;
@@ -169,7 +169,7 @@ class CorridasService {
 
     // Marca o veiculo como em corrida
     if (veiculo) {
-      carrosRepository.updateStatus(veiculo.id, 'EM_CORRIDA');
+      veiculosRepository.updateStatus(veiculo.id, 'EM_CORRIDA');
     }
 
     return novaCorrida;
@@ -195,7 +195,7 @@ class CorridasService {
     // Libera o veiculo
     if (corrida.veiculoId) {
       try {
-        carrosRepository.updateStatus(corrida.veiculoId, 'DISPONIVEL');
+        veiculosRepository.updateStatus(corrida.veiculoId, 'DISPONIVEL');
       } catch (e) { /* veiculo pode nao existir mais — ok */ }
     }
 
@@ -221,7 +221,7 @@ class CorridasService {
 
     if (corrida.veiculoId) {
       try {
-        carrosRepository.updateStatus(corrida.veiculoId, 'DISPONIVEL');
+        veiculosRepository.updateStatus(corrida.veiculoId, 'DISPONIVEL');
       } catch (e) { /* ok */ }
     }
 

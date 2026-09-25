@@ -21,14 +21,14 @@ const login = (req, res, next) => {
  */
 const cadastrar = (req, res, next) => {
   try {
-    const { nome, usuario, senha, perfil } = req.body;
-    if (!nome || !usuario || !senha || !perfil) {
-      return next(new AppError('nome, usuario, senha e perfil sao obrigatorios.', 400));
+    const { nome, cpf, celular, email, senha, perfil, endereco, cnh } = req.body;
+    if (!nome || !senha || !perfil || !cpf || !celular || !email) {
+      return next(new AppError('Campos obrigatórios ausentes.', 400));
     }
     if (perfil === 'ADMINISTRADOR') {
       return next(new AppError('Nao e possivel criar conta de administrador pelo cadastro publico.', 403));
     }
-    const resultado = authService.cadastrar({ nome, usuario, senha, perfil });
+    const resultado = authService.cadastrar({ nome, cpf, celular, email, senha, perfil, endereco, cnh });
     return res.status(201).json({ success: true, data: resultado, message: 'Conta criada com sucesso.' });
   } catch (err) {
     next(err);

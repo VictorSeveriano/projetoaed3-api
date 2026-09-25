@@ -1,7 +1,7 @@
-const motoistasRepository = require('./motoristas.repository');
+const motoristasRepository = require('./motoristas.repository');
 const authRepository = require('../auth/auth.repository');
 const corridasRepository = require('../corridas/corridas.repository');
-const carrosRepository = require('../carros/carros.repository');
+const veiculosRepository = require('../veiculos/veiculos.repository');
 const notificacoesService = require('../notificacoes/notificacoes.service');
 const AppError = require('../utils/AppError');
 
@@ -30,7 +30,7 @@ class MotoristasService {
    * @returns {object[]}
    */
   listarTodos() {
-    const todos = motoistasRepository.findAll();
+    const todos = motoristasRepository.findAll();
     return todos.map((m) => this._enriquecer(m));
   }
 
@@ -41,8 +41,8 @@ class MotoristasService {
    */
   listarPorStatus(statusCadastro) {
     const lista = statusCadastro
-      ? motoistasRepository.findByStatusCadastro(statusCadastro)
-      : motoistasRepository.findAll();
+      ? motoristasRepository.findByStatusCadastro(statusCadastro)
+      : motoristasRepository.findAll();
     return lista.map((m) => this._enriquecer(m));
   }
 
@@ -52,7 +52,7 @@ class MotoristasService {
    * @returns {object[]}
    */
   listarOnline() {
-    return motoistasRepository.findByStatusPresenca('ONLINE').map((m) => this._enriquecer(m));
+    return motoristasRepository.findByStatusPresenca('ONLINE').map((m) => this._enriquecer(m));
   }
 
   // ----- Fluxo de solicitação -----
@@ -71,14 +71,14 @@ class MotoristasService {
     if (usuario.perfil !== 'MOTORISTA') throw new AppError('Apenas usuários com perfil MOTORISTA podem solicitar cadastro.', 403);
 
     // Impede duplicata de solicitação
-    const jaExiste = motoistasRepository.findByUsuarioId(usuarioId);
+    const jaExiste = motoristasRepository.findByUsuarioId(usuarioId);
     if (jaExiste) throw new AppError('Já existe uma solicitação de motorista para este usuário.', 409);
 
     if (!cnh || cnh.trim().length < 11) {
       throw new AppError('CNH inválida. Informe o número completo (11 dígitos).', 400);
     }
 
-    const novoMotorista = motoistasRepository.create({ usuarioId, cnh: cnh.trim() });
+    const novoMotorista = motoristasRepository.create({ usuarioId, cnh: cnh.trim() });
 
     // Notifica o administrador
     notificacoesService.notificarSolicitacaoMotorista(ADMIN_ID, {
@@ -95,10 +95,10 @@ class MotoristasService {
    * @returns {object}
    */
   aprovar(id) {
-    const m = motoistasRepository.findById(id);
+    const m = motoristasRepository.findById(id);
     if (!m) throw new AppError('Motorista não encontrado.', 404);
     if (m.statusCadastro === 'APROVADO') throw new AppError('Motorista já está aprovado.', 409);
-    return this._enriquecer(motoistasRepository.updateStatusCadastro(id, 'APROVADO'));
+    return this._enriquecer(motoristasRepository.updateStatusCadastro(id, 'APROVADO'));
   }
 
   /**
@@ -107,10 +107,10 @@ class MotoristasService {
    * @returns {object}
    */
   rejeitar(id) {
-    const m = motoistasRepository.findById(id);
+    const m = motoristasRepository.findById(id);
     if (!m) throw new AppError('Motorista não encontrado.', 404);
     if (m.statusCadastro === 'REJEITADO') throw new AppError('Motorista já está rejeitado.', 409);
-    return this._enriquecer(motoistasRepository.updateStatusCadastro(id, 'REJEITADO'));
+    return this._enriquecer(motoristasRepository.updateStatusCadastro(id, 'REJEITADO'));
   }
 
   // ----- Consultas do próprio motorista -----
@@ -125,7 +125,7 @@ class MotoristasService {
     if (!usuario) throw new AppError('Usuário não encontrado.', 404);
     if (usuario.perfil !== 'MOTORISTA') throw new AppError('Usuário não é motorista.', 403);
 
-    const motorista = motoistasRepository.findByUsuarioId(usuarioId);
+    const motorista = motoristasRepository.findByUsuarioId(usuarioId);
     if (!motorista) return null; // Ainda não solicitou cadastro
 
     return this._enriquecer(motorista);
@@ -137,7 +137,7 @@ class MotoristasService {
    * @returns {object}
    */
   buscarPorId(id) {
-    const m = motoistasRepository.findById(id);
+    const m = motoristasRepository.findById(id);
     if (!m) throw new AppError('Motorista não encontrado.', 404);
     return this._enriquecer(m);
   }
@@ -157,7 +157,7 @@ class MotoristasService {
    * @returns {object|null}
    */
   buscarVeiculo(usuarioId) {
-    return carrosRepository.findByMotoristaId(usuarioId);
+    return veiculosRepository.findByMotoristaId(usuarioId);
   }
 
   // ----- Privado -----
@@ -172,7 +172,7 @@ class MotoristasService {
     if (!motorista) return null;
     const usuario = authRepository.encontrarPorId(motorista.usuarioId);
     const { senha, ...dadosUsuario } = usuario || {};
-    const veiculo = carrosRepository.findByMotoristaId(motorista.usuarioId);
+    const veiculo = veiculosRepository.findByMotoristaId(motorista.usuarioId);
     return {
       ...motorista,
       usuario: dadosUsuario || null,

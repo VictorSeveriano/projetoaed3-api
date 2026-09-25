@@ -1,5 +1,5 @@
 const corridasRepository = require('../corridas/corridas.repository');
-const carrosRepository = require('../carros/carros.repository');
+const veiculosRepository = require('../veiculos/veiculos.repository');
 
 /**
  * DashboardService — Metricas e indicadores do sistema de corridas.
@@ -22,7 +22,7 @@ class DashboardService {
    */
   getResumo() {
     const corridas = corridasRepository.findAll();
-    const carros = carrosRepository.findAll();
+    const carros = veiculosRepository.findAll();
 
     let corridasAtivas = 0;
     let faturamentoTotal = 0;
