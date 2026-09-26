@@ -52,6 +52,30 @@ const criar = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+/** PATCH /api/corridas/:id/aceitar — Motorista aceita a corrida */
+const aceitar = async (req, res, next) => {
+  try {
+    const { motoristaUsuarioId } = req.body;
+    if (!motoristaUsuarioId) {
+      return next(new AppError('motoristaUsuarioId e obrigatorio.', 400));
+    }
+    const corridaAceita = await corridasService.aceitar(req.params.id, motoristaUsuarioId);
+    return success(res, corridaAceita, 'Corrida aceita com sucesso.');
+  } catch (err) { next(err); }
+};
+
+/** PATCH /api/corridas/:id/recusar — Motorista recusa a corrida */
+const recusar = async (req, res, next) => {
+  try {
+    const { motoristaUsuarioId } = req.body;
+    if (!motoristaUsuarioId) {
+      return next(new AppError('motoristaUsuarioId e obrigatorio.', 400));
+    }
+    const resultado = await corridasService.recusar(req.params.id, motoristaUsuarioId);
+    return success(res, resultado, 'Corrida recusada.');
+  } catch (err) { next(err); }
+};
+
 /** PATCH /api/corridas/:id/cancelar */
 const cancelar = async (req, res, next) => {
   try {
@@ -60,7 +84,23 @@ const cancelar = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-/** PATCH /api/corridas/:id/finalizar */
+/**
+ * PATCH /api/corridas/:id/confirmar-pagamento
+ * Motorista confirma recebimento do pagamento e finaliza a corrida.
+ * A corrida só é FINALIZADA após este passo.
+ */
+const confirmarPagamento = async (req, res, next) => {
+  try {
+    const { motoristaUsuarioId } = req.body;
+    const corridaFinalizada = await corridasService.confirmarPagamentoEFinalizar(
+      req.params.id,
+      motoristaUsuarioId || null
+    );
+    return success(res, corridaFinalizada, 'Pagamento confirmado. Corrida finalizada com sucesso.');
+  } catch (err) { next(err); }
+};
+
+/** PATCH /api/corridas/:id/finalizar — Admin ou motorista */
 const finalizar = async (req, res, next) => {
   try {
     const corridaFinalizada = await corridasService.finalizar(req.params.id);
@@ -68,4 +108,7 @@ const finalizar = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { listarTodas, listarMinhas, buscarPorId, criar, cancelar, finalizar };
+module.exports = {
+  listarTodas, listarMinhas, buscarPorId, criar,
+  aceitar, recusar, cancelar, confirmarPagamento, finalizar,
+};

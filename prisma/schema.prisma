@@ -117,6 +117,8 @@ model Corrida {
   duracaoMin        Int?      @map("duracao_min")
   
   valor             Decimal   @db.Decimal(10, 2)
+  classe            String    @default("NORMAL") @db.VarChar(50) // BASICO, NORMAL, PREMIUM
+  formaPagamento    String    @default("DINHEIRO") @map("forma_pagamento") @db.VarChar(50) // DINHEIRO, CARTAO_DEBITO, CARTAO_CREDITO, PIX
   status            String    @default("SOLICITADA") @db.VarChar(50) // SOLICITADA, CONFIRMADA, EM_ANDAMENTO, FINALIZADA, CANCELADA
   dataHorario       DateTime  @map("data_horario")
   criadaEm          DateTime  @default(now()) @map("criada_em")
@@ -152,10 +154,11 @@ model CorridaRota {
 model Notificacao {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   destinatarioId  String   @map("destinatario_id") @db.Uuid
-  tipo            String   @db.VarChar(50) // SOLICITACAO_MOTORISTA, ATUALIZACAO_CORRIDA, SISTEMA
+  tipo            String   @db.VarChar(50) // SOLICITACAO_MOTORISTA, ATUALIZACAO_CORRIDA, NOVA_CORRIDA, SISTEMA
   titulo          String   @db.VarChar(100)
   mensagem        String
   referenciaId    String?  @map("referencia_id") @db.Uuid
+  acaoMotorista   String?  @map("acao_motorista") @db.VarChar(50) // PENDENTE, ACEITA, RECUSADA (apenas para tipo NOVA_CORRIDA)
   lida            Boolean  @default(false)
   criadaEm        DateTime @default(now()) @map("criada_em")
 

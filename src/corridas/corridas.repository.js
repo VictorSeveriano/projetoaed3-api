@@ -20,6 +20,8 @@ function formatarCorrida(cPrisma) {
     distanciaKm: cPrisma.distanciaKm ? cPrisma.distanciaKm.toNumber() : 0,
     valor: cPrisma.valor ? cPrisma.valor.toNumber() : 0,
     rotaCaminho: cPrisma.rotaCaminho || [],
+    classe: cPrisma.classe || 'NORMAL',
+    formaPagamento: cPrisma.formaPagamento || 'DINHEIRO',
     
     // Mapeia rotas alternativas para ter as propriedades no formato da aplicação
     rotasAlternativas: (cPrisma.rotasAlternativas || []).map(r => ({
@@ -147,7 +149,7 @@ class CorridasRepository {
     const rotas = dados.rotasAlternativas || [];
     const rotasCriacao = rotas
       .map((r, i) => rotaParaPrisma(r, i, i === 0))
-      .filter(r => !!r.polyline); // O banco tinha uma checagem de polyline!
+      .filter(r => !!r.polyline);
 
     const novaCorrida = await prisma.corrida.create({
       data: {
@@ -168,6 +170,8 @@ class CorridasRepository {
         distanciaKm: dados.distanciaKm,
         duracaoMin: dados.duracaoMin || null,
         valor: dados.valor || 0,
+        classe: dados.classe || 'NORMAL',
+        formaPagamento: dados.formaPagamento || 'DINHEIRO',
         dataHorario: dados.dataHorario ? new Date(dados.dataHorario) : new Date(),
         status: dados.status || 'SOLICITADA',
         
@@ -185,6 +189,38 @@ class CorridasRepository {
     });
 
     return formatarCorrida(novaCorrida);
+  }
+
+  /**
+   * Aceita a corrida atomicamente:
+   * - Só atualiza se o status ainda é SOLICITADA (prevenção de duplo aceite)
+   * - Associa motoristaId e veiculoId
+   * - Muda status para CONFIRMADA
+   * @returns {Corrida|null} null se a corrida já foi assumida por outro
+   */
+  async aceitarCorrida(corridaId, motoristaId, veiculoId) {
+    try {
+      // updateMany com filtro de status previne corrida de dados (duplo aceite)
+      const resultado = await prisma.corrida.updateMany({
+        where: { id: corridaId, status: 'SOLICITADA' },
+        data: {
+          motoristaId,
+          veiculoId,
+          status: 'CONFIRMADA',
+          atualizadaEm: new Date(),
+        }
+      });
+
+      if (resultado.count === 0) {
+        // Nenhuma linha atualizada: corrida já foi assumida ou não existe
+        return null;
+      }
+
+      // Buscar corrida atualizada para retornar
+      return this.findById(corridaId);
+    } catch (error) {
+      throw error;
+    }
   }
 
   async updateStatus(id, status) {

@@ -6,15 +6,14 @@
  *   - Destino: ponto de chegada
  *   - Rota: trajeto selecionado (geometria real da malha viária via Google Routes API)
  *   - Veículo: recurso alocado pelo backend para atender a corrida
- *
- * Estrutura preparada para futura migração ao banco de dados.
- * Todos os campos seguem nomes e tipos adequados para mapeamento ORM.
+ *   - Classe: BASICO, NORMAL ou PREMIUM (selecionada pelo passageiro)
+ *   - FormaPagamento: DINHEIRO, CARTAO_DEBITO, CARTAO_CREDITO ou PIX
  *
  * STATUS possíveis:
- *   SOLICITADA   — corrida criada pelo usuário, aguardando início
- *   CONFIRMADA   — veículo alocado, corrida confirmada pelo sistema
+ *   SOLICITADA   — corrida criada pelo usuário, aguardando motorista aceitar
+ *   CONFIRMADA   — motorista aceitou, corrida confirmada
  *   EM_ANDAMENTO — corrida em execução
- *   FINALIZADA   — corrida concluída com sucesso
+ *   FINALIZADA   — corrida concluída e pagamento confirmado pelo motorista
  *   CANCELADA    — corrida cancelada pelo usuário ou sistema
  */
 class Corrida {
@@ -22,22 +21,24 @@ class Corrida {
    * @param {object}   dados
    * @param {string}   dados.id
    * @param {string}   dados.usuarioId
-   * @param {string}   [dados.motoristaId]        - ID do usuário com perfil MOTORISTA responsável pela corrida
-   * @param {string}   [dados.veiculoId]          - ID do veículo alocado (null se nenhum disponível)
+   * @param {string}   [dados.motoristaId]        - ID do motorista responsável
+   * @param {string}   [dados.veiculoId]          - ID do veículo alocado
    * @param {string}   dados.origemNome           - Nome/endereço de exibição da origem
    * @param {string}   dados.destinoNome          - Nome/endereço de exibição do destino
    * @param {number}   [dados.origemLat]          - Latitude da origem
    * @param {number}   [dados.origemLng]          - Longitude da origem
    * @param {number}   [dados.destinoLat]         - Latitude do destino
    * @param {number}   [dados.destinoLng]         - Longitude do destino
-   * @param {object}   [dados.origemEndereco]     - Endereço estruturado da origem (ViaCEP)
+   * @param {object}   [dados.origemEndereco]     - Endereço estruturado da origem
    * @param {object}   [dados.destinoEndereco]    - Endereço estruturado do destino
-   * @param {string[]} [dados.rotaCaminho]        - Sequência de nomes dos pontos da rota selecionada
-   * @param {Array}    [dados.rotasAlternativas]  - Todas as rotas retornadas pela API (para histórico)
-   * @param {string}   [dados.polyline]           - Encoded polyline da rota (geometria real da malha viária)
-   * @param {number}   dados.distanciaKm          - Distância em km (dado real da Google Routes API)
+   * @param {string[]} [dados.rotaCaminho]        - Sequência de nomes dos pontos da rota
+   * @param {Array}    [dados.rotasAlternativas]  - Todas as rotas retornadas pela API
+   * @param {string}   [dados.polyline]           - Encoded polyline da rota
+   * @param {number}   dados.distanciaKm          - Distância em km
    * @param {number}   [dados.duracaoMin]         - Duração estimada em minutos
-   * @param {number}   dados.valor                - Valor da corrida em R$ (calculado pelo backend)
+   * @param {number}   dados.valor                - Valor da corrida em R$
+   * @param {string}   [dados.classe]             - Classe desejada: BASICO, NORMAL ou PREMIUM
+   * @param {string}   [dados.formaPagamento]     - Forma de pagamento: DINHEIRO, CARTAO_DEBITO, CARTAO_CREDITO, PIX
    * @param {string}   [dados.dataHorario]        - ISO 8601: quando a corrida está agendada
    * @param {string}   [dados.status]             - Ver STATUS possíveis acima
    * @param {string}   [dados.criadaEm]           - ISO 8601: quando a corrida foi criada
@@ -52,7 +53,7 @@ class Corrida {
     this.origemNome = dados.origemNome;
     this.destinoNome = dados.destinoNome;
 
-    // Coordenadas geográficas (necessárias para reconstrução futura sem re-geocodificar)
+    // Coordenadas geográficas
     this.origemLat = dados.origemLat || null;
     this.origemLng = dados.origemLng || null;
     this.destinoLat = dados.destinoLat || null;
@@ -64,22 +65,24 @@ class Corrida {
 
     // Rota selecionada
     this.rotaCaminho = dados.rotaCaminho || [];
-    // polyline: geometria real da rota (encodedPolyline da Google Routes API)
-    // Preservada para reconstrução visual futura sem nova consulta à API externa
     this.polyline = dados.polyline || null;
-    // Rotas alternativas retornadas pela API — mantidas para histórico/auditoria
     this.rotasAlternativas = dados.rotasAlternativas || [];
 
-    // Métricas da rota (dados reais da Google Routes API)
+    // Métricas da rota
     this.distanciaKm = dados.distanciaKm || 0;
     this.duracaoMin = dados.duracaoMin || null;
 
-    // Financeiro — calculado pelo backend com base na distância e categoria do veículo
+    // Financeiro
     this.valor = dados.valor || 0;
+
+    // Classe de serviço solicitada pelo passageiro: BASICO, NORMAL ou PREMIUM
+    this.classe = dados.classe || 'NORMAL';
+
+    // Forma de pagamento (pagamento ocorre presencialmente — sem dados financeiros sensíveis)
+    this.formaPagamento = dados.formaPagamento || 'DINHEIRO';
 
     // Temporal
     this.dataHorario = dados.dataHorario || new Date().toISOString();
-    // SOLICITADA é o status inicial: o usuário solicitou a corrida, aguardando processamento
     this.status = dados.status || 'SOLICITADA';
     this.criadaEm = dados.criadaEm || new Date().toISOString();
   }
@@ -99,6 +102,8 @@ class Corrida {
       distanciaKm: this.distanciaKm,
       duracaoMin: this.duracaoMin,
       valor: this.valor,
+      classe: this.classe,
+      formaPagamento: this.formaPagamento,
       status: this.status,
       dataHorario: this.dataHorario,
       criadaEm: this.criadaEm,
@@ -107,4 +112,3 @@ class Corrida {
 }
 
 module.exports = Corrida;
-

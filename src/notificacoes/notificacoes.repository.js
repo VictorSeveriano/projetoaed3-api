@@ -27,12 +27,37 @@ class NotificacoesRepository {
     return prisma.notificacao.create({
       data: {
         destinatarioId: dados.destinatarioId,
-        tipo: dados.tipo,
-        titulo: dados.titulo,
-        mensagem: dados.mensagem,
-        referenciaId: dados.referenciaId || null
+        tipo:           dados.tipo,
+        titulo:         dados.titulo,
+        mensagem:       dados.mensagem,
+        referenciaId:   dados.referenciaId   || null,
+        acaoMotorista:  dados.acaoMotorista  || null,
       }
     });
+  }
+
+  /**
+   * Atualiza o campo acaoMotorista na notificação NOVA_CORRIDA
+   * de um motorista específico para uma corrida específica.
+   * Usado quando o motorista aceita (ACEITA) ou recusa (RECUSADA).
+   */
+  async atualizarAcaoMotorista(corridaId, motoristaUsuarioId, acao) {
+    try {
+      await prisma.notificacao.updateMany({
+        where: {
+          destinatarioId: motoristaUsuarioId,
+          tipo:           'NOVA_CORRIDA',
+          referenciaId:   corridaId,
+        },
+        data: {
+          acaoMotorista: acao,
+          lida:          true,
+        }
+      });
+    } catch (error) {
+      // Não falhar o fluxo principal se a notificação não for encontrada
+      console.error('[NotificacoesRepository] atualizarAcaoMotorista:', error.message);
+    }
   }
 
   async marcarLida(id) {
