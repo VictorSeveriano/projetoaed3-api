@@ -48,8 +48,8 @@ class CorridasService {
       const motorista = await motoristasRepository.findByUsuarioId(usuarioId);
       if (!motorista) return [];
       return status
-        ? corridasRepository.findByMotoristaIdAndStatus(motorista.id, status)
-        : corridasRepository.findByMotoristaId(motorista.id);
+        ? corridasRepository.findByMotoristaIdAndStatus(usuarioId, status)
+        : corridasRepository.findByMotoristaId(usuarioId);
     }
     // USUARIO (passageiro)
     return status
@@ -159,26 +159,24 @@ class CorridasService {
       const veiculosDisponiveis = await veiculosRepository.findDisponiveis();
       const veiculosDaClasse = veiculosDisponiveis.filter((v) => v.classe === corrida.classe);
 
-      // veiculo.motoristaId = ID do registro Motorista (não do usuario)
-      const motoristaIds = [...new Set(
+      // veiculo.motoristaId = ID do usuário
+      const usuarioIds = [...new Set(
         veiculosDaClasse
           .filter((v) => v.motoristaId)
           .map((v) => v.motoristaId)
       )];
 
-      for (const motoristaId of motoristaIds) {
-        // Buscar por ID do registro Motorista
-        const motorista = await motoristasRepository.findById(motoristaId);
+      for (const usuarioId of usuarioIds) {
+        // Buscar por ID do usuário
+        const motorista = await motoristasRepository.findByUsuarioId(usuarioId);
         if (!motorista || motorista.statusCadastro !== 'APROVADO') continue;
-        // motorista.usuarioId = ID do usuário (para notificar)
-        if (!motorista.usuarioId) continue;
 
         const dataFormatada = new Date(corrida.dataHorario).toLocaleString('pt-BR', {
           day: '2-digit', month: '2-digit', year: 'numeric',
           hour: '2-digit', minute: '2-digit',
         });
 
-        await notificacoesService.notificarNovaCorrida(motorista.usuarioId, {
+        await notificacoesService.notificarNovaCorrida(usuarioId, {
           corridaId:   corrida.id,
           classe:      corrida.classe,
           origemNome:  corrida.origemNome,
@@ -217,8 +215,8 @@ class CorridasService {
       throw new AppError('Apenas motoristas aprovados podem aceitar corridas.', 403);
     }
 
-    // Verificar veículo elegível — findByMotoristaId usa o ID do registro Motorista
-    const veiculo = await veiculosRepository.findByMotoristaId(motorista.id);
+    // Verificar veículo elegível — findByMotoristaId usa o ID do usuário do Motorista
+    const veiculo = await veiculosRepository.findByMotoristaId(motorista.usuarioId);
     if (!veiculo) throw new AppError('Motorista sem veiculo cadastrado.', 409);
     if (veiculo.statusAprovacao !== 'APROVADO') {
       throw new AppError('O veiculo do motorista nao esta aprovado.', 409);
@@ -233,10 +231,10 @@ class CorridasService {
       );
     }
 
-    // Aceitar: associar motorista e veículo, mudar status para CONFIRMADA
+    // Aceitar: associar motorista (usuarioId) e veículo, mudar status para CONFIRMADA
     const corridaAtualizada = await corridasRepository.aceitarCorrida(
       corridaId,
-      motorista.id,
+      motorista.usuarioId,
       veiculo.id
     );
 
@@ -323,7 +321,7 @@ class CorridasService {
     // Validar que é o motorista correto (se fornecido)
     if (motoristaUsuarioId) {
       const motorista = await motoristasRepository.findByUsuarioId(motoristaUsuarioId);
-      if (motorista && corrida.motoristaId && corrida.motoristaId !== motorista.id) {
+      if (motorista && corrida.motoristaId && corrida.motoristaId !== motorista.usuarioId) {
         throw new AppError('Voce nao e o motorista responsavel por esta corrida.', 403);
       }
     }

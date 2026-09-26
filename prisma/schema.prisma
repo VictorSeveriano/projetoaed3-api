@@ -193,9 +193,4 @@ model Notificacao {
   @@map("notificacoes")
 }
 
-model SchemaMigration {
-  version    String   @id @db.VarChar(255)
-  aplicadaEm DateTime @default(now()) @map("aplicada_em") @db.Timestamptz(6)
 
-  @@map("schema_migrations")
-}

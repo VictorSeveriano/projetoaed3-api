@@ -18,7 +18,9 @@ function formatarUsuario(usuarioPrisma) {
   if (endereco) {
     resto.endereco = {
       ...endereco,
-      rua: endereco.logradouro
+      rua: endereco.logradouro,
+      latitude: endereco.latitude ? endereco.latitude.toNumber() : null,
+      longitude: endereco.longitude ? endereco.longitude.toNumber() : null
     };
   } else {
     resto.endereco = null;
@@ -39,13 +41,15 @@ function enderecoParaPrisma(endereco) {
   return {
     logradouro:  endereco.rua        || endereco.logradouro || null,
     numero:      endereco.numero      || null,
-    // O banco atual que criamos manual na migration não tem complemento na tabela de enderecos (verifiquei 001_create_enderecos.sql na primeira parte da conversa - oh wait, it might not have). I'll omit complemento or ignore it.
+    complemento: endereco.complemento || null,
     bairro:      endereco.bairro      || null,
     cidade:      endereco.cidade      || null,
     estado:      endereco.estado      || null,
     uf:          endereco.uf          || null,
     cep:         endereco.cep         ? endereco.cep.replace(/\D/g, '') : null,
-    pais:        endereco.pais        || 'Brasil'
+    pais:        endereco.pais        || 'Brasil',
+    latitude:    endereco.latitude    || null,
+    longitude:   endereco.longitude   || null
   };
 }
 

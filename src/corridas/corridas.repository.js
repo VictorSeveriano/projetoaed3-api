@@ -35,16 +35,15 @@ function enderecoParaPrisma(endereco, lat, lng) {
   return {
     logradouro:  endereco?.rua || endereco?.logradouro || null,
     numero:      endereco?.numero || null,
+    complemento: endereco?.complemento || null,
     bairro:      endereco?.bairro || null,
     cidade:      endereco?.cidade || null,
     estado:      endereco?.estado || null,
     uf:          endereco?.uf || null,
     cep:         endereco?.cep ? endereco.cep.replace(/\D/g, '') : null,
     pais:        endereco?.pais || 'Brasil',
-    // O schema não inclui lat/lng no model Endereco, apenas na tabela Corridas.
-    // O banco criado via .sql tinha lat/lng em Endereços? Sim. Mas não foi
-    // atualizado no nosso schema.prisma manual. Vou ignorar isso aqui para Enderecos,
-    // pois a corrida já salva lat/lng diretos na própria tabela.
+    latitude:    lat !== undefined ? lat : (endereco?.latitude || null),
+    longitude:   lng !== undefined ? lng : (endereco?.longitude || null)
   };
 }
 
@@ -176,10 +175,10 @@ class CorridasRepository {
         status: dados.status || 'SOLICITADA',
         
         origemEndereco: {
-          create: enderecoParaPrisma(dados.origemEndereco)
+          create: enderecoParaPrisma(dados.origemEndereco, dados.origemLat, dados.origemLng)
         },
         destinoEndereco: {
-          create: enderecoParaPrisma(dados.destinoEndereco)
+          create: enderecoParaPrisma(dados.destinoEndereco, dados.destinoLat, dados.destinoLng)
         },
         rotasAlternativas: {
           create: rotasCriacao
