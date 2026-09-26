@@ -110,6 +110,17 @@ class AuthService {
     const cpfNorm     = normalizarCPF(cpf);
     const celularNorm = normalizarCelular(celular);
     const emailNorm   = normalizarEmail(email);
+    let cnhNorm = null;
+    
+    if (perfil === 'MOTORISTA') {
+      const { normalizarCNH, validarCNH } = require('../utils/validators');
+      cnhNorm = normalizarCNH(cnh);
+      if (!validarCNH(cnhNorm)) throw new AppError('CNH inválida.', 400);
+      const motoristasRepository = require('../motoristas/motoristas.repository');
+      if (await motoristasRepository.existsByCnh(cnhNorm)) {
+        throw new AppError('CNH já cadastrada no sistema.', 409);
+      }
+    }
 
     if (!validarCPF(cpfNorm))        throw new AppError('CPF inválido.', 400);
     if (!validarCelular(celularNorm)) throw new AppError('Celular inválido.', 400);
@@ -130,7 +141,7 @@ class AuthService {
     });
 
     if (perfil === 'MOTORISTA') {
-      await motoristasService.solicitar(novoUsuario.id, cnh);
+      await motoristasService.solicitar(novoUsuario.id, cnhNorm);
     }
 
     const token = `session-token-${novoUsuario.id}`;

@@ -24,6 +24,13 @@ class MotoristasRepository {
     });
   }
 
+  async existsByCnh(cnh) {
+    const motorista = await prisma.motorista.findUnique({
+      where: { cnh }
+    });
+    return !!motorista;
+  }
+
   async findByStatusCadastro(statusCadastro) {
     return prisma.motorista.findMany({
       where: { statusCadastro },

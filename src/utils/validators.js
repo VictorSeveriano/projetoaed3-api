@@ -10,6 +10,7 @@ const validarCPF = (cpf) => {
   // Evita CPFs repetidos
   if (/^(\d)\1+$/.test(limpo)) return false;
 
+  /* // VERIFICACAO DE CPF EXISTENTE COMENTADA
   let soma = 0;
   let resto;
 
@@ -27,6 +28,7 @@ const validarCPF = (cpf) => {
   resto = (soma * 10) % 11;
   if (resto === 10 || resto === 11) resto = 0;
   if (resto !== parseInt(limpo.substring(10, 11))) return false;
+  */
 
   return true;
 };
@@ -40,6 +42,52 @@ const validarEmail = (email) => {
 const normalizarCPF = (cpf) => {
   if (!cpf) return '';
   return cpf.replace(/\D/g, '');
+};
+
+const validarCNH = (cnh) => {
+  if (!cnh) return false;
+  const limpo = cnh.replace(/\D/g, '');
+  if (limpo.length !== 11) return false;
+
+  if (/^(\d)\1+$/.test(limpo)) return false;
+
+  /* // VERIFICACAO DE CNH EXISTENTE COMENTADA
+  let soma = 0;
+  let d1 = 0;
+  let d2 = 0;
+  let mult = 9;
+
+  for (let i = 0; i < 9; i++) {
+    soma += parseInt(limpo.charAt(i)) * mult;
+    mult--;
+  }
+  
+  let resto = soma % 11;
+  if (resto === 10) d1 = 0;
+  else d1 = resto;
+
+  soma = 0;
+  mult = 1;
+  for (let i = 0; i < 9; i++) {
+    soma += parseInt(limpo.charAt(i)) * mult;
+    mult++;
+  }
+
+  resto = soma % 11;
+  if (resto === 10) d2 = 0;
+  else d2 = resto;
+
+  if (d1 !== parseInt(limpo.charAt(9)) || d2 !== parseInt(limpo.charAt(10))) {
+    return false;
+  }
+  */
+
+  return true;
+};
+
+const normalizarCNH = (cnh) => {
+  if (!cnh) return '';
+  return cnh.replace(/\D/g, '');
 };
 
 const normalizarEmail = (email) => {
@@ -95,11 +143,13 @@ const validarSenha = (senha, nomeUsuario = '') => {
 
 module.exports = {
   validarCPF,
+  validarCNH,
   validarEmail,
   validarCelular,
   validarCEP,
   validarSenha,
   normalizarCPF,
+  normalizarCNH,
   normalizarEmail,
   normalizarCelular,
 };

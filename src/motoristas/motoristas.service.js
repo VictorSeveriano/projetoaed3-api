@@ -50,11 +50,21 @@ class MotoristasService {
     const jaExiste = await motoristasRepository.findByUsuarioId(usuarioId);
     if (jaExiste) throw new AppError('Já existe uma solicitação de motorista para este usuário.', 409);
 
-    if (!cnh || cnh.trim().length < 11) {
-      throw new AppError('CNH inválida. Informe o número completo (11 dígitos).', 400);
+    if (!cnh) {
+      throw new AppError('CNH é obrigatória.', 400);
+    }
+    const { validarCNH, normalizarCNH } = require('../utils/validators');
+    const cnhNorm = normalizarCNH(cnh);
+
+    if (!validarCNH(cnhNorm)) {
+      throw new AppError('CNH inválida.', 400);
     }
 
-    const novoMotorista = await motoristasRepository.create({ usuarioId, cnh: cnh.trim() });
+    if (await motoristasRepository.existsByCnh(cnhNorm)) {
+      throw new AppError('CNH já cadastrada no sistema.', 409);
+    }
+
+    const novoMotorista = await motoristasRepository.create({ usuarioId, cnh: cnhNorm });
 
     await notificacoesService.notificarSolicitacaoMotorista(ADMIN_ID, {
       nomeMotorista: usuario.nome,
