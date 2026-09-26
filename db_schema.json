@@ -1,0 +1,1429 @@
+{
+  "tables": {
+    "corrida_rotas": [
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": "gen_random_uuid()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "corrida_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "ordem",
+        "data_type": "integer",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "distancia_km",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "distancia_metros",
+        "data_type": "integer",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "duracao_min",
+        "data_type": "integer",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "duracao_segundos",
+        "data_type": "integer",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "polyline",
+        "data_type": "text",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "selecionada",
+        "data_type": "boolean",
+        "character_maximum_length": null,
+        "column_default": "false",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corrida_rotas",
+        "column_name": "criada_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      }
+    ],
+    "corridas": [
+      {
+        "table_name": "corridas",
+        "column_name": "id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": "gen_random_uuid()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "usuario_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "motorista_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "veiculo_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "origem_endereco_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "destino_endereco_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "origem_nome",
+        "data_type": "character varying",
+        "character_maximum_length": 255,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "destino_nome",
+        "data_type": "character varying",
+        "character_maximum_length": 255,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "origem_lat",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "origem_lng",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "destino_lat",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "destino_lng",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "rota_caminho",
+        "data_type": "jsonb",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "polyline",
+        "data_type": "text",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "distancia_km",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "duracao_min",
+        "data_type": "integer",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "valor",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": "0",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "data_horario",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "status",
+        "data_type": "character varying",
+        "character_maximum_length": 20,
+        "column_default": "'SOLICITADA'::character varying",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "criada_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "atualizada_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "classe",
+        "data_type": "character varying",
+        "character_maximum_length": 50,
+        "column_default": "'NORMAL'::character varying",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "corridas",
+        "column_name": "forma_pagamento",
+        "data_type": "character varying",
+        "character_maximum_length": 50,
+        "column_default": "'DINHEIRO'::character varying",
+        "is_nullable": "NO"
+      }
+    ],
+    "enderecos": [
+      {
+        "table_name": "enderecos",
+        "column_name": "id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": "gen_random_uuid()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "logradouro",
+        "data_type": "character varying",
+        "character_maximum_length": 200,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "numero",
+        "data_type": "character varying",
+        "character_maximum_length": 20,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "complemento",
+        "data_type": "character varying",
+        "character_maximum_length": 150,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "bairro",
+        "data_type": "character varying",
+        "character_maximum_length": 120,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "cidade",
+        "data_type": "character varying",
+        "character_maximum_length": 120,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "estado",
+        "data_type": "character varying",
+        "character_maximum_length": 120,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "uf",
+        "data_type": "character",
+        "character_maximum_length": 2,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "cep",
+        "data_type": "character varying",
+        "character_maximum_length": 8,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "pais",
+        "data_type": "character varying",
+        "character_maximum_length": 80,
+        "column_default": "'Brasil'::character varying",
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "latitude",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "longitude",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "criado_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "enderecos",
+        "column_name": "atualizado_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      }
+    ],
+    "motoristas": [
+      {
+        "table_name": "motoristas",
+        "column_name": "id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": "gen_random_uuid()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "motoristas",
+        "column_name": "usuario_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "motoristas",
+        "column_name": "cnh",
+        "data_type": "character varying",
+        "character_maximum_length": 20,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "motoristas",
+        "column_name": "status_cadastro",
+        "data_type": "character varying",
+        "character_maximum_length": 20,
+        "column_default": "'PENDENTE'::character varying",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "motoristas",
+        "column_name": "status_presenca",
+        "data_type": "character varying",
+        "character_maximum_length": 20,
+        "column_default": "'OFFLINE'::character varying",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "motoristas",
+        "column_name": "criado_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "motoristas",
+        "column_name": "atualizado_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      }
+    ],
+    "notificacoes": [
+      {
+        "table_name": "notificacoes",
+        "column_name": "id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": "gen_random_uuid()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "notificacoes",
+        "column_name": "destinatario_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "notificacoes",
+        "column_name": "tipo",
+        "data_type": "character varying",
+        "character_maximum_length": 40,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "notificacoes",
+        "column_name": "titulo",
+        "data_type": "character varying",
+        "character_maximum_length": 150,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "notificacoes",
+        "column_name": "mensagem",
+        "data_type": "text",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "notificacoes",
+        "column_name": "referencia_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "notificacoes",
+        "column_name": "lida",
+        "data_type": "boolean",
+        "character_maximum_length": null,
+        "column_default": "false",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "notificacoes",
+        "column_name": "criada_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "notificacoes",
+        "column_name": "acao_motorista",
+        "data_type": "character varying",
+        "character_maximum_length": 50,
+        "column_default": null,
+        "is_nullable": "YES"
+      }
+    ],
+    "schema_migrations": [
+      {
+        "table_name": "schema_migrations",
+        "column_name": "version",
+        "data_type": "character varying",
+        "character_maximum_length": 255,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "schema_migrations",
+        "column_name": "aplicada_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      }
+    ],
+    "usuarios": [
+      {
+        "table_name": "usuarios",
+        "column_name": "id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": "gen_random_uuid()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "nome",
+        "data_type": "character varying",
+        "character_maximum_length": 150,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "cpf",
+        "data_type": "character varying",
+        "character_maximum_length": 11,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "celular",
+        "data_type": "character varying",
+        "character_maximum_length": 11,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "email",
+        "data_type": "character varying",
+        "character_maximum_length": 255,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "usuario",
+        "data_type": "character varying",
+        "character_maximum_length": 100,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "senha",
+        "data_type": "text",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "perfil",
+        "data_type": "character varying",
+        "character_maximum_length": 20,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "endereco_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "criado_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "usuarios",
+        "column_name": "atualizado_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      }
+    ],
+    "veiculos": [
+      {
+        "table_name": "veiculos",
+        "column_name": "id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": "gen_random_uuid()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "marca",
+        "data_type": "character varying",
+        "character_maximum_length": 80,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "modelo",
+        "data_type": "character varying",
+        "character_maximum_length": 100,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "ano",
+        "data_type": "integer",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "placa",
+        "data_type": "character varying",
+        "character_maximum_length": 10,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "cor",
+        "data_type": "character varying",
+        "character_maximum_length": 50,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "porte",
+        "data_type": "character varying",
+        "character_maximum_length": 50,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "classe",
+        "data_type": "character varying",
+        "character_maximum_length": 20,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "quilometragem",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": "0",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "quantidade_passageiros",
+        "data_type": "integer",
+        "character_maximum_length": null,
+        "column_default": "4",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "possui_ar_condicionado",
+        "data_type": "boolean",
+        "character_maximum_length": null,
+        "column_default": "false",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "possui_extintor",
+        "data_type": "boolean",
+        "character_maximum_length": null,
+        "column_default": "false",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "possui_cinto_seguranca",
+        "data_type": "boolean",
+        "character_maximum_length": null,
+        "column_default": "false",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "documentacao_regularizada",
+        "data_type": "boolean",
+        "character_maximum_length": null,
+        "column_default": "false",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "status_aprovacao",
+        "data_type": "character varying",
+        "character_maximum_length": 20,
+        "column_default": "'PENDENTE'::character varying",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "status",
+        "data_type": "character varying",
+        "character_maximum_length": 20,
+        "column_default": "'INDISPONIVEL'::character varying",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "tarifa_base",
+        "data_type": "numeric",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "YES"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "motorista_id",
+        "data_type": "uuid",
+        "character_maximum_length": null,
+        "column_default": null,
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "criado_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      },
+      {
+        "table_name": "veiculos",
+        "column_name": "atualizado_em",
+        "data_type": "timestamp with time zone",
+        "character_maximum_length": null,
+        "column_default": "now()",
+        "is_nullable": "NO"
+      }
+    ]
+  },
+  "indices": {
+    "corrida_rotas": [
+      {
+        "tablename": "corrida_rotas",
+        "indexname": "corrida_rotas_pkey",
+        "indexdef": "CREATE UNIQUE INDEX corrida_rotas_pkey ON public.corrida_rotas USING btree (id)"
+      },
+      {
+        "tablename": "corrida_rotas",
+        "indexname": "idx_corrida_rotas_corrida_id",
+        "indexdef": "CREATE INDEX idx_corrida_rotas_corrida_id ON public.corrida_rotas USING btree (corrida_id)"
+      },
+      {
+        "tablename": "corrida_rotas",
+        "indexname": "idx_corrida_rotas_selecionada",
+        "indexdef": "CREATE INDEX idx_corrida_rotas_selecionada ON public.corrida_rotas USING btree (corrida_id, selecionada) WHERE (selecionada = true)"
+      }
+    ],
+    "corridas": [
+      {
+        "tablename": "corridas",
+        "indexname": "corridas_pkey",
+        "indexdef": "CREATE UNIQUE INDEX corridas_pkey ON public.corridas USING btree (id)"
+      },
+      {
+        "tablename": "corridas",
+        "indexname": "idx_corridas_data_horario",
+        "indexdef": "CREATE INDEX idx_corridas_data_horario ON public.corridas USING btree (data_horario)"
+      },
+      {
+        "tablename": "corridas",
+        "indexname": "idx_corridas_motorista_id",
+        "indexdef": "CREATE INDEX idx_corridas_motorista_id ON public.corridas USING btree (motorista_id)"
+      },
+      {
+        "tablename": "corridas",
+        "indexname": "idx_corridas_status",
+        "indexdef": "CREATE INDEX idx_corridas_status ON public.corridas USING btree (status)"
+      },
+      {
+        "tablename": "corridas",
+        "indexname": "idx_corridas_usuario_id",
+        "indexdef": "CREATE INDEX idx_corridas_usuario_id ON public.corridas USING btree (usuario_id)"
+      },
+      {
+        "tablename": "corridas",
+        "indexname": "idx_corridas_veiculo_id",
+        "indexdef": "CREATE INDEX idx_corridas_veiculo_id ON public.corridas USING btree (veiculo_id)"
+      }
+    ],
+    "enderecos": [
+      {
+        "tablename": "enderecos",
+        "indexname": "enderecos_pkey",
+        "indexdef": "CREATE UNIQUE INDEX enderecos_pkey ON public.enderecos USING btree (id)"
+      },
+      {
+        "tablename": "enderecos",
+        "indexname": "idx_enderecos_cep",
+        "indexdef": "CREATE INDEX idx_enderecos_cep ON public.enderecos USING btree (cep)"
+      },
+      {
+        "tablename": "enderecos",
+        "indexname": "idx_enderecos_cidade",
+        "indexdef": "CREATE INDEX idx_enderecos_cidade ON public.enderecos USING btree (cidade)"
+      }
+    ],
+    "motoristas": [
+      {
+        "tablename": "motoristas",
+        "indexname": "idx_motoristas_status_cadastro",
+        "indexdef": "CREATE INDEX idx_motoristas_status_cadastro ON public.motoristas USING btree (status_cadastro)"
+      },
+      {
+        "tablename": "motoristas",
+        "indexname": "idx_motoristas_status_presenca",
+        "indexdef": "CREATE INDEX idx_motoristas_status_presenca ON public.motoristas USING btree (status_presenca)"
+      },
+      {
+        "tablename": "motoristas",
+        "indexname": "idx_motoristas_usuario_id",
+        "indexdef": "CREATE INDEX idx_motoristas_usuario_id ON public.motoristas USING btree (usuario_id)"
+      },
+      {
+        "tablename": "motoristas",
+        "indexname": "motoristas_pkey",
+        "indexdef": "CREATE UNIQUE INDEX motoristas_pkey ON public.motoristas USING btree (id)"
+      },
+      {
+        "tablename": "motoristas",
+        "indexname": "uq_motoristas_cnh",
+        "indexdef": "CREATE UNIQUE INDEX uq_motoristas_cnh ON public.motoristas USING btree (cnh)"
+      },
+      {
+        "tablename": "motoristas",
+        "indexname": "uq_motoristas_usuario_id",
+        "indexdef": "CREATE UNIQUE INDEX uq_motoristas_usuario_id ON public.motoristas USING btree (usuario_id)"
+      }
+    ],
+    "notificacoes": [
+      {
+        "tablename": "notificacoes",
+        "indexname": "idx_notificacoes_criada_em",
+        "indexdef": "CREATE INDEX idx_notificacoes_criada_em ON public.notificacoes USING btree (criada_em DESC)"
+      },
+      {
+        "tablename": "notificacoes",
+        "indexname": "idx_notificacoes_destinatario",
+        "indexdef": "CREATE INDEX idx_notificacoes_destinatario ON public.notificacoes USING btree (destinatario_id)"
+      },
+      {
+        "tablename": "notificacoes",
+        "indexname": "idx_notificacoes_lida",
+        "indexdef": "CREATE INDEX idx_notificacoes_lida ON public.notificacoes USING btree (destinatario_id, lida)"
+      },
+      {
+        "tablename": "notificacoes",
+        "indexname": "notificacoes_pkey",
+        "indexdef": "CREATE UNIQUE INDEX notificacoes_pkey ON public.notificacoes USING btree (id)"
+      }
+    ],
+    "schema_migrations": [
+      {
+        "tablename": "schema_migrations",
+        "indexname": "schema_migrations_pkey",
+        "indexdef": "CREATE UNIQUE INDEX schema_migrations_pkey ON public.schema_migrations USING btree (version)"
+      }
+    ],
+    "usuarios": [
+      {
+        "tablename": "usuarios",
+        "indexname": "idx_usuarios_cpf",
+        "indexdef": "CREATE INDEX idx_usuarios_cpf ON public.usuarios USING btree (cpf)"
+      },
+      {
+        "tablename": "usuarios",
+        "indexname": "idx_usuarios_email",
+        "indexdef": "CREATE INDEX idx_usuarios_email ON public.usuarios USING btree (email)"
+      },
+      {
+        "tablename": "usuarios",
+        "indexname": "idx_usuarios_perfil",
+        "indexdef": "CREATE INDEX idx_usuarios_perfil ON public.usuarios USING btree (perfil)"
+      },
+      {
+        "tablename": "usuarios",
+        "indexname": "idx_usuarios_usuario",
+        "indexdef": "CREATE INDEX idx_usuarios_usuario ON public.usuarios USING btree (usuario)"
+      },
+      {
+        "tablename": "usuarios",
+        "indexname": "uq_usuarios_cpf",
+        "indexdef": "CREATE UNIQUE INDEX uq_usuarios_cpf ON public.usuarios USING btree (cpf)"
+      },
+      {
+        "tablename": "usuarios",
+        "indexname": "uq_usuarios_email",
+        "indexdef": "CREATE UNIQUE INDEX uq_usuarios_email ON public.usuarios USING btree (email)"
+      },
+      {
+        "tablename": "usuarios",
+        "indexname": "uq_usuarios_usuario",
+        "indexdef": "CREATE UNIQUE INDEX uq_usuarios_usuario ON public.usuarios USING btree (usuario)"
+      },
+      {
+        "tablename": "usuarios",
+        "indexname": "usuarios_pkey",
+        "indexdef": "CREATE UNIQUE INDEX usuarios_pkey ON public.usuarios USING btree (id)"
+      }
+    ],
+    "veiculos": [
+      {
+        "tablename": "veiculos",
+        "indexname": "idx_veiculos_classe",
+        "indexdef": "CREATE INDEX idx_veiculos_classe ON public.veiculos USING btree (classe)"
+      },
+      {
+        "tablename": "veiculos",
+        "indexname": "idx_veiculos_motorista_id",
+        "indexdef": "CREATE INDEX idx_veiculos_motorista_id ON public.veiculos USING btree (motorista_id)"
+      },
+      {
+        "tablename": "veiculos",
+        "indexname": "idx_veiculos_status",
+        "indexdef": "CREATE INDEX idx_veiculos_status ON public.veiculos USING btree (status)"
+      },
+      {
+        "tablename": "veiculos",
+        "indexname": "idx_veiculos_status_aprovacao",
+        "indexdef": "CREATE INDEX idx_veiculos_status_aprovacao ON public.veiculos USING btree (status_aprovacao)"
+      },
+      {
+        "tablename": "veiculos",
+        "indexname": "uq_veiculos_placa",
+        "indexdef": "CREATE UNIQUE INDEX uq_veiculos_placa ON public.veiculos USING btree (placa)"
+      },
+      {
+        "tablename": "veiculos",
+        "indexname": "veiculos_pkey",
+        "indexdef": "CREATE UNIQUE INDEX veiculos_pkey ON public.veiculos USING btree (id)"
+      }
+    ]
+  },
+  "constraints": [
+    {
+      "conname": "schema_migrations_version_not_null",
+      "pg_get_constraintdef": "NOT NULL version"
+    },
+    {
+      "conname": "schema_migrations_aplicada_em_not_null",
+      "pg_get_constraintdef": "NOT NULL aplicada_em"
+    },
+    {
+      "conname": "schema_migrations_pkey",
+      "pg_get_constraintdef": "PRIMARY KEY (version)"
+    },
+    {
+      "conname": "enderecos_id_not_null",
+      "pg_get_constraintdef": "NOT NULL id"
+    },
+    {
+      "conname": "enderecos_criado_em_not_null",
+      "pg_get_constraintdef": "NOT NULL criado_em"
+    },
+    {
+      "conname": "enderecos_atualizado_em_not_null",
+      "pg_get_constraintdef": "NOT NULL atualizado_em"
+    },
+    {
+      "conname": "enderecos_pkey",
+      "pg_get_constraintdef": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "ck_usuarios_perfil",
+      "pg_get_constraintdef": "CHECK (((perfil)::text = ANY ((ARRAY['ADMINISTRADOR'::character varying, 'USUARIO'::character varying, 'MOTORISTA'::character varying])::text[])))"
+    },
+    {
+      "conname": "usuarios_id_not_null",
+      "pg_get_constraintdef": "NOT NULL id"
+    },
+    {
+      "conname": "usuarios_nome_not_null",
+      "pg_get_constraintdef": "NOT NULL nome"
+    },
+    {
+      "conname": "usuarios_cpf_not_null",
+      "pg_get_constraintdef": "NOT NULL cpf"
+    },
+    {
+      "conname": "usuarios_celular_not_null",
+      "pg_get_constraintdef": "NOT NULL celular"
+    },
+    {
+      "conname": "usuarios_email_not_null",
+      "pg_get_constraintdef": "NOT NULL email"
+    },
+    {
+      "conname": "usuarios_usuario_not_null",
+      "pg_get_constraintdef": "NOT NULL usuario"
+    },
+    {
+      "conname": "usuarios_senha_not_null",
+      "pg_get_constraintdef": "NOT NULL senha"
+    },
+    {
+      "conname": "usuarios_perfil_not_null",
+      "pg_get_constraintdef": "NOT NULL perfil"
+    },
+    {
+      "conname": "usuarios_criado_em_not_null",
+      "pg_get_constraintdef": "NOT NULL criado_em"
+    },
+    {
+      "conname": "usuarios_atualizado_em_not_null",
+      "pg_get_constraintdef": "NOT NULL atualizado_em"
+    },
+    {
+      "conname": "usuarios_pkey",
+      "pg_get_constraintdef": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "uq_usuarios_cpf",
+      "pg_get_constraintdef": "UNIQUE (cpf)"
+    },
+    {
+      "conname": "uq_usuarios_email",
+      "pg_get_constraintdef": "UNIQUE (email)"
+    },
+    {
+      "conname": "uq_usuarios_usuario",
+      "pg_get_constraintdef": "UNIQUE (usuario)"
+    },
+    {
+      "conname": "usuarios_endereco_id_fkey",
+      "pg_get_constraintdef": "FOREIGN KEY (endereco_id) REFERENCES enderecos(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "ck_motoristas_status_cadastro",
+      "pg_get_constraintdef": "CHECK (((status_cadastro)::text = ANY ((ARRAY['PENDENTE'::character varying, 'APROVADO'::character varying, 'REJEITADO'::character varying])::text[])))"
+    },
+    {
+      "conname": "ck_motoristas_status_presenca",
+      "pg_get_constraintdef": "CHECK (((status_presenca)::text = ANY ((ARRAY['ONLINE'::character varying, 'OFFLINE'::character varying])::text[])))"
+    },
+    {
+      "conname": "motoristas_id_not_null",
+      "pg_get_constraintdef": "NOT NULL id"
+    },
+    {
+      "conname": "motoristas_usuario_id_not_null",
+      "pg_get_constraintdef": "NOT NULL usuario_id"
+    },
+    {
+      "conname": "motoristas_cnh_not_null",
+      "pg_get_constraintdef": "NOT NULL cnh"
+    },
+    {
+      "conname": "motoristas_status_cadastro_not_null",
+      "pg_get_constraintdef": "NOT NULL status_cadastro"
+    },
+    {
+      "conname": "motoristas_status_presenca_not_null",
+      "pg_get_constraintdef": "NOT NULL status_presenca"
+    },
+    {
+      "conname": "motoristas_criado_em_not_null",
+      "pg_get_constraintdef": "NOT NULL criado_em"
+    },
+    {
+      "conname": "motoristas_atualizado_em_not_null",
+      "pg_get_constraintdef": "NOT NULL atualizado_em"
+    },
+    {
+      "conname": "motoristas_pkey",
+      "pg_get_constraintdef": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "uq_motoristas_usuario_id",
+      "pg_get_constraintdef": "UNIQUE (usuario_id)"
+    },
+    {
+      "conname": "uq_motoristas_cnh",
+      "pg_get_constraintdef": "UNIQUE (cnh)"
+    },
+    {
+      "conname": "fk_motoristas_usuario",
+      "pg_get_constraintdef": "FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "ck_veiculos_status_aprovacao",
+      "pg_get_constraintdef": "CHECK (((status_aprovacao)::text = ANY ((ARRAY['PENDENTE'::character varying, 'APROVADO'::character varying, 'REJEITADO'::character varying])::text[])))"
+    },
+    {
+      "conname": "ck_veiculos_status",
+      "pg_get_constraintdef": "CHECK (((status)::text = ANY ((ARRAY['DISPONIVEL'::character varying, 'EM_CORRIDA'::character varying, 'INDISPONIVEL'::character varying])::text[])))"
+    },
+    {
+      "conname": "corridas_classe_not_null",
+      "pg_get_constraintdef": "NOT NULL classe"
+    },
+    {
+      "conname": "corridas_forma_pagamento_not_null",
+      "pg_get_constraintdef": "NOT NULL forma_pagamento"
+    },
+    {
+      "conname": "ck_veiculos_classe",
+      "pg_get_constraintdef": "CHECK (((classe)::text = ANY ((ARRAY['BASICO'::character varying, 'NORMAL'::character varying, 'PREMIUM'::character varying])::text[])))"
+    },
+    {
+      "conname": "ck_veiculos_quilometragem",
+      "pg_get_constraintdef": "CHECK ((quilometragem >= (0)::numeric))"
+    },
+    {
+      "conname": "ck_veiculos_passageiros",
+      "pg_get_constraintdef": "CHECK ((quantidade_passageiros > 0))"
+    },
+    {
+      "conname": "ck_veiculos_ano",
+      "pg_get_constraintdef": "CHECK (((ano >= 1900) AND (ano <= 2100)))"
+    },
+    {
+      "conname": "veiculos_id_not_null",
+      "pg_get_constraintdef": "NOT NULL id"
+    },
+    {
+      "conname": "veiculos_marca_not_null",
+      "pg_get_constraintdef": "NOT NULL marca"
+    },
+    {
+      "conname": "veiculos_modelo_not_null",
+      "pg_get_constraintdef": "NOT NULL modelo"
+    },
+    {
+      "conname": "veiculos_ano_not_null",
+      "pg_get_constraintdef": "NOT NULL ano"
+    },
+    {
+      "conname": "veiculos_placa_not_null",
+      "pg_get_constraintdef": "NOT NULL placa"
+    },
+    {
+      "conname": "veiculos_porte_not_null",
+      "pg_get_constraintdef": "NOT NULL porte"
+    },
+    {
+      "conname": "veiculos_classe_not_null",
+      "pg_get_constraintdef": "NOT NULL classe"
+    },
+    {
+      "conname": "veiculos_quilometragem_not_null",
+      "pg_get_constraintdef": "NOT NULL quilometragem"
+    },
+    {
+      "conname": "veiculos_quantidade_passageiros_not_null",
+      "pg_get_constraintdef": "NOT NULL quantidade_passageiros"
+    },
+    {
+      "conname": "veiculos_possui_ar_condicionado_not_null",
+      "pg_get_constraintdef": "NOT NULL possui_ar_condicionado"
+    },
+    {
+      "conname": "veiculos_possui_extintor_not_null",
+      "pg_get_constraintdef": "NOT NULL possui_extintor"
+    },
+    {
+      "conname": "veiculos_possui_cinto_seguranca_not_null",
+      "pg_get_constraintdef": "NOT NULL possui_cinto_seguranca"
+    },
+    {
+      "conname": "veiculos_documentacao_regularizada_not_null",
+      "pg_get_constraintdef": "NOT NULL documentacao_regularizada"
+    },
+    {
+      "conname": "veiculos_status_aprovacao_not_null",
+      "pg_get_constraintdef": "NOT NULL status_aprovacao"
+    },
+    {
+      "conname": "veiculos_status_not_null",
+      "pg_get_constraintdef": "NOT NULL status"
+    },
+    {
+      "conname": "veiculos_motorista_id_not_null",
+      "pg_get_constraintdef": "NOT NULL motorista_id"
+    },
+    {
+      "conname": "veiculos_criado_em_not_null",
+      "pg_get_constraintdef": "NOT NULL criado_em"
+    },
+    {
+      "conname": "veiculos_atualizado_em_not_null",
+      "pg_get_constraintdef": "NOT NULL atualizado_em"
+    },
+    {
+      "conname": "veiculos_pkey",
+      "pg_get_constraintdef": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "uq_veiculos_placa",
+      "pg_get_constraintdef": "UNIQUE (placa)"
+    },
+    {
+      "conname": "fk_veiculos_motorista",
+      "pg_get_constraintdef": "FOREIGN KEY (motorista_id) REFERENCES usuarios(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "ck_corridas_status",
+      "pg_get_constraintdef": "CHECK (((status)::text = ANY ((ARRAY['SOLICITADA'::character varying, 'CONFIRMADA'::character varying, 'EM_ANDAMENTO'::character varying, 'FINALIZADA'::character varying, 'CANCELADA'::character varying])::text[])))"
+    },
+    {
+      "conname": "ck_corridas_distancia",
+      "pg_get_constraintdef": "CHECK ((distancia_km > (0)::numeric))"
+    },
+    {
+      "conname": "ck_corridas_duracao",
+      "pg_get_constraintdef": "CHECK (((duracao_min IS NULL) OR (duracao_min > 0)))"
+    },
+    {
+      "conname": "ck_corridas_valor",
+      "pg_get_constraintdef": "CHECK ((valor >= (0)::numeric))"
+    },
+    {
+      "conname": "corridas_id_not_null",
+      "pg_get_constraintdef": "NOT NULL id"
+    },
+    {
+      "conname": "corridas_usuario_id_not_null",
+      "pg_get_constraintdef": "NOT NULL usuario_id"
+    },
+    {
+      "conname": "corridas_origem_endereco_id_not_null",
+      "pg_get_constraintdef": "NOT NULL origem_endereco_id"
+    },
+    {
+      "conname": "corridas_destino_endereco_id_not_null",
+      "pg_get_constraintdef": "NOT NULL destino_endereco_id"
+    },
+    {
+      "conname": "corridas_origem_nome_not_null",
+      "pg_get_constraintdef": "NOT NULL origem_nome"
+    },
+    {
+      "conname": "corridas_destino_nome_not_null",
+      "pg_get_constraintdef": "NOT NULL destino_nome"
+    },
+    {
+      "conname": "corridas_distancia_km_not_null",
+      "pg_get_constraintdef": "NOT NULL distancia_km"
+    },
+    {
+      "conname": "corridas_valor_not_null",
+      "pg_get_constraintdef": "NOT NULL valor"
+    },
+    {
+      "conname": "corridas_data_horario_not_null",
+      "pg_get_constraintdef": "NOT NULL data_horario"
+    },
+    {
+      "conname": "corridas_status_not_null",
+      "pg_get_constraintdef": "NOT NULL status"
+    },
+    {
+      "conname": "corridas_criada_em_not_null",
+      "pg_get_constraintdef": "NOT NULL criada_em"
+    },
+    {
+      "conname": "corridas_atualizada_em_not_null",
+      "pg_get_constraintdef": "NOT NULL atualizada_em"
+    },
+    {
+      "conname": "corridas_pkey",
+      "pg_get_constraintdef": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "fk_corridas_usuario",
+      "pg_get_constraintdef": "FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "fk_corridas_motorista",
+      "pg_get_constraintdef": "FOREIGN KEY (motorista_id) REFERENCES usuarios(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "fk_corridas_veiculo",
+      "pg_get_constraintdef": "FOREIGN KEY (veiculo_id) REFERENCES veiculos(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "fk_corridas_origem",
+      "pg_get_constraintdef": "FOREIGN KEY (origem_endereco_id) REFERENCES enderecos(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "fk_corridas_destino",
+      "pg_get_constraintdef": "FOREIGN KEY (destino_endereco_id) REFERENCES enderecos(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "ck_corrida_rotas_distancia",
+      "pg_get_constraintdef": "CHECK ((distancia_km > (0)::numeric))"
+    },
+    {
+      "conname": "ck_corrida_rotas_metros",
+      "pg_get_constraintdef": "CHECK ((distancia_metros > 0))"
+    },
+    {
+      "conname": "corrida_rotas_id_not_null",
+      "pg_get_constraintdef": "NOT NULL id"
+    },
+    {
+      "conname": "corrida_rotas_corrida_id_not_null",
+      "pg_get_constraintdef": "NOT NULL corrida_id"
+    },
+    {
+      "conname": "corrida_rotas_ordem_not_null",
+      "pg_get_constraintdef": "NOT NULL ordem"
+    },
+    {
+      "conname": "corrida_rotas_distancia_km_not_null",
+      "pg_get_constraintdef": "NOT NULL distancia_km"
+    },
+    {
+      "conname": "corrida_rotas_distancia_metros_not_null",
+      "pg_get_constraintdef": "NOT NULL distancia_metros"
+    },
+    {
+      "conname": "corrida_rotas_polyline_not_null",
+      "pg_get_constraintdef": "NOT NULL polyline"
+    },
+    {
+      "conname": "corrida_rotas_selecionada_not_null",
+      "pg_get_constraintdef": "NOT NULL selecionada"
+    },
+    {
+      "conname": "corrida_rotas_criada_em_not_null",
+      "pg_get_constraintdef": "NOT NULL criada_em"
+    },
+    {
+      "conname": "corrida_rotas_pkey",
+      "pg_get_constraintdef": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "fk_corrida_rotas_corrida",
+      "pg_get_constraintdef": "FOREIGN KEY (corrida_id) REFERENCES corridas(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "ck_notificacoes_tipo",
+      "pg_get_constraintdef": "CHECK (((tipo)::text = ANY ((ARRAY['SOLICITACAO_MOTORISTA'::character varying, 'SOLICITACAO_VEICULO'::character varying])::text[])))"
+    },
+    {
+      "conname": "notificacoes_id_not_null",
+      "pg_get_constraintdef": "NOT NULL id"
+    },
+    {
+      "conname": "notificacoes_destinatario_id_not_null",
+      "pg_get_constraintdef": "NOT NULL destinatario_id"
+    },
+    {
+      "conname": "notificacoes_tipo_not_null",
+      "pg_get_constraintdef": "NOT NULL tipo"
+    },
+    {
+      "conname": "notificacoes_titulo_not_null",
+      "pg_get_constraintdef": "NOT NULL titulo"
+    },
+    {
+      "conname": "notificacoes_mensagem_not_null",
+      "pg_get_constraintdef": "NOT NULL mensagem"
+    },
+    {
+      "conname": "notificacoes_lida_not_null",
+      "pg_get_constraintdef": "NOT NULL lida"
+    },
+    {
+      "conname": "notificacoes_criada_em_not_null",
+      "pg_get_constraintdef": "NOT NULL criada_em"
+    },
+    {
+      "conname": "notificacoes_pkey",
+      "pg_get_constraintdef": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "fk_notificacoes_destinatario",
+      "pg_get_constraintdef": "FOREIGN KEY (destinatario_id) REFERENCES usuarios(id) ON DELETE RESTRICT"
+    }
+  ]
+}
