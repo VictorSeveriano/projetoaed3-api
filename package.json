@@ -35,5 +35,8 @@
     "testMatch": [
       "**/tests/**/*.test.js"
     ]
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }
