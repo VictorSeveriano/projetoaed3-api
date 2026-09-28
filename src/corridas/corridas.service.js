@@ -22,16 +22,31 @@ const FORMAS_PAGAMENTO_VALIDAS = ['DINHEIRO', 'CARTAO_DEBITO', 'CARTAO_CREDITO',
 
 class CorridasService {
   /**
-   * Tarifa base por km por classe de veículo (R$/km).
-   * Valores zerados nesta etapa (tarifação futura).
+   * Tarifa base por km por classe de veículo (R$/km) dependendo da faixa de horário.
+   * 05:00–12:59 → manha
+   * 13:00–18:59 → tarde
+   * 19:00–04:59 → noite
    */
   static get TARIFAS_KM() {
     return {
-      BASICO:  0.00,
-      NORMAL:  0.00,
-      PREMIUM: 0.00,
-      default: 0.00,
+      BASICO:  { manha: 1.50, tarde: 2.00, noite: 2.50 },
+      NORMAL:  { manha: 2.00, tarde: 2.50, noite: 3.00 },
+      PREMIUM: { manha: 2.50, tarde: 3.00, noite: 3.50 },
+      default: { manha: 2.00, tarde: 2.50, noite: 3.00 },
     };
+  }
+
+  /**
+   * Determina a faixa de horário baseada no dataHorario da corrida.
+   * A terceira faixa (noite) atravessa a meia-noite (19:00 até 04:59).
+   */
+  static _determinarFaixaHorario(dataHorario) {
+    const data = new Date(dataHorario);
+    const hora = data.getHours();
+
+    if (hora >= 5 && hora < 13) return 'manha'; // 05:00 até 12:59
+    if (hora >= 13 && hora < 19) return 'tarde'; // 13:00 até 18:59
+    return 'noite'; // 19:00 até 04:59 (00:00 até 04:59 e 19:00 até 23:59)
   }
 
   async listarTodas() {
@@ -64,10 +79,13 @@ class CorridasService {
   }
 
   /**
-   * Calcula o valor estimado da corrida.
+   * Calcula o valor da corrida usando a regra de: distanciaKm * tarifa por km da classe e horario.
    */
-  calcularValor({ distanciaKm, classe }) {
-    const tarifa = CorridasService.TARIFAS_KM[classe] || CorridasService.TARIFAS_KM.default;
+  calcularValor({ distanciaKm, classe, dataHorario }) {
+    const tarifasClasse = CorridasService.TARIFAS_KM[classe] || CorridasService.TARIFAS_KM.default;
+    const faixa = CorridasService._determinarFaixaHorario(dataHorario);
+    const tarifa = tarifasClasse[faixa];
+    
     return parseFloat((distanciaKm * tarifa).toFixed(2));
   }
 
@@ -120,7 +138,8 @@ class CorridasService {
       );
     }
 
-    const valor = this.calcularValor({ distanciaKm, classe: classeNorm });
+    const dataHorarioEfetivo = dataHorario || new Date().toISOString();
+    const valor = this.calcularValor({ distanciaKm, classe: classeNorm, dataHorario: dataHorarioEfetivo });
 
     const novaCorrida = await corridasRepository.create({
       usuarioId,
@@ -140,7 +159,7 @@ class CorridasService {
       valor,
       classe:             classeNorm,
       formaPagamento:     formaPagamentoNorm,
-      dataHorario:        dataHorario   || new Date().toISOString(),
+      dataHorario:        dataHorarioEfetivo,
       status:             'SOLICITADA',
     });
 

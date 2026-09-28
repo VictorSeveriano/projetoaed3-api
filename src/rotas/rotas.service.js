@@ -88,13 +88,13 @@ class RotasService {
     // 4. Organizar as alternativas validas via ABB.
     const rotasOrdenadas = grafoService.organizarAlternativasComABB(rotasValidas);
 
-    // Tarifa minima para estimativa pre-confirmacao (Hatch: R$2/km).
-    const TARIFA_MINIMA = 2.0;
-
     // 5. Formatar para retorno ao frontend
+    const corridasService = require('../corridas/corridas.service');
+    const agora = new Date().toISOString();
+
     const rotasFormatadas = rotasOrdenadas.map((rota, index) => {
       const distanciaKm = Number((rota.distanciaMetros / 1000).toFixed(2));
-      const valorEstimado = Number((distanciaKm * TARIFA_MINIMA).toFixed(2));
+      const valorEstimado = corridasService.calcularValor({ distanciaKm, classe: 'BASICO', dataHorario: agora });
       return {
         id: index + 1,
         caminho: [origem.nome, destino.nome],

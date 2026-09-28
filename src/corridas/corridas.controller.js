@@ -40,6 +40,18 @@ const buscarPorId = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+/** POST /api/corridas/calcular-valor */
+const calcularValorPrevia = (req, res, next) => {
+  try {
+    const { distanciaKm, classe, dataHorario } = req.body;
+    if (distanciaKm == null || !classe || !dataHorario) {
+      return next(new AppError('Campos obrigatorios para calculo: distanciaKm, classe, dataHorario.', 400));
+    }
+    const valor = corridasService.calcularValor({ distanciaKm, classe, dataHorario });
+    return success(res, { valor }, 'Valor calculado com sucesso.');
+  } catch (err) { next(err); }
+};
+
 /** POST /api/corridas */
 const criar = async (req, res, next) => {
   try {
@@ -109,6 +121,6 @@ const finalizar = async (req, res, next) => {
 };
 
 module.exports = {
-  listarTodas, listarMinhas, buscarPorId, criar,
+  listarTodas, listarMinhas, buscarPorId, criar, calcularValorPrevia,
   aceitar, recusar, cancelar, confirmarPagamento, finalizar,
 };

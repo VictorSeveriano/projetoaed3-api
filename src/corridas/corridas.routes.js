@@ -1,6 +1,6 @@
 const express = require('express');
 const {
-  listarTodas, listarMinhas, buscarPorId, criar,
+  listarTodas, listarMinhas, buscarPorId, criar, calcularValorPrevia,
   aceitar, recusar, cancelar, confirmarPagamento, finalizar,
 } = require('./corridas.controller');
 
@@ -9,6 +9,7 @@ const router = express.Router();
 router.get('/',                          listarTodas);
 router.get('/minhas',                    listarMinhas);
 router.get('/:id',                       buscarPorId);
+router.post('/calcular-valor',           calcularValorPrevia);
 router.post('/',                         criar);
 router.patch('/:id/aceitar',             aceitar);
 router.patch('/:id/recusar',             recusar);
