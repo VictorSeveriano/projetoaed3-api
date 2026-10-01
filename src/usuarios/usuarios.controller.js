@@ -21,7 +21,7 @@ const listarTodos = async (req, res, next) => {
 /** PATCH /api/usuarios/:id — Admin */
 const atualizar = async (req, res, next) => {
   try {
-    const dados = await usuariosService.atualizar(req.params.id, req.body);
+    const dados = await usuariosService.atualizar(req.params.id, req.body, req.usuario);
     return success(res, dados, 'Usuário atualizado com sucesso.');
   } catch (err) { next(err); }
 };

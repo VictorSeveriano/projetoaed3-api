@@ -35,7 +35,12 @@ class UsuariosService {
     return lista;
   }
 
-  async atualizar(id, dados) {
+  async atualizar(id, dados, usuarioLogado) {
+    if (!usuarioLogado) throw new AppError('Acesso negado.', 401);
+    if (usuarioLogado.perfil !== 'ADMINISTRADOR' && usuarioLogado.id !== id) {
+      throw new AppError('Acesso negado. Você só pode alterar seus próprios dados.', 403);
+    }
+
     const user = await authRepository.encontrarPorId(id);
     if (!user) throw new AppError('Usuário não encontrado.', 404);
 

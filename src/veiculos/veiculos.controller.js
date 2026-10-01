@@ -55,4 +55,12 @@ const rejeitar = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, editarClasse };
+/** PATCH /api/veiculos/:id — Motorista ou Admin */
+const atualizar = async (req, res, next) => {
+  try {
+    const dados = await veiculosService.atualizar(req.params.id, req.body, req.usuario);
+    return success(res, dados, 'Veículo atualizado.');
+  } catch (err) { next(err); }
+};
+
+module.exports = { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, editarClasse, atualizar };

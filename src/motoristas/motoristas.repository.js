@@ -88,6 +88,21 @@ class MotoristasRepository {
       throw error;
     }
   }
+
+  async updateCnh(id, cnh) {
+    try {
+      return await prisma.motorista.update({
+        where: { id },
+        data: {
+          cnh,
+          atualizadoEm: new Date()
+        }
+      });
+    } catch (error) {
+      if (error.code === 'P2025') return null;
+      throw error;
+    }
+  }
 }
 
 module.exports = new MotoristasRepository();

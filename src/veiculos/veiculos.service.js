@@ -122,6 +122,23 @@ class VeiculosService {
     return this._enriquecer(await veiculosRepository.updateStatusAprovacao(id, 'REJEITADO'));
   }
 
+  async atualizar(id, dados, usuarioLogado) {
+    if (!usuarioLogado) throw new AppError('Acesso negado.', 401);
+    
+    const veiculo = await veiculosRepository.findById(id);
+    if (!veiculo) throw new AppError('Veículo não encontrado.', 404);
+
+    if (usuarioLogado.perfil !== 'ADMINISTRADOR' && veiculo.motoristaId !== usuarioLogado.id) {
+      throw new AppError('Acesso negado. Você só pode alterar seu próprio veículo.', 403);
+    }
+
+    if (dados.porte && dados.porte !== veiculo.porte) {
+      dados.classe = this._determinarClasseServico(dados.porte);
+    }
+    
+    return this._enriquecer(await veiculosRepository.update(id, dados));
+  }
+
   /** Enriquece veículo com dados do motorista (sem senha). */
   async _enriquecer(veiculo) {
     if (!veiculo) return null;

@@ -78,6 +78,14 @@ const rejeitar = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+/** PATCH /api/motoristas/:id — Atualiza dados do motorista */
+const atualizar = async (req, res, next) => {
+  try {
+    const dados = await motoristasService.atualizar(req.params.id, req.body, req.usuario);
+    return success(res, dados, 'Motorista atualizado com sucesso.');
+  } catch (err) { next(err); }
+};
+
 /** GET /api/motoristas/:id/corridas — Corridas do motorista */
 const listarCorridas = async (req, res, next) => {
   try {
@@ -110,5 +118,5 @@ const getRelatorio = async (req, res, next) => {
 module.exports = {
   listarTodos, listarAnalise, listarOnline, buscarPerfil,
   buscarPorId, solicitar, aprovar, rejeitar,
-  listarCorridas, buscarVeiculo, getRelatorio,
+  listarCorridas, buscarVeiculo, getRelatorio, atualizar
 };

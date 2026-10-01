@@ -145,6 +145,38 @@ class VeiculosRepository {
     });
     return formatarVeiculo(veiculo);
   }
+
+  async update(id, dados) {
+    const dataUpdate = {};
+    if (dados.marca !== undefined) dataUpdate.marca = dados.marca;
+    if (dados.modelo !== undefined) dataUpdate.modelo = dados.modelo;
+    if (dados.ano !== undefined) dataUpdate.ano = dados.ano;
+    if (dados.placa !== undefined) dataUpdate.placa = dados.placa;
+    if (dados.cor !== undefined) dataUpdate.cor = dados.cor;
+    if (dados.porte !== undefined) dataUpdate.porte = dados.porte;
+    if (dados.classe !== undefined) dataUpdate.classe = dados.classe;
+    
+    // allow other editable fields if needed
+    if (dados.quilometragem !== undefined) dataUpdate.quilometragem = dados.quilometragem;
+    if (dados.quantidadePassageiros !== undefined) dataUpdate.quantidadePassageiros = dados.quantidadePassageiros;
+    if (dados.possuiArCondicionado !== undefined) dataUpdate.possuiArCondicionado = dados.possuiArCondicionado;
+    if (dados.possuiExtintor !== undefined) dataUpdate.possuiExtintor = dados.possuiExtintor;
+    if (dados.possuiCintoSeguranca !== undefined) dataUpdate.possuiCintoSeguranca = dados.possuiCintoSeguranca;
+    if (dados.documentacaoRegularizada !== undefined) dataUpdate.documentacaoRegularizada = dados.documentacaoRegularizada;
+
+    dataUpdate.atualizadoEm = new Date();
+
+    try {
+      const veiculo = await prisma.veiculo.update({
+        where: { id },
+        data: dataUpdate
+      });
+      return formatarVeiculo(veiculo);
+    } catch (error) {
+      if (error.code === 'P2025') return null;
+      throw error;
+    }
+  }
 }
 
 module.exports = new VeiculosRepository();

@@ -2,8 +2,9 @@ const express = require('express');
 const {
   listarTodos, listarAnalise, listarOnline, buscarPerfil,
   buscarPorId, solicitar, aprovar, rejeitar,
-  listarCorridas, buscarVeiculo, getRelatorio,
+  listarCorridas, buscarVeiculo, getRelatorio, atualizar
 } = require('./motoristas.controller');
+const { authMiddleware } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
@@ -16,6 +17,7 @@ router.get('/',                      listarTodos);
 router.post('/',                     solicitar);
 
 router.get('/:id',                   buscarPorId);
+router.patch('/:id',                 authMiddleware, atualizar);
 router.patch('/:id/aprovar',         aprovar);
 router.patch('/:id/rejeitar',        rejeitar);
 router.get('/:id/corridas',          listarCorridas);

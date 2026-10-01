@@ -88,6 +88,33 @@ class MotoristasService {
     return this._enriquecer(await motoristasRepository.updateStatusCadastro(id, 'REJEITADO'));
   }
 
+  async atualizar(id, dados, usuarioLogado) {
+    if (!usuarioLogado) throw new AppError('Acesso negado.', 401);
+    
+    const motorista = await motoristasRepository.findById(id);
+    if (!motorista) throw new AppError('Motorista não encontrado.', 404);
+
+    if (usuarioLogado.perfil !== 'ADMINISTRADOR' && motorista.usuarioId !== usuarioLogado.id) {
+      throw new AppError('Acesso negado. Você só pode alterar seus próprios dados.', 403);
+    }
+
+    if (dados.cnh && dados.cnh !== motorista.cnh) {
+      const { validarCNH, normalizarCNH } = require('../utils/validators');
+      const cnhNorm = normalizarCNH(dados.cnh);
+      if (!validarCNH(cnhNorm)) {
+        throw new AppError('CNH inválida.', 400);
+      }
+      const existente = await motoristasRepository.existsByCnh(cnhNorm);
+      if (existente) {
+        throw new AppError('CNH já cadastrada no sistema.', 409);
+      }
+      await motoristasRepository.updateCnh(id, cnhNorm);
+      motorista.cnh = cnhNorm;
+    }
+
+    return this._enriquecer(motorista);
+  }
+
   // ----- Consultas do próprio motorista -----
 
   async buscarPorUsuarioId(usuarioId) {

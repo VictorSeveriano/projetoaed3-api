@@ -5,7 +5,7 @@ const { authMiddleware, requireAdmin } = require('../middlewares/auth.middleware
 const router = express.Router();
 
 router.get('/',             authMiddleware, requireAdmin, listarTodos);
-router.patch('/:id',        authMiddleware, requireAdmin, atualizar);
+router.patch('/:id',        authMiddleware, atualizar);
 
 router.get('/:id',          buscarPorId);
 router.get('/:id/corridas', listarCorridas);
