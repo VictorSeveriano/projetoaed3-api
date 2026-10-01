@@ -23,10 +23,18 @@ const listarTodos = async (req, res, next) => {
 const atualizar = async (req, res, next) => {
   try {
     const dados = await usuariosService.atualizar(req.params.id, req.body, req.usuario);
-    await auditoriaService.registrar({ usuarioId: req.usuario.id, perfil: req.usuario.perfil, acao: 'ALTERACAO_USUARIO', modulo: 'USUARIOS', resultado: 'SUCESSO', entidade: 'Usuario', entidadeId: req.params.id }, req, { dadosNovos: req.body });
+    await auditoriaService.registrar(
+      { usuarioId: req.usuario.id, perfil: req.usuario.perfil, acao: 'ALTERACAO_USUARIO', modulo: 'USUARIOS', resultado: 'SUCESSO' },
+      req,
+      { entidade: 'Usuario', entidadeId: req.params.id, dadosNovos: req.body }
+    );
     return success(res, dados, 'Usuário atualizado com sucesso.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_USUARIO_FALHA', modulo: 'USUARIOS', resultado: 'FALHA', entidade: 'Usuario', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar(
+      { usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_USUARIO_FALHA', modulo: 'USUARIOS', resultado: 'FALHA' },
+      req,
+      { entidade: 'Usuario', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 }
+    );
     next(err);
   }
 };

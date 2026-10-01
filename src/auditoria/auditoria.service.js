@@ -57,10 +57,7 @@ class AuditoriaService {
     const orderBy = { criadoEm: 'desc' };
     const where = {};
 
-    if (filtros.perfil) where.perfil = filtros.perfil.toUpperCase();
-    if (filtros.modulo) where.modulo = filtros.modulo.toUpperCase();
-    if (filtros.acao) where.acao = filtros.acao.toUpperCase();
-    if (filtros.resultado) where.resultado = filtros.resultado.toUpperCase();
+    if (filtros.usuarioId) where.usuarioId = filtros.usuarioId;
 
     const result = await auditoriaRepository.findAll({ skip, take, orderBy, where });
     return {

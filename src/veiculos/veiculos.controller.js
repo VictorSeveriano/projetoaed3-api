@@ -26,7 +26,7 @@ const cadastrar = async (req, res, next) => {
     const { usuarioId, ...dadosVeiculo } = req.body;
     if (!usuarioId) return next(new AppError('usuarioId é obrigatório.', 400));
     const veiculo = await veiculosService.cadastrar(usuarioId, dadosVeiculo);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'CADASTRO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO', entidade: 'Veiculo', entidadeId: veiculo.id }, req);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'CADASTRO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO' }, req, { entidade: 'Veiculo', entidadeId: veiculo.id });
     return res.status(201).json({ success: true, data: veiculo, message: 'Veículo cadastrado. Aguarda aprovação.' });
   } catch (err) {
     await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'CADASTRO_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA' }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
@@ -38,10 +38,10 @@ const cadastrar = async (req, res, next) => {
 const aprovar = async (req, res, next) => {
   try {
     const dados = await veiculosService.aprovar(req.params.id);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO', entidade: 'Veiculo', entidadeId: req.params.id }, req);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO' }, req, { entidade: 'Veiculo', entidadeId: req.params.id });
     return success(res, dados, 'Veículo aprovado.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA', entidade: 'Veiculo', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA' }, req, { entidade: 'Veiculo', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };
@@ -52,10 +52,10 @@ const editarClasse = async (req, res, next) => {
     const { classe } = req.body;
     if (!classe) return next(new AppError('classe é obrigatória.', 400));
     const dados = await veiculosService.editarClasse(req.params.id, classe);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_CLASSE_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO', entidade: 'Veiculo', entidadeId: req.params.id }, req, { dadosNovos: { classe } });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_CLASSE_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO' }, req, { entidade: 'Veiculo', entidadeId: req.params.id, dadosNovos: { classe } });
     return success(res, dados, 'Classe do veículo atualizada.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_CLASSE_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA', entidade: 'Veiculo', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_CLASSE_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA' }, req, { entidade: 'Veiculo', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };
@@ -64,10 +64,10 @@ const editarClasse = async (req, res, next) => {
 const rejeitar = async (req, res, next) => {
   try {
     const dados = await veiculosService.rejeitar(req.params.id);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO', entidade: 'Veiculo', entidadeId: req.params.id }, req);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO' }, req, { entidade: 'Veiculo', entidadeId: req.params.id });
     return success(res, dados, 'Veículo rejeitado.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA', entidade: 'Veiculo', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA' }, req, { entidade: 'Veiculo', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };
@@ -76,10 +76,10 @@ const rejeitar = async (req, res, next) => {
 const atualizar = async (req, res, next) => {
   try {
     const dados = await veiculosService.atualizar(req.params.id, req.body, req.usuario);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO', entidade: 'Veiculo', entidadeId: req.params.id }, req, { dadosNovos: req.body });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO' }, req, { entidade: 'Veiculo', entidadeId: req.params.id, dadosNovos: req.body });
     return success(res, dados, 'Veículo atualizado.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA', entidade: 'Veiculo', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA' }, req, { entidade: 'Veiculo', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };

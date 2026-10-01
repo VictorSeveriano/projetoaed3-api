@@ -23,10 +23,10 @@ class VeiculosService {
    * @returns {string} BASICO, NORMAL ou PREMIUM
    */
   _determinarClasseServico(porte) {
-    const p = (porte || '').toUpperCase();
-    if (['HATCH', 'SEDAN COMPACTO', 'PEQUENO'].includes(p))  return 'BASICO';
-    if (['SEDAN MEDIO', 'SUV COMPACTO', 'MEDIO'].includes(p)) return 'NORMAL';
-    if (['SUV GRANDE', 'LUXO', 'GRANDE'].includes(p))         return 'PREMIUM';
+    const p = (porte || '').toLowerCase();
+    if (p === 'pequeno') return 'BASICO';
+    if (p === 'medio')   return 'NORMAL';
+    if (p === 'grande')  return 'PREMIUM';
     return 'NORMAL'; // Fallback
   }
 
@@ -36,14 +36,7 @@ class VeiculosService {
   }
 
   async listarTodos(filtros = {}) {
-    let lista = await veiculosRepository.findAll();
-    if (filtros.status) {
-      const s = filtros.status.toUpperCase();
-      lista = lista.filter((v) => v.status === s || v.statusAprovacao === s);
-    }
-    if (filtros.motoristaId) {
-      lista = lista.filter((v) => v.motoristaId === filtros.motoristaId);
-    }
+    const lista = await veiculosRepository.findAll(filtros);
     return Promise.all(lista.map((v) => this._enriquecer(v)));
   }
 
@@ -75,10 +68,17 @@ class VeiculosService {
       throw new AppError('modelo, marca, ano, placa e porte são obrigatórios.', 400);
     }
 
+    const PORTES_VALIDOS = ['Pequeno', 'Medio', 'Grande'];
+    const pStr = (porte || '').trim();
+    const pValido = PORTES_VALIDOS.find(p => p.toLowerCase() === pStr.toLowerCase());
+    if (!pValido) {
+      throw new AppError('Porte inválido. Use Pequeno, Medio ou Grande.', 400);
+    }
+
     const classe = this._determinarClasseServico(porte);
 
     const novoVeiculo = await veiculosRepository.create({
-      modelo, marca, ano, placa, porte, classe,
+      modelo, marca, ano, placa, porte: pValido, classe,
       possuiArCondicionado:     !!possuiArCondicionado,
       possuiExtintor:           !!possuiExtintor,
       possuiCintoSeguranca:     !!possuiCintoSeguranca,
@@ -132,8 +132,18 @@ class VeiculosService {
       throw new AppError('Acesso negado. Você só pode alterar seu próprio veículo.', 403);
     }
 
-    if (dados.porte && dados.porte !== veiculo.porte) {
-      dados.classe = this._determinarClasseServico(dados.porte);
+    if (dados.porte) {
+      const PORTES_VALIDOS = ['Pequeno', 'Medio', 'Grande'];
+      const pStr = (dados.porte || '').trim();
+      const pValido = PORTES_VALIDOS.find(p => p.toLowerCase() === pStr.toLowerCase());
+      
+      if (!pValido) {
+        throw new AppError('Porte inválido. Use Pequeno, Medio ou Grande.', 400);
+      }
+      if (pValido !== veiculo.porte) {
+        dados.porte = pValido;
+        dados.classe = this._determinarClasseServico(pValido);
+      }
     }
     
     // Filtra campos não permitidos para edição por esta rota

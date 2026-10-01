@@ -11,13 +11,24 @@ function formatarVeiculo(v) {
     ...v,
     // Prisma retorna Decimal object, convertemos para Number nativo
     quilometragem: v.quilometragem ? v.quilometragem.toNumber() : 0,
-    tarifaBase: v.tarifaBase ? v.tarifaBase.toNumber() : null,
   };
 }
 
 class VeiculosRepository {
-  async findAll() {
+  async findAll(filtros = {}) {
+    const where = {};
+    if (filtros.status) {
+      const s = filtros.status.toUpperCase();
+      where.OR = [{ status: s }, { statusAprovacao: s }];
+    }
+    if (filtros.motoristaId) {
+      where.motoristaId = filtros.motoristaId;
+    }
+    if (filtros.porte) {
+      where.porte = filtros.porte.toUpperCase();
+    }
     const veiculos = await prisma.veiculo.findMany({
+      where,
       orderBy: { criadoEm: 'asc' }
     });
     return veiculos.map(formatarVeiculo);
@@ -137,7 +148,6 @@ class VeiculosRepository {
         possuiExtintor: dados.possuiExtintor || false,
         possuiCintoSeguranca: dados.possuiCintoSeguranca || false,
         documentacaoRegularizada: dados.documentacaoRegularizada || false,
-        tarifaBase: dados.tarifaBase || null,
         statusAprovacao: 'PENDENTE',
         status: 'INDISPONIVEL',
         motoristaId: dados.motoristaId

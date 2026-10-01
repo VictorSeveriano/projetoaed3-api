@@ -194,7 +194,7 @@ async function main() {
     // 5. Criar veículos para os motoristas aprovados (5) e talvez pendentes
     // A regra costuma ser que motorista pode cadastrar veículo e ele tb passa por aprovação
     const classes = ['BASICO', 'NORMAL', 'PREMIUM'];
-    const portes = ['HATCH', 'SEDAN MEDIO', 'SUV GRANDE'];
+    const portes = ['Pequeno', 'Medio', 'Grande'];
     const veiculos = [];
 
     for (let i = 0; i < 10; i++) {
