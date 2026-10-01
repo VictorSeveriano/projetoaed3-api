@@ -11,6 +11,7 @@
 const authRepository = require('./auth.repository');
 const notificacoesService = require('../notificacoes/notificacoes.service');
 const AppError = require('../utils/AppError');
+const bcrypt = require('bcryptjs');
 const {
   validarCPF, validarCNH, validarEmail, validarCelular, validarCEP, validarSenha,
   normalizarCPF, normalizarCNH, normalizarEmail, normalizarCelular,
@@ -23,7 +24,11 @@ class AuthService {
       throw new AppError('Usuario e senha sao obrigatorios.', 400);
     }
     const user = await authRepository.encontrarPorUsuario(usuario);
-    if (!user || user.senha !== senha) {
+    if (!user) {
+      throw new AppError('Credenciais invalidas.', 401);
+    }
+    const senhaValida = await bcrypt.compare(senha, user.senha);
+    if (!senhaValida) {
       throw new AppError('Credenciais invalidas.', 401);
     }
     const token = `session-token-${user.id}`;
@@ -111,25 +116,22 @@ class AuthService {
     }
   }
 
-  /**
-   * Cria nova conta pública (USUARIO ou MOTORISTA).
-   * Nunca cria ADMINISTRADOR pelo fluxo público.
-   * @param {object} dados - { nome, cpf, celular, email, senha, perfil, endereco, cnh }
-   * @returns {Promise<{ token, usuario }>}
-   */
-  async cadastrar(dados) {
+  async executarCadastro(dados, perfisPermitidos) {
     const { nome, cpf, celular, email, senha, perfil, endereco, cnh } = dados;
 
-    const perfilValidos = ['USUARIO', 'MOTORISTA'];
-    if (!perfilValidos.includes(perfil)) {
-      throw new AppError('perfil deve ser USUARIO ou MOTORISTA.', 400);
+    if (!perfisPermitidos.includes(perfil)) {
+      throw new AppError(`perfil deve ser ${perfisPermitidos.join(', ')}.`, 400);
     }
     if (!nome || !cpf || !celular || !email || !senha) {
       throw new AppError('Nome, CPF, celular, e-mail e senha são obrigatórios.', 400);
     }
-    if (!endereco || !endereco.rua || !endereco.bairro || !endereco.cidade || !endereco.estado || !endereco.numero || !endereco.cep) {
-      throw new AppError('Endereço completo é obrigatório (rua, bairro, cidade, estado, número, cep).', 400);
+    
+    if (perfil !== 'ADMINISTRADOR') {
+      if (!endereco || !endereco.rua || !endereco.bairro || !endereco.cidade || !endereco.estado || !endereco.numero || !endereco.cep) {
+        throw new AppError('Endereço completo é obrigatório (rua, bairro, cidade, estado, número, cep).', 400);
+      }
     }
+
     if (perfil === 'MOTORISTA' && !cnh) {
       throw new AppError('CNH é obrigatória para motoristas.', 400);
     }
@@ -140,7 +142,6 @@ class AuthService {
     let cnhNorm = null;
     
     if (perfil === 'MOTORISTA') {
-      const { normalizarCNH, validarCNH } = require('../utils/validators');
       cnhNorm = normalizarCNH(cnh);
       if (!validarCNH(cnhNorm)) throw new AppError('CNH inválida.', 400);
       const motoristasRepository = require('../motoristas/motoristas.repository');
@@ -152,7 +153,7 @@ class AuthService {
     if (!validarCPF(cpfNorm))        throw new AppError('CPF inválido.', 400);
     if (!validarCelular(celularNorm)) throw new AppError('Celular inválido.', 400);
     if (!validarEmail(emailNorm))     throw new AppError('E-mail inválido.', 400);
-    if (!validarCEP(endereco.cep))    throw new AppError('CEP inválido.', 400);
+    if (perfil !== 'ADMINISTRADOR' && !validarCEP(endereco.cep)) throw new AppError('CEP inválido.', 400);
 
     const senhaError = validarSenha(senha, nome);
     if (senhaError) throw new AppError(senhaError, 400);
@@ -164,10 +165,12 @@ class AuthService {
 
     let novoUsuario;
     try {
+      const salt = await bcrypt.genSalt(10);
+      const senhaHash = await bcrypt.hash(senha, salt);
+      
       novoUsuario = await authRepository.create({
         nome, cpf: cpfNorm, celular: celularNorm, email: emailNorm,
-        usuario, senha, perfil, endereco,
-        cnh: perfil === 'MOTORISTA' ? cnhNorm : undefined,
+        usuario, senha: senhaHash, perfil, endereco,
       });
     } catch (error) {
       if (error.code !== 'P2002') throw error;
@@ -177,21 +180,25 @@ class AuthService {
         : String(error.meta?.target || '').toLowerCase();
       if (alvo.includes('cpf')) throw new AppError('CPF já cadastrado no sistema.', 409);
       if (alvo.includes('email')) throw new AppError('E-mail já cadastrado no sistema.', 409);
-      if (alvo.includes('cnh')) throw new AppError('CNH já cadastrada no sistema.', 409);
       throw new AppError('Já existe um cadastro com esses dados.', 409);
     }
 
     if (perfil === 'MOTORISTA') {
-      try {
-        await notificacoesService.notificarSolicitacaoMotorista(ADMIN_ID, {
-          nomeMotorista: novoUsuario.nome,
-          motoristaId: novoUsuario.motorista.id,
-        });
-      } catch (error) {
-        console.error('[AuthService] Erro ao notificar solicitação de motorista:', error.message);
-      }
+      const motoristasService = require('../motoristas/motoristas.service');
+      await motoristasService.solicitar(novoUsuario.id, cnhNorm);
     }
 
+    return novoUsuario;
+  }
+
+  /**
+   * Cria nova conta pública (USUARIO ou MOTORISTA).
+   * Nunca cria ADMINISTRADOR pelo fluxo público.
+   * @param {object} dados - { nome, cpf, celular, email, senha, perfil, endereco, cnh }
+   * @returns {Promise<{ token, usuario }>}
+   */
+  async cadastrar(dados) {
+    const novoUsuario = await this.executarCadastro(dados, ['USUARIO', 'MOTORISTA']);
     const token = `session-token-${novoUsuario.id}`;
     return {
       token,

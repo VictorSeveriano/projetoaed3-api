@@ -1,7 +1,11 @@
 const { Router } = require('express');
 const { calcularCorrida, geocodificar, buscarSugestoes } = require('./rotas.controller');
 
+const { authMiddleware } = require('../middlewares/auth.middleware');
+
 const router = Router();
+
+router.use(authMiddleware);
 
 /**
  * Rotas do módulo Rotas

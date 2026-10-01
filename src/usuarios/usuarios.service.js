@@ -83,61 +83,8 @@ class UsuariosService {
       throw new AppError('Acesso negado. Apenas administradores podem criar contas por aqui.', 403);
     }
 
-    const { nome, cpf, celular, email, senha, perfil, endereco, cnh } = dados;
-
-    const perfilValidos = ['USUARIO', 'MOTORISTA', 'ADMINISTRADOR'];
-    if (!perfilValidos.includes(perfil)) {
-      throw new AppError('perfil deve ser USUARIO, MOTORISTA ou ADMINISTRADOR.', 400);
-    }
-    if (!nome || !cpf || !celular || !email || !senha) {
-      throw new AppError('Nome, CPF, celular, e-mail e senha são obrigatórios.', 400);
-    }
+    const novoUsuario = await authService.executarCadastro(dados, ['USUARIO', 'MOTORISTA', 'ADMINISTRADOR']);
     
-    if (perfil !== 'ADMINISTRADOR') {
-      if (!endereco || !endereco.rua || !endereco.bairro || !endereco.cidade || !endereco.estado || !endereco.numero || !endereco.cep) {
-        throw new AppError('Endereço completo é obrigatório (rua, bairro, cidade, estado, número, cep).', 400);
-      }
-    }
-    
-    if (perfil === 'MOTORISTA' && !cnh) {
-      throw new AppError('CNH é obrigatória para motoristas.', 400);
-    }
-
-    const cpfNorm     = normalizarCPF(cpf);
-    const celularNorm = normalizarCelular(celular);
-    const emailNorm   = normalizarEmail(email);
-    let cnhNorm = null;
-    
-    if (perfil === 'MOTORISTA') {
-      cnhNorm = normalizarCNH(cnh);
-      if (!validarCNH(cnhNorm)) throw new AppError('CNH inválida.', 400);
-      if (await motoristasRepository.existsByCnh(cnhNorm)) {
-        throw new AppError('CNH já cadastrada no sistema.', 409);
-      }
-    }
-
-    if (!validarCPF(cpfNorm))        throw new AppError('CPF inválido.', 400);
-    if (!validarCelular(celularNorm)) throw new AppError('Celular inválido.', 400);
-    if (!validarEmail(emailNorm))     throw new AppError('E-mail inválido.', 400);
-    if (perfil !== 'ADMINISTRADOR' && !validarCEP(endereco.cep)) throw new AppError('CEP inválido.', 400);
-
-    const senhaError = validarSenha(senha, nome);
-    if (senhaError) throw new AppError(senhaError, 400);
-
-    if (await authRepository.existsByCpf(cpfNorm))    throw new AppError('CPF já cadastrado no sistema.', 409);
-    if (await authRepository.existsByEmail(emailNorm)) throw new AppError('E-mail já cadastrado no sistema.', 409);
-
-    const usuario = await authService._gerarLogin(nome);
-
-    const novoUsuario = await authRepository.create({
-      nome, cpf: cpfNorm, celular: celularNorm, email: emailNorm,
-      usuario, senha, perfil, endereco,
-    });
-
-    if (perfil === 'MOTORISTA') {
-      await motoristasService.solicitar(novoUsuario.id, cnhNorm);
-    }
-
     const { senha: _, ...dadosSeguros } = novoUsuario;
     return dadosSeguros;
   }

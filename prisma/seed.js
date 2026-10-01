@@ -1,8 +1,10 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-const ADMIN_EMAIL = 'admin@admin.com'; // I will check if admin exists, or just query perfil = 'ADMINISTRADOR'
-const SENHA_PADRAO = 'Teste@2026';
+const bcrypt = require('bcryptjs');
+
+// Hash the password synchronously for seed
+const SENHA_PADRAO = bcrypt.hashSync('Teste@2026', 10);
 
 // Utils para login
 function gerarLogin(nome, idx = '') {
@@ -44,7 +46,6 @@ async function limparDadosTeste(tx) {
     
     // Veiculos
     const motoristas = await tx.motorista.findMany({ where: { usuarioId: { in: idsUsuarios } } });
-    const idsMotoristas = motoristas.map(m => m.id); // Wait, motorista table only has id and usuarioId. The Veiculo table relates to Usuario for motorista!
     // Let's check Veiculo schema: motoristaId points to Usuario
     await tx.veiculo.deleteMany({ where: { motoristaId: { in: idsUsuarios } } });
 

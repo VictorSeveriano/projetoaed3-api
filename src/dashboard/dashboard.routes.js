@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const dashboardController = require('./dashboard.controller');
+const { authMiddleware, requireAdmin } = require('../middlewares/auth.middleware');
+
+router.use(authMiddleware, requireAdmin);
 
 router.get('/resumo',       dashboardController.getResumo.bind(dashboardController));
 router.get('/corridas',     dashboardController.getCorridas.bind(dashboardController));

@@ -8,7 +8,7 @@ router.post('/',            authMiddleware, requireAdmin, criar);
 router.get('/',             authMiddleware, requireAdmin, listarTodos);
 router.patch('/:id',        authMiddleware, atualizar);
 
-router.get('/:id',          buscarPorId);
-router.get('/:id/corridas', listarCorridas);
+router.get('/:id',          authMiddleware, buscarPorId);
+router.get('/:id/corridas', authMiddleware, listarCorridas);
 
 module.exports = router;

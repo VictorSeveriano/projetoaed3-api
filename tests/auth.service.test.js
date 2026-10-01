@@ -13,14 +13,14 @@ jest.mock('../src/database/prisma', () => ({
   usuario: { create: jest.fn() },
 }));
 
-jest.mock('../src/notificacoes/notificacoes.service', () => ({
-  notificarSolicitacaoMotorista: jest.fn(),
+jest.mock('../src/motoristas/motoristas.service', () => ({
+  solicitar: jest.fn(),
 }));
 
 const authRepository = require('../src/auth/auth.repository');
 const motoristasRepository = require('../src/motoristas/motoristas.repository');
 const prisma = require('../src/database/prisma');
-const notificacoesService = require('../src/notificacoes/notificacoes.service');
+const motoristasService = require('../src/motoristas/motoristas.service');
 const authService = require('../src/auth/auth.service');
 
 describe('AuthService cadastro availability', () => {
@@ -98,9 +98,8 @@ describe('AuthService cadastro availability', () => {
     expect(authRepository.create).not.toHaveBeenCalled();
   });
 
-  test('creates the motorista record with the account and returns success when admin notification fails', async () => {
-    notificacoesService.notificarSolicitacaoMotorista.mockRejectedValue(new Error('notification unavailable'));
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+  test('creates the motorista record with the account by calling motoristasService.solicitar', async () => {
+    motoristasService.solicitar.mockResolvedValue({});
 
     await expect(authService.cadastrar({
       nome: 'Ana Silva',
@@ -122,13 +121,8 @@ describe('AuthService cadastro availability', () => {
 
     expect(authRepository.create).toHaveBeenCalledWith(expect.objectContaining({
       perfil: 'MOTORISTA',
-      cnh: '12345678901',
     }));
-    expect(notificacoesService.notificarSolicitacaoMotorista).toHaveBeenCalledWith(
-      '00000000-0000-0000-0000-000000000001',
-      { nomeMotorista: 'Ana Silva', motoristaId: 'motorista-id' }
-    );
-    consoleError.mockRestore();
+    expect(motoristasService.solicitar).toHaveBeenCalledWith('usuario-id', '12345678901');
   });
 
   test('maps a concurrent CNH unique-constraint conflict to a clear 409 without partial success', async () => {
@@ -153,8 +147,7 @@ describe('AuthService cadastro availability', () => {
         estado: 'ES',
         cep: '29000000',
       },
-    })).rejects.toMatchObject({ statusCode: 409, message: 'CNH já cadastrada no sistema.' });
-    expect(notificacoesService.notificarSolicitacaoMotorista).not.toHaveBeenCalled();
+    })).rejects.toMatchObject({ statusCode: 409, message: 'Já existe um cadastro com esses dados.' });
   });
 
   test('persists the motorista record as a nested write with the new account', async () => {

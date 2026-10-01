@@ -9,19 +9,18 @@ const { authMiddleware, requireAdmin } = require('../middlewares/auth.middleware
 const router = express.Router();
 
 // Rotas específicas antes das parametrizadas
-router.get('/analise',               listarAnalise);
-router.get('/online',                listarOnline);
-router.get('/perfil/:usuarioId',     buscarPerfil);
+router.get('/analise',               authMiddleware, requireAdmin, listarAnalise);
+router.get('/online',                authMiddleware, listarOnline);
+router.get('/perfil/:usuarioId',     authMiddleware, buscarPerfil);
 
+router.post('/',                     authMiddleware, requireAdmin, solicitar);
 
-router.post('/',                     solicitar);
-
-router.get('/:id',                   buscarPorId);
+router.get('/:id',                   authMiddleware, buscarPorId);
 router.patch('/:id',                 authMiddleware, atualizar);
 router.patch('/:id/aprovar',         authMiddleware, requireAdmin, aprovar);
 router.patch('/:id/rejeitar',        authMiddleware, requireAdmin, rejeitar);
-router.get('/:id/corridas',          listarCorridas);
-router.get('/:id/veiculo',           buscarVeiculo);
-router.get('/:id/relatorio',         getRelatorio);
+router.get('/:id/corridas',          authMiddleware, listarCorridas);
+router.get('/:id/veiculo',           authMiddleware, buscarVeiculo);
+router.get('/:id/relatorio',         authMiddleware, getRelatorio);
 
 module.exports = router;
