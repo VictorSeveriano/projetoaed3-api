@@ -5,12 +5,12 @@ const { success } = require('../utils/responseHelper');
 
 const listar = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, perfil, modulo, acao, resultado } = req.query;
+    const { page = 1, limit = 20, usuarioId } = req.query;
     const paginacao = { page: parseInt(page, 10), limit: parseInt(limit, 10) };
-    const filtros = { perfil, modulo, acao, resultado };
+    const filtros = { usuarioId };
 
     const result = await auditoriaService.listar(filtros, paginacao);
-    return success(res, result.data, 'Registros de auditoria listados.', result.meta);
+    return success(res, result.data, 'Registros de auditoria listados.', 200, result.meta);
   } catch (err) { next(err); }
 };
 

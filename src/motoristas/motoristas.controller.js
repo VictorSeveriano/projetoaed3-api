@@ -63,10 +63,10 @@ const solicitar = async (req, res, next) => {
 const aprovar = async (req, res, next) => {
   try {
     const dados = await motoristasService.aprovar(req.params.id);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO', entidade: 'Motorista', entidadeId: req.params.id }, req);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO' }, req, { entidade: 'Motorista', entidadeId: req.params.id });
     return success(res, dados, 'Motorista aprovado com sucesso.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA', entidade: 'Motorista', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA' }, req, { entidade: 'Motorista', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };
@@ -75,10 +75,10 @@ const aprovar = async (req, res, next) => {
 const rejeitar = async (req, res, next) => {
   try {
     const dados = await motoristasService.rejeitar(req.params.id);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO', entidade: 'Motorista', entidadeId: req.params.id }, req);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO' }, req, { entidade: 'Motorista', entidadeId: req.params.id });
     return success(res, dados, 'Motorista rejeitado.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA', entidade: 'Motorista', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA' }, req, { entidade: 'Motorista', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };
@@ -87,10 +87,10 @@ const rejeitar = async (req, res, next) => {
 const atualizar = async (req, res, next) => {
   try {
     const dados = await motoristasService.atualizar(req.params.id, req.body, req.usuario);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO', entidade: 'Motorista', entidadeId: req.params.id }, req, { dadosNovos: req.body });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO' }, req, { entidade: 'Motorista', entidadeId: req.params.id, dadosNovos: req.body });
     return success(res, dados, 'Motorista atualizado com sucesso.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA', entidade: 'Motorista', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA' }, req, { entidade: 'Motorista', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };
