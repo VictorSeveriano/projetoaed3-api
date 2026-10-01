@@ -39,6 +39,26 @@ const atualizar = async (req, res, next) => {
   }
 };
 
+/** POST /api/usuarios — Admin */
+const criar = async (req, res, next) => {
+  try {
+    const dados = await usuariosService.criar(req.body, req.usuario);
+    await auditoriaService.registrar(
+      { usuarioId: req.usuario.id, perfil: req.usuario.perfil, acao: 'CRIACAO_USUARIO', modulo: 'USUARIOS', resultado: 'SUCESSO' },
+      req,
+      { entidade: 'Usuario', entidadeId: dados.id, dadosNovos: dados }
+    );
+    return success(res, dados, 'Usuário criado com sucesso.', 201);
+  } catch (err) {
+    await auditoriaService.registrar(
+      { usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'CRIACAO_USUARIO_FALHA', modulo: 'USUARIOS', resultado: 'FALHA' },
+      req,
+      { entidade: 'Usuario', descricao: err.message, statusHttp: err.statusCode || 500 }
+    );
+    next(err);
+  }
+};
+
 /** GET /api/usuarios/:id/corridas */
 const listarCorridas = async (req, res, next) => {
   try {
@@ -47,4 +67,4 @@ const listarCorridas = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { buscarPorId, listarCorridas, listarTodos, atualizar };
+module.exports = { buscarPorId, listarCorridas, listarTodos, atualizar, criar };
