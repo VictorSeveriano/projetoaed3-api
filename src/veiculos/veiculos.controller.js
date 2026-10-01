@@ -23,10 +23,21 @@ const listarTodos = async (req, res, next) => {
 /** POST /api/veiculos — Motorista: cadastra veículo */
 const cadastrar = async (req, res, next) => {
   try {
-    const { usuarioId, ...dadosVeiculo } = req.body;
-    if (!usuarioId) return next(new AppError('usuarioId é obrigatório.', 400));
-    const veiculo = await veiculosService.cadastrar(usuarioId, dadosVeiculo);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'CADASTRO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO' }, req, { entidade: 'Veiculo', entidadeId: veiculo.id });
+    const { usuarioId, ...dadosVeiculo } = req.body || {};
+    if (usuarioId && usuarioId !== req.usuario.id) {
+      throw new AppError('O usuário informado não corresponde ao usuário autenticado.', 403);
+    }
+    if (req.usuario.perfil !== 'MOTORISTA') {
+      throw new AppError('Apenas motoristas podem cadastrar veículos.', 403);
+    }
+    const veiculo = await veiculosService.cadastrar(req.usuario.id, dadosVeiculo);
+    await auditoriaService.registrar({
+      usuarioId: req.usuario.id,
+      perfil: req.usuario.perfil,
+      acao: 'CADASTRO_VEICULO',
+      modulo: 'VEICULOS',
+      resultado: 'SUCESSO',
+    }, req, { entidade: 'Veiculo', entidadeId: veiculo.id });
     return res.status(201).json({ success: true, data: veiculo, message: 'Veículo cadastrado. Aguarda aprovação.' });
   } catch (err) {
     await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'CADASTRO_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA' }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });

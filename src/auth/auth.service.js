@@ -9,12 +9,14 @@
  */
 
 const authRepository = require('./auth.repository');
-const motoristasService = require('../motoristas/motoristas.service');
+const notificacoesService = require('../notificacoes/notificacoes.service');
 const AppError = require('../utils/AppError');
 const {
   validarCPF, validarCNH, validarEmail, validarCelular, validarCEP, validarSenha,
   normalizarCPF, normalizarCNH, normalizarEmail, normalizarCelular,
 } = require('../utils/validators');
+
+const ADMIN_ID = '00000000-0000-0000-0000-000000000001';
 
 class AuthService {
   async login(usuario, senha) {
@@ -161,13 +163,34 @@ class AuthService {
 
     const usuario = await this._gerarLogin(nome);
 
-    const novoUsuario = await authRepository.create({
-      nome, cpf: cpfNorm, celular: celularNorm, email: emailNorm,
-      usuario, senha, perfil, endereco,
-    });
+    let novoUsuario;
+    try {
+      novoUsuario = await authRepository.create({
+        nome, cpf: cpfNorm, celular: celularNorm, email: emailNorm,
+        usuario, senha, perfil, endereco,
+        cnh: perfil === 'MOTORISTA' ? cnhNorm : undefined,
+      });
+    } catch (error) {
+      if (error.code !== 'P2002') throw error;
+
+      const alvo = Array.isArray(error.meta?.target)
+        ? error.meta.target.join(' ').toLowerCase()
+        : String(error.meta?.target || '').toLowerCase();
+      if (alvo.includes('cpf')) throw new AppError('CPF já cadastrado no sistema.', 409);
+      if (alvo.includes('email')) throw new AppError('E-mail já cadastrado no sistema.', 409);
+      if (alvo.includes('cnh')) throw new AppError('CNH já cadastrada no sistema.', 409);
+      throw new AppError('Já existe um cadastro com esses dados.', 409);
+    }
 
     if (perfil === 'MOTORISTA') {
-      await motoristasService.solicitar(novoUsuario.id, cnhNorm);
+      try {
+        await notificacoesService.notificarSolicitacaoMotorista(ADMIN_ID, {
+          nomeMotorista: novoUsuario.nome,
+          motoristaId: novoUsuario.motorista.id,
+        });
+      } catch (error) {
+        console.error('[AuthService] Erro ao notificar solicitação de motorista:', error.message);
+      }
     }
 
     const token = `session-token-${novoUsuario.id}`;

@@ -5,10 +5,7 @@ const { success }         = require('../utils/responseHelper');
 /** GET /api/notificacoes?destinatarioId= */
 const listar = async (req, res, next) => {
   try {
-    const { destinatarioId } = req.query;
-    if (!destinatarioId) {
-      return res.status(400).json({ success: false, message: 'destinatarioId é obrigatório.' });
-    }
+    const destinatarioId = req.usuario.id;
     const dados    = await notificacoesService.listar(destinatarioId);
     const naoLidas = await notificacoesService.contarNaoLidas(destinatarioId);
     return success(res, { notificacoes: dados, naoLidas }, 'Notificações listadas.');
