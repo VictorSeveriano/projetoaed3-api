@@ -8,19 +8,19 @@ datasource db {
 }
 
 model Endereco {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  logradouro  String?  @db.VarChar(200)
-  numero      String?  @db.VarChar(20)
-  complemento String?  @db.VarChar(150)
-  bairro      String?  @db.VarChar(120)
-  cidade      String?  @db.VarChar(120)
-  estado      String?  @db.VarChar(120)
-  uf          String?  @db.Char(2)
-  cep         String?  @db.VarChar(8)
-  pais        String?  @default("Brasil") @db.VarChar(80)
-  latitude    Decimal? @db.Decimal(10, 7)
-  longitude   Decimal? @db.Decimal(10, 7)
-  criadoEm    DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  logradouro   String?  @db.VarChar(200)
+  numero       String?  @db.VarChar(20)
+  complemento  String?  @db.VarChar(150)
+  bairro       String?  @db.VarChar(120)
+  cidade       String?  @db.VarChar(120)
+  estado       String?  @db.VarChar(120)
+  uf           String?  @db.Char(2)
+  cep          String?  @db.VarChar(8)
+  pais         String?  @default("Brasil") @db.VarChar(80)
+  latitude     Decimal? @db.Decimal(10, 7)
+  longitude    Decimal? @db.Decimal(10, 7)
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
   atualizadoEm DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
 
   // Relações
@@ -47,12 +47,13 @@ model Usuario {
   atualizadoEm DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
 
   // Relações
-  endereco            Endereco?     @relation(fields: [enderecoId], references: [id], onDelete: Restrict, map: "usuarios_endereco_id_fkey")
-  motorista           Motorista?
-  corridas            Corrida[]     @relation("CorridaUsuario")
-  corridasComoMotorista Corrida[]   @relation("CorridaMotoristaUsuario")
-  veiculos            Veiculo[]     @relation("VeiculoMotorista")
-  notificacoes        Notificacao[]
+  endereco              Endereco?     @relation(fields: [enderecoId], references: [id], onDelete: Restrict, map: "usuarios_endereco_id_fkey")
+  motorista             Motorista?
+  corridas              Corrida[]     @relation("CorridaUsuario")
+  corridasComoMotorista Corrida[]     @relation("CorridaMotoristaUsuario")
+  veiculos              Veiculo[]     @relation("VeiculoMotorista")
+  notificacoes          Notificacao[]
+  auditorias            Auditoria[]
 
   @@index([cpf], map: "idx_usuarios_cpf")
   @@index([email], map: "idx_usuarios_email")
@@ -71,7 +72,7 @@ model Motorista {
   atualizadoEm   DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
 
   // Relações
-  usuario        Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict, map: "fk_motoristas_usuario")
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict, map: "fk_motoristas_usuario")
 
   @@index([statusCadastro], map: "idx_motoristas_status_cadastro")
   @@index([statusPresenca], map: "idx_motoristas_status_presenca")
@@ -102,9 +103,9 @@ model Veiculo {
   atualizadoEm             DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
 
   // Relações
-  motorista                Usuario  @relation("VeiculoMotorista", fields: [motoristaId], references: [id], onDelete: Restrict, map: "fk_veiculos_motorista")
-  corridas                 Corrida[] @relation("CorridaVeiculo")
-  
+  motorista Usuario   @relation("VeiculoMotorista", fields: [motoristaId], references: [id], onDelete: Restrict, map: "fk_veiculos_motorista")
+  corridas  Corrida[] @relation("CorridaVeiculo")
+
   @@index([classe], map: "idx_veiculos_classe")
   @@index([motoristaId], map: "idx_veiculos_motorista_id")
   @@index([status], map: "idx_veiculos_status")
@@ -138,11 +139,11 @@ model Corrida {
   formaPagamento    String   @default("DINHEIRO") @map("forma_pagamento") @db.VarChar(50)
 
   // Relações
-  usuario           Usuario  @relation("CorridaUsuario", fields: [usuarioId], references: [id], onDelete: Restrict, map: "fk_corridas_usuario")
-  motorista         Usuario? @relation("CorridaMotoristaUsuario", fields: [motoristaId], references: [id], onDelete: Restrict, map: "fk_corridas_motorista")
-  veiculo           Veiculo? @relation("CorridaVeiculo", fields: [veiculoId], references: [id], onDelete: Restrict, map: "fk_corridas_veiculo")
-  origemEndereco    Endereco @relation("OrigemEndereco", fields: [origemEnderecoId], references: [id], onDelete: Restrict, map: "fk_corridas_origem")
-  destinoEndereco   Endereco @relation("DestinoEndereco", fields: [destinoEnderecoId], references: [id], onDelete: Restrict, map: "fk_corridas_destino")
+  usuario           Usuario       @relation("CorridaUsuario", fields: [usuarioId], references: [id], onDelete: Restrict, map: "fk_corridas_usuario")
+  motorista         Usuario?      @relation("CorridaMotoristaUsuario", fields: [motoristaId], references: [id], onDelete: Restrict, map: "fk_corridas_motorista")
+  veiculo           Veiculo?      @relation("CorridaVeiculo", fields: [veiculoId], references: [id], onDelete: Restrict, map: "fk_corridas_veiculo")
+  origemEndereco    Endereco      @relation("OrigemEndereco", fields: [origemEnderecoId], references: [id], onDelete: Restrict, map: "fk_corridas_origem")
+  destinoEndereco   Endereco      @relation("DestinoEndereco", fields: [destinoEnderecoId], references: [id], onDelete: Restrict, map: "fk_corridas_destino")
   rotasAlternativas CorridaRota[]
 
   @@index([dataHorario], map: "idx_corridas_data_horario")
@@ -166,7 +167,7 @@ model CorridaRota {
   criadaEm        DateTime @default(now()) @map("criada_em") @db.Timestamptz(6)
 
   // Relações a serem definidas
-  corrida         Corrida  @relation(fields: [corridaId], references: [id], onDelete: Cascade, map: "fk_corrida_rotas_corrida")
+  corrida Corrida @relation(fields: [corridaId], references: [id], onDelete: Cascade, map: "fk_corrida_rotas_corrida")
 
   @@index([corridaId], map: "idx_corrida_rotas_corrida_id")
   @@index([corridaId, selecionada], map: "idx_corrida_rotas_selecionada")
@@ -185,7 +186,7 @@ model Notificacao {
   acaoMotorista  String?  @map("acao_motorista") @db.VarChar(50)
 
   // Relações
-  destinatario   Usuario  @relation(fields: [destinatarioId], references: [id], onDelete: Restrict, map: "fk_notificacoes_destinatario")
+  destinatario Usuario @relation(fields: [destinatarioId], references: [id], onDelete: Restrict, map: "fk_notificacoes_destinatario")
 
   @@index([criadaEm(sort: Desc)], map: "idx_notificacoes_criada_em")
   @@index([destinatarioId], map: "idx_notificacoes_destinatario")
@@ -193,4 +194,32 @@ model Notificacao {
   @@map("notificacoes")
 }
 
+model Auditoria {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuarioId       String?  @map("usuario_id") @db.Uuid
+  perfil          String?  @db.VarChar(20)
+  acao            String   @db.VarChar(50)
+  modulo          String   @db.VarChar(50)
+  entidade        String?  @db.VarChar(50)
+  entidadeId      String?  @map("entidade_id") @db.Uuid
+  descricao       String?  @db.Text
+  dadosAnteriores Json?    @map("dados_anteriores") @db.JsonB
+  dadosNovos      Json?    @map("dados_novos") @db.JsonB
+  resultado       String   @db.VarChar(20)
+  statusHttp      Int?     @map("status_http")
+  rota            String?  @db.VarChar(255)
+  metodoHttp      String?  @map("metodo_http") @db.VarChar(10)
+  ip              String?  @db.VarChar(45)
+  userAgent       String?  @map("user_agent") @db.Text
+  criadoEm        DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
 
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull, map: "fk_auditoria_usuario")
+
+  @@index([criadoEm(sort: Desc)], map: "idx_auditoria_criado_em")
+  @@index([usuarioId], map: "idx_auditoria_usuario_id")
+  @@index([perfil], map: "idx_auditoria_perfil")
+  @@index([acao], map: "idx_auditoria_acao")
+  @@index([modulo], map: "idx_auditoria_modulo")
+  @@index([resultado], map: "idx_auditoria_resultado")
+  @@map("auditoria")
+}

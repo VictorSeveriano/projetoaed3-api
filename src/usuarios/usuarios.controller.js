@@ -1,6 +1,7 @@
 'use strict';
 const usuariosService = require('./usuarios.service');
 const { success }     = require('../utils/responseHelper');
+const auditoriaService = require('../auditoria/auditoria.service');
 
 /** GET /api/usuarios/:id */
 const buscarPorId = async (req, res, next) => {
@@ -22,8 +23,12 @@ const listarTodos = async (req, res, next) => {
 const atualizar = async (req, res, next) => {
   try {
     const dados = await usuariosService.atualizar(req.params.id, req.body, req.usuario);
+    await auditoriaService.registrar({ usuarioId: req.usuario.id, perfil: req.usuario.perfil, acao: 'ALTERACAO_USUARIO', modulo: 'USUARIOS', resultado: 'SUCESSO', entidade: 'Usuario', entidadeId: req.params.id }, req, { dadosNovos: req.body });
     return success(res, dados, 'Usuário atualizado com sucesso.');
-  } catch (err) { next(err); }
+  } catch (err) {
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_USUARIO_FALHA', modulo: 'USUARIOS', resultado: 'FALHA', entidade: 'Usuario', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    next(err);
+  }
 };
 
 /** GET /api/usuarios/:id/corridas */

@@ -3,6 +3,7 @@ const motoristasService = require('./motoristas.service');
 const relatorioService  = require('./relatorio.motorista.service');
 const { success }       = require('../utils/responseHelper');
 const AppError          = require('../utils/AppError');
+const auditoriaService  = require('../auditoria/auditoria.service');
 
 /**
  * MotoristasController — Endpoints do módulo de motoristas.
@@ -50,32 +51,48 @@ const solicitar = async (req, res, next) => {
       return next(new AppError('usuarioId e cnh são obrigatórios.', 400));
     }
     const motorista = await motoristasService.solicitar(usuarioId, cnh);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'SOLICITACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO', entidade: 'Motorista', entidadeId: motorista.id }, req);
     return res.status(201).json({ success: true, data: motorista, message: 'Solicitação enviada.' });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'SOLICITACAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA' }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    next(err);
+  }
 };
 
 /** PATCH /api/motoristas/:id/aprovar — Admin */
 const aprovar = async (req, res, next) => {
   try {
     const dados = await motoristasService.aprovar(req.params.id);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO', entidade: 'Motorista', entidadeId: req.params.id }, req);
     return success(res, dados, 'Motorista aprovado com sucesso.');
-  } catch (err) { next(err); }
+  } catch (err) {
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'APROVACAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA', entidade: 'Motorista', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    next(err);
+  }
 };
 
 /** PATCH /api/motoristas/:id/rejeitar — Admin */
 const rejeitar = async (req, res, next) => {
   try {
     const dados = await motoristasService.rejeitar(req.params.id);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO', entidade: 'Motorista', entidadeId: req.params.id }, req);
     return success(res, dados, 'Motorista rejeitado.');
-  } catch (err) { next(err); }
+  } catch (err) {
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'REJEICAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA', entidade: 'Motorista', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    next(err);
+  }
 };
 
 /** PATCH /api/motoristas/:id — Atualiza dados do motorista */
 const atualizar = async (req, res, next) => {
   try {
     const dados = await motoristasService.atualizar(req.params.id, req.body, req.usuario);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO', entidade: 'Motorista', entidadeId: req.params.id }, req, { dadosNovos: req.body });
     return success(res, dados, 'Motorista atualizado com sucesso.');
-  } catch (err) { next(err); }
+  } catch (err) {
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA', entidade: 'Motorista', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    next(err);
+  }
 };
 
 /** GET /api/motoristas/:id/corridas — Corridas do motorista */
