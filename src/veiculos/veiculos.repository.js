@@ -16,7 +16,7 @@ function formatarVeiculo(v) {
 
 class VeiculosRepository {
   async findAll(filtros = {}) {
-    const where = {};
+    const where = { statusAprovacao: { not: 'EXCLUIDO' } };
     if (filtros.status) {
       const s = filtros.status.toUpperCase();
       where.OR = [{ status: s }, { statusAprovacao: s }];
@@ -62,9 +62,27 @@ class VeiculosRepository {
 
   async findByMotoristaId(motoristaId) {
     const veiculo = await prisma.veiculo.findFirst({
-      where: { motoristaId }
+      where: { motoristaId, statusAprovacao: { not: 'EXCLUIDO' } },
+      orderBy: { criadoEm: 'desc' }
     });
     return formatarVeiculo(veiculo);
+  }
+
+  async softDelete(id) {
+    try {
+      const veiculo = await prisma.veiculo.update({
+        where: { id },
+        data: {
+          statusAprovacao: 'EXCLUIDO',
+          status: 'INDISPONIVEL',
+          atualizadoEm: new Date()
+        }
+      });
+      return formatarVeiculo(veiculo);
+    } catch (error) {
+      if (error.code === 'P2025') return null;
+      throw error;
+    }
   }
 
   async findByStatusAprovacao(statusAprovacao) {

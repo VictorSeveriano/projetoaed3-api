@@ -95,4 +95,16 @@ const atualizar = async (req, res, next) => {
   }
 };
 
-module.exports = { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, editarClasse, atualizar };
+/** DELETE /api/veiculos/:id — Motorista: exclui o próprio veículo sem apagar o histórico. */
+const excluir = async (req, res, next) => {
+  try {
+    const dados = await veiculosService.excluir(req.params.id, req.usuario);
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'EXCLUSAO_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO' }, req, { entidade: 'Veiculo', entidadeId: req.params.id });
+    return success(res, dados, 'Veículo excluído.');
+  } catch (err) {
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'EXCLUSAO_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA' }, req, { entidade: 'Veiculo', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
+    next(err);
+  }
+};
+
+module.exports = { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, editarClasse, atualizar, excluir };

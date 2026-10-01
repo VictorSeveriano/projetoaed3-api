@@ -27,10 +27,20 @@ class AuthService {
     if (!user) {
       throw new AppError('Credenciais invalidas.', 401);
     }
-    const senhaValida = await bcrypt.compare(senha, user.senha);
+
+    const senhaEmHash = /^\$2[aby]\$\d{2}\$/.test(user.senha);
+    const senhaValida = senhaEmHash
+      ? await bcrypt.compare(senha, user.senha)
+      : user.senha === senha;
     if (!senhaValida) {
       throw new AppError('Credenciais invalidas.', 401);
     }
+
+    if (!senhaEmHash) {
+      const senhaHash = await bcrypt.hash(senha, 10);
+      await authRepository.atualizarSenha(user.id, senhaHash);
+    }
+
     const token = `session-token-${user.id}`;
     return {
       token,

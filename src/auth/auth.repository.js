@@ -78,6 +78,14 @@ class AuthRepository {
     return formatarUsuario(u);
   }
 
+  async atualizarSenha(id, senha) {
+    return prisma.usuario.update({
+      where: { id },
+      data: { senha, atualizadoEm: new Date() },
+      select: { id: true }
+    });
+  }
+
   async existsByCpf(cpf) {
     const count = await prisma.usuario.count({
       where: { cpf }

@@ -1,5 +1,5 @@
 const express = require('express');
-const { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, editarClasse, atualizar } = require('./veiculos.controller');
+const { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, editarClasse, atualizar, excluir } = require('./veiculos.controller');
 const { authMiddleware, requireAdmin } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
@@ -11,5 +11,6 @@ router.patch('/:id/aprovar',  authMiddleware, requireAdmin, aprovar);
 router.patch('/:id/rejeitar', authMiddleware, requireAdmin, rejeitar);
 router.patch('/:id/classe',   authMiddleware, requireAdmin, editarClasse);
 router.patch('/:id',          authMiddleware, atualizar);
+router.delete('/:id',         authMiddleware, excluir);
 
 module.exports = router;

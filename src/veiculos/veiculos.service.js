@@ -88,11 +88,15 @@ class VeiculosService {
       motoristaId:              usuarioId,
     });
 
-    await notificacoesService.notificarSolicitacaoVeiculo(ADMIN_ID, {
-      nomeMotorista:  usuario.nome,
-      veiculoId:      novoVeiculo.id,
-      modeloVeiculo:  `${marca} ${modelo}`,
-    });
+    try {
+      await notificacoesService.notificarSolicitacaoVeiculo(ADMIN_ID, {
+        nomeMotorista:  usuario.nome,
+        veiculoId:      novoVeiculo.id,
+        modeloVeiculo:  `${marca} ${modelo}`,
+      });
+    } catch (error) {
+      console.error('[VeiculosService] Falha ao notificar cadastro de veículo:', error.message);
+    }
 
     return novoVeiculo;
   }
@@ -100,6 +104,7 @@ class VeiculosService {
   async aprovar(id) {
     const v = await veiculosRepository.findById(id);
     if (!v) throw new AppError('Veículo não encontrado.', 404);
+    this._garantirNaoExcluido(v);
     if (v.statusAprovacao === 'APROVADO') throw new AppError('Veículo já está aprovado.', 409);
     const classe = this._determinarClasseServico(v.porte);
     return this._enriquecer(await veiculosRepository.updateStatusAprovacao(id, 'APROVADO', classe));
@@ -111,14 +116,35 @@ class VeiculosService {
     }
     const v = await veiculosRepository.findById(id);
     if (!v) throw new AppError('Veículo não encontrado.', 404);
+    this._garantirNaoExcluido(v);
     return this._enriquecer(await veiculosRepository.updateClasse(id, classe));
   }
 
   async rejeitar(id) {
     const v = await veiculosRepository.findById(id);
     if (!v) throw new AppError('Veículo não encontrado.', 404);
+    this._garantirNaoExcluido(v);
     if (v.statusAprovacao === 'REJEITADO') throw new AppError('Veículo já está rejeitado.', 409);
     return this._enriquecer(await veiculosRepository.updateStatusAprovacao(id, 'REJEITADO'));
+  }
+
+  async excluir(id, usuarioLogado) {
+    if (!usuarioLogado || usuarioLogado.perfil !== 'MOTORISTA') {
+      throw new AppError('Apenas motoristas podem excluir veículos.', 403);
+    }
+
+    const veiculo = await veiculosRepository.findById(id);
+    if (!veiculo || veiculo.statusAprovacao === 'EXCLUIDO') {
+      throw new AppError('Veículo não encontrado.', 404);
+    }
+    if (veiculo.motoristaId !== usuarioLogado.id) {
+      throw new AppError('Acesso negado. Você só pode excluir seu próprio veículo.', 403);
+    }
+    if (veiculo.status === 'EM_CORRIDA') {
+      throw new AppError('Não é possível excluir um veículo que está em uma corrida.', 409);
+    }
+
+    return this._enriquecer(await veiculosRepository.softDelete(id));
   }
 
   async atualizar(id, dados, usuarioLogado) {
@@ -126,6 +152,7 @@ class VeiculosService {
     
     const veiculo = await veiculosRepository.findById(id);
     if (!veiculo) throw new AppError('Veículo não encontrado.', 404);
+    this._garantirNaoExcluido(veiculo);
 
     if (usuarioLogado.perfil !== 'ADMINISTRADOR' && veiculo.motoristaId !== usuarioLogado.id) {
       throw new AppError('Acesso negado. Você só pode alterar seu próprio veículo.', 403);
@@ -155,6 +182,12 @@ class VeiculosService {
       }, {});
     
     return this._enriquecer(await veiculosRepository.update(id, dadosLimpos));
+  }
+
+  _garantirNaoExcluido(veiculo) {
+    if (veiculo.statusAprovacao === 'EXCLUIDO') {
+      throw new AppError('Veículo não encontrado.', 404);
+    }
   }
 
   /** Enriquece veículo com dados do motorista (sem senha). */

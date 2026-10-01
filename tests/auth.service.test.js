@@ -3,6 +3,7 @@ jest.mock('../src/auth/auth.repository', () => ({
   existsByCpf: jest.fn(),
   existsByEmail: jest.fn(),
   encontrarPorUsuario: jest.fn(),
+  atualizarSenha: jest.fn(),
 }));
 
 jest.mock('../src/motoristas/motoristas.repository', () => ({
@@ -22,6 +23,7 @@ const motoristasRepository = require('../src/motoristas/motoristas.repository');
 const prisma = require('../src/database/prisma');
 const motoristasService = require('../src/motoristas/motoristas.service');
 const authService = require('../src/auth/auth.service');
+const bcrypt = require('bcryptjs');
 
 describe('AuthService cadastro availability', () => {
   beforeEach(() => {
@@ -181,5 +183,53 @@ describe('AuthService cadastro availability', () => {
       }),
       include: { endereco: true, motorista: true },
     }));
+  });
+
+  test('accepts a legacy plaintext password and replaces it with a bcrypt hash', async () => {
+    authRepository.encontrarPorUsuario.mockResolvedValue({
+      id: 'usuario-id',
+      nome: 'Ana Silva',
+      usuario: 'anasilva',
+      perfil: 'USUARIO',
+      senha: 'senha-legada',
+    });
+
+    const resultado = await authService.login('anasilva', 'senha-legada');
+
+    expect(resultado).toMatchObject({
+      token: 'session-token-usuario-id',
+      usuario: { id: 'usuario-id', perfil: 'USUARIO' },
+    });
+    const senhaGravada = authRepository.atualizarSenha.mock.calls[0][1];
+    await expect(bcrypt.compare('senha-legada', senhaGravada)).resolves.toBe(true);
+  });
+
+  test('continues authenticating bcrypt passwords without rewriting them', async () => {
+    const senhaHash = await bcrypt.hash('senha-atual', 4);
+    authRepository.encontrarPorUsuario.mockResolvedValue({
+      id: 'usuario-id',
+      nome: 'Ana Silva',
+      usuario: 'anasilva',
+      perfil: 'USUARIO',
+      senha: senhaHash,
+    });
+
+    await expect(authService.login('anasilva', 'senha-atual')).resolves.toMatchObject({
+      token: 'session-token-usuario-id',
+    });
+    expect(authRepository.atualizarSenha).not.toHaveBeenCalled();
+  });
+
+  test('rejects an incorrect legacy password without changing the stored password', async () => {
+    authRepository.encontrarPorUsuario.mockResolvedValue({
+      id: 'usuario-id',
+      senha: 'senha-legada',
+    });
+
+    await expect(authService.login('anasilva', 'senha-errada')).rejects.toMatchObject({
+      statusCode: 401,
+      message: 'Credenciais invalidas.',
+    });
+    expect(authRepository.atualizarSenha).not.toHaveBeenCalled();
   });
 });
