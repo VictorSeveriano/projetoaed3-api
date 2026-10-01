@@ -12,11 +12,7 @@ const corridasRepository   = require('../corridas/corridas.repository');
 const veiculosRepository   = require('../veiculos/veiculos.repository');
 const notificacoesService  = require('../notificacoes/notificacoes.service');
 const AppError             = require('../utils/AppError');
-
-// Id do administrador principal.
-// Em produção viria do token JWT.
-// Após a migration, o admin tem UUID fixo.
-const ADMIN_ID = '00000000-0000-0000-0000-000000000001';
+const { ADMIN_ID }         = require('../utils/constants');
 
 class MotoristasService {
   // ----- Consultas admin -----

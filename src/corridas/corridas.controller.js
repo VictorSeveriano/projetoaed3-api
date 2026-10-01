@@ -106,15 +106,15 @@ const aceitar = async (req, res, next) => {
 /** PATCH /api/corridas/:id/recusar — Motorista recusa a corrida */
 const recusar = async (req, res, next) => {
   try {
-    const { motoristaUsuarioId } = req.body;
-    if (!motoristaUsuarioId) {
-      return next(new AppError('motoristaUsuarioId e obrigatorio.', 400));
+    const { motoristaUsuarioId } = req.body || {};
+    if (motoristaUsuarioId && motoristaUsuarioId !== req.usuario.id) {
+      throw new AppError('O motorista informado não corresponde ao usuário autenticado.', 403);
     }
-    const resultado = await corridasService.recusar(req.params.id, motoristaUsuarioId);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id || motoristaUsuarioId, perfil: req.usuario?.perfil || 'MOTORISTA', acao: 'RECUSA_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: req.params.id });
+    const resultado = await corridasService.recusar(req.params.id, req.usuario.id);
+    await auditoriaService.registrar({ usuarioId: req.usuario.id, perfil: req.usuario.perfil, acao: 'RECUSA_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: req.params.id });
     return success(res, resultado, 'Corrida recusada.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id || req.body.motoristaUsuarioId, perfil: req.usuario?.perfil || 'MOTORISTA', acao: 'RECUSA_CORRIDA_FALHA', modulo: 'CORRIDAS', resultado: 'FALHA' }, req, { entidade: 'Corrida', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'RECUSA_CORRIDA_FALHA', modulo: 'CORRIDAS', resultado: 'FALHA' }, req, { entidade: 'Corrida', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };

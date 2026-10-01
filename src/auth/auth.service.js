@@ -15,8 +15,7 @@ const {
   validarCPF, validarCNH, validarEmail, validarCelular, validarCEP, validarSenha,
   normalizarCPF, normalizarCNH, normalizarEmail, normalizarCelular,
 } = require('../utils/validators');
-
-const ADMIN_ID = '00000000-0000-0000-0000-000000000001';
+const { ADMIN_ID } = require('../utils/constants');
 
 class AuthService {
   async login(usuario, senha) {

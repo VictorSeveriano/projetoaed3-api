@@ -10,25 +10,7 @@ const validarCPF = (cpf) => {
   // Evita CPFs repetidos
   if (/^(\d)\1+$/.test(limpo)) return false;
 
-  /* // VERIFICACAO DE CPF EXISTENTE COMENTADA
-  let soma = 0;
-  let resto;
-
-  for (let i = 1; i <= 9; i++) {
-    soma = soma + parseInt(limpo.substring(i - 1, i)) * (11 - i);
-  }
-  resto = (soma * 10) % 11;
-  if (resto === 10 || resto === 11) resto = 0;
-  if (resto !== parseInt(limpo.substring(9, 10))) return false;
-
-  soma = 0;
-  for (let i = 1; i <= 10; i++) {
-    soma = soma + parseInt(limpo.substring(i - 1, i)) * (12 - i);
-  }
-  resto = (soma * 10) % 11;
-  if (resto === 10 || resto === 11) resto = 0;
-  if (resto !== parseInt(limpo.substring(10, 11))) return false;
-  */
+  // A verificação real dos dígitos do CPF está desabilitada no momento
 
   return true;
 };
@@ -51,36 +33,7 @@ const validarCNH = (cnh) => {
 
   if (/^(\d)\1+$/.test(limpo)) return false;
 
-  /* // VERIFICACAO DE CNH EXISTENTE COMENTADA
-  let soma = 0;
-  let d1 = 0;
-  let d2 = 0;
-  let mult = 9;
-
-  for (let i = 0; i < 9; i++) {
-    soma += parseInt(limpo.charAt(i)) * mult;
-    mult--;
-  }
-  
-  let resto = soma % 11;
-  if (resto === 10) d1 = 0;
-  else d1 = resto;
-
-  soma = 0;
-  mult = 1;
-  for (let i = 0; i < 9; i++) {
-    soma += parseInt(limpo.charAt(i)) * mult;
-    mult++;
-  }
-
-  resto = soma % 11;
-  if (resto === 10) d2 = 0;
-  else d2 = resto;
-
-  if (d1 !== parseInt(limpo.charAt(9)) || d2 !== parseInt(limpo.charAt(10))) {
-    return false;
-  }
-  */
+  // A verificação real dos dígitos da CNH está desabilitada no momento
 
   return true;
 };

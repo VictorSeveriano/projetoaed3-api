@@ -32,7 +32,7 @@ class AuditoriaService {
         statusHttp: detalhes.statusHttp || null,
         rota: req ? req.originalUrl : null,
         metodoHttp: req ? req.method : null,
-        ip: req ? (req.headers['x-forwarded-for'] || req.connection.remoteAddress) : null,
+        ip: req ? (req.headers['x-forwarded-for'] || req.socket?.remoteAddress) : null,
         userAgent: req ? req.headers['user-agent'] : null,
       };
 

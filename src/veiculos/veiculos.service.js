@@ -13,8 +13,7 @@ const motoristasRepository = require('../motoristas/motoristas.repository');
 const authRepository       = require('../auth/auth.repository');
 const notificacoesService  = require('../notificacoes/notificacoes.service');
 const AppError             = require('../utils/AppError');
-
-const ADMIN_ID = '00000000-0000-0000-0000-000000000001';
+const { ADMIN_ID }         = require('../utils/constants');
 
 class VeiculosService {
   /**

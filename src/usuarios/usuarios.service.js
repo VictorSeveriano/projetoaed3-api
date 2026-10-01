@@ -4,10 +4,16 @@
  * Todos os métodos são async para suportar o repositório PostgreSQL.
  */
 
-const authRepository    = require('../auth/auth.repository');
-const corridasRepository = require('../corridas/corridas.repository');
-const AppError          = require('../utils/AppError');
-
+const authRepository       = require('../auth/auth.repository');
+const corridasRepository   = require('../corridas/corridas.repository');
+const motoristasRepository = require('../motoristas/motoristas.repository');
+const authService          = require('../auth/auth.service');
+const motoristasService    = require('../motoristas/motoristas.service');
+const AppError             = require('../utils/AppError');
+const {
+  validarCPF, validarCelular, validarEmail, validarCEP, validarSenha,
+  normalizarCPF, normalizarCelular, normalizarEmail, normalizarCNH, validarCNH
+} = require('../utils/validators');
 class UsuariosService {
   async buscarPorId(id) {
     const user = await authRepository.encontrarPorId(id);
@@ -97,20 +103,14 @@ class UsuariosService {
       throw new AppError('CNH é obrigatória para motoristas.', 400);
     }
 
-    const {
-      validarCPF, validarCelular, validarEmail, validarCEP, validarSenha, normalizarCPF, normalizarCelular, normalizarEmail
-    } = require('../utils/validators');
-
     const cpfNorm     = normalizarCPF(cpf);
     const celularNorm = normalizarCelular(celular);
     const emailNorm   = normalizarEmail(email);
     let cnhNorm = null;
     
     if (perfil === 'MOTORISTA') {
-      const { normalizarCNH, validarCNH } = require('../utils/validators');
       cnhNorm = normalizarCNH(cnh);
       if (!validarCNH(cnhNorm)) throw new AppError('CNH inválida.', 400);
-      const motoristasRepository = require('../motoristas/motoristas.repository');
       if (await motoristasRepository.existsByCnh(cnhNorm)) {
         throw new AppError('CNH já cadastrada no sistema.', 409);
       }
@@ -127,7 +127,6 @@ class UsuariosService {
     if (await authRepository.existsByCpf(cpfNorm))    throw new AppError('CPF já cadastrado no sistema.', 409);
     if (await authRepository.existsByEmail(emailNorm)) throw new AppError('E-mail já cadastrado no sistema.', 409);
 
-    const authService = require('../auth/auth.service');
     const usuario = await authService._gerarLogin(nome);
 
     const novoUsuario = await authRepository.create({
@@ -136,7 +135,6 @@ class UsuariosService {
     });
 
     if (perfil === 'MOTORISTA') {
-      const motoristasService = require('../motoristas/motoristas.service');
       await motoristasService.solicitar(novoUsuario.id, cnhNorm);
     }
 
