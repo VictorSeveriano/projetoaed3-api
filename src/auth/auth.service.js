@@ -12,8 +12,8 @@ const authRepository = require('./auth.repository');
 const motoristasService = require('../motoristas/motoristas.service');
 const AppError = require('../utils/AppError');
 const {
-  validarCPF, validarEmail, validarCelular, validarCEP, validarSenha,
-  normalizarCPF, normalizarEmail, normalizarCelular,
+  validarCPF, validarCNH, validarEmail, validarCelular, validarCEP, validarSenha,
+  normalizarCPF, normalizarCNH, normalizarEmail, normalizarCelular,
 } = require('../utils/validators');
 
 class AuthService {
@@ -35,6 +35,32 @@ class AuthService {
         perfil:  user.perfil,
       },
     };
+  }
+
+  async verificarDisponibilidadeCadastro({ cpf, email, perfil, cnh }) {
+    if (!['USUARIO', 'MOTORISTA'].includes(perfil)) {
+      throw new AppError('perfil deve ser USUARIO ou MOTORISTA.', 400);
+    }
+
+    const cpfNorm = normalizarCPF(cpf);
+    const emailNorm = normalizarEmail(email);
+    if (!validarCPF(cpfNorm)) throw new AppError('CPF inválido.', 400);
+    if (!validarEmail(emailNorm)) throw new AppError('E-mail inválido.', 400);
+
+    const [cpfDuplicado, emailDuplicado] = await Promise.all([
+      authRepository.existsByCpf(cpfNorm),
+      authRepository.existsByEmail(emailNorm),
+    ]);
+    const duplicados = { cpf: cpfDuplicado, email: emailDuplicado };
+
+    if (perfil === 'MOTORISTA') {
+      const cnhNorm = normalizarCNH(cnh);
+      if (!validarCNH(cnhNorm)) throw new AppError('CNH inválida.', 400);
+      const motoristasRepository = require('../motoristas/motoristas.repository');
+      duplicados.cnh = await motoristasRepository.existsByCnh(cnhNorm);
+    }
+
+    return { duplicados };
   }
 
   /**
