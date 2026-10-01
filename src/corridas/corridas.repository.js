@@ -18,7 +18,7 @@ function formatarCorrida(cPrisma) {
     destinoLat: cPrisma.destinoLat ? cPrisma.destinoLat.toNumber() : null,
     destinoLng: cPrisma.destinoLng ? cPrisma.destinoLng.toNumber() : null,
     distanciaKm: cPrisma.distanciaKm ? cPrisma.distanciaKm.toNumber() : 0,
-    valor: cPrisma.valor ? cPrisma.valor.toNumber() : 0,
+    valor: cPrisma.valor != null ? cPrisma.valor.toNumber() : 0,
     rotaCaminho: cPrisma.rotaCaminho || [],
     classe: cPrisma.classe || 'NORMAL',
     formaPagamento: cPrisma.formaPagamento || 'DINHEIRO',
@@ -168,7 +168,7 @@ class CorridasRepository {
         
         distanciaKm: dados.distanciaKm,
         duracaoMin: dados.duracaoMin || null,
-        valor: dados.valor || 0,
+        valor: dados.valor, // Valor obrigatorio — deve ter sido calculado e validado pelo Service
         classe: dados.classe || 'NORMAL',
         formaPagamento: dados.formaPagamento || 'DINHEIRO',
         dataHorario: dados.dataHorario ? new Date(dados.dataHorario) : new Date(),

@@ -1,6 +1,6 @@
 const express = require('express');
 const {
-  listarTodos, listarAnalise, listarOnline, buscarPerfil,
+  listarAnalise, listarOnline, buscarPerfil,
   buscarPorId, solicitar, aprovar, rejeitar,
   listarCorridas, buscarVeiculo, getRelatorio, atualizar
 } = require('./motoristas.controller');
@@ -13,7 +13,7 @@ router.get('/analise',               listarAnalise);
 router.get('/online',                listarOnline);
 router.get('/perfil/:usuarioId',     buscarPerfil);
 
-router.get('/',                      listarTodos);
+
 router.post('/',                     solicitar);
 
 router.get('/:id',                   buscarPorId);

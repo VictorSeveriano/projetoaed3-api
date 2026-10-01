@@ -48,6 +48,14 @@ class UsuariosService {
       throw new AppError('A alteração de perfil não é permitida por esta rota.', 403);
     }
 
+    if (dados.cpf && dados.cpf !== user.cpf && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      throw new AppError('A alteração de CPF não é permitida para este usuário.', 403);
+    }
+
+    // Remove campos que não devem ser editados silenciosamente caso sejam enviados
+    delete dados.criadoEm;
+    delete dados.atualizadoEm;
+
     if (dados.usuario && dados.usuario !== user.usuario) {
       const existente = await authRepository.encontrarPorUsuario(dados.usuario);
       if (existente && existente.id !== id) {

@@ -21,10 +21,7 @@ const ADMIN_ID = '00000000-0000-0000-0000-000000000001';
 class MotoristasService {
   // ----- Consultas admin -----
 
-  async listarTodos() {
-    const todos = await motoristasRepository.findAll();
-    return Promise.all(todos.map((m) => this._enriquecer(m)));
-  }
+
 
   async listarPorStatus(statusCadastro) {
     const lista = statusCadastro

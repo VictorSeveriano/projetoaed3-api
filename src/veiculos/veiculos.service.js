@@ -136,7 +136,16 @@ class VeiculosService {
       dados.classe = this._determinarClasseServico(dados.porte);
     }
     
-    return this._enriquecer(await veiculosRepository.update(id, dados));
+    // Filtra campos não permitidos para edição por esta rota
+    const camposPermitidos = ['marca', 'modelo', 'ano', 'placa', 'cor', 'porte', 'classe'];
+    const dadosLimpos = Object.keys(dados)
+      .filter(key => camposPermitidos.includes(key))
+      .reduce((obj, key) => {
+        obj[key] = dados[key];
+        return obj;
+      }, {});
+    
+    return this._enriquecer(await veiculosRepository.update(id, dadosLimpos));
   }
 
   /** Enriquece veículo com dados do motorista (sem senha). */

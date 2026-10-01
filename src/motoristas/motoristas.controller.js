@@ -9,14 +9,6 @@ const AppError          = require('../utils/AppError');
  * Nenhuma regra de negócio aqui.
  */
 
-/** GET /api/motoristas — Admin: lista todos (com filtro opcional ?status=) */
-const listarTodos = async (req, res, next) => {
-  try {
-    const { status } = req.query;
-    const dados = await motoristasService.listarPorStatus(status || null);
-    return success(res, dados, 'Motoristas listados.');
-  } catch (err) { next(err); }
-};
 
 /** GET /api/motoristas/analise — Admin: lista pendentes */
 const listarAnalise = async (req, res, next) => {
@@ -116,7 +108,7 @@ const getRelatorio = async (req, res, next) => {
 };
 
 module.exports = {
-  listarTodos, listarAnalise, listarOnline, buscarPerfil,
+  listarAnalise, listarOnline, buscarPerfil,
   buscarPorId, solicitar, aprovar, rejeitar,
   listarCorridas, buscarVeiculo, getRelatorio, atualizar
 };

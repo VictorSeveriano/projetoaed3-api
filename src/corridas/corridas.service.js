@@ -38,15 +38,39 @@ class CorridasService {
 
   /**
    * Determina a faixa de horário baseada no dataHorario da corrida.
-   * A terceira faixa (noite) atravessa a meia-noite (19:00 até 04:59).
+   * Extrai a hora diretamente da string ISO sem conversão de timezone,
+   * garantindo que o horário local escolhido pelo usuário seja respeitado
+   * independentemente do TZ do servidor.
+   *
+   * Aceita strings no formato:
+   *   - "2026-10-01T13:05:00.000Z"  → extrai hora 13 (campo T + HH)
+   *   - "2026-10-01T13:05"          → extrai hora 13
+   *   - Date object                  → usa getHours() como fallback
    */
   static _determinarFaixaHorario(dataHorario) {
-    const data = new Date(dataHorario);
-    const hora = data.getHours();
+    let hora;
+
+    if (typeof dataHorario === 'string' && dataHorario.includes('T')) {
+      // Extrai a parte de hora diretamente da string ISO: "YYYY-MM-DDTHH:mm..."
+      // Isso evita qualquer conversão de timezone
+      const horaStr = dataHorario.split('T')[1].split(':')[0];
+      hora = parseInt(horaStr, 10);
+    } else {
+      // Fallback para Date object
+      const data = new Date(dataHorario);
+      if (isNaN(data.getTime())) {
+        throw new Error('dataHorario invalido para calculo de faixa horaria');
+      }
+      hora = data.getHours();
+    }
+
+    if (isNaN(hora) || hora < 0 || hora > 23) {
+      throw new Error('Hora invalida extraida de dataHorario: ' + dataHorario);
+    }
 
     if (hora >= 5 && hora < 13) return 'manha'; // 05:00 até 12:59
     if (hora >= 13 && hora < 19) return 'tarde'; // 13:00 até 18:59
-    return 'noite'; // 19:00 até 04:59 (00:00 até 04:59 e 19:00 até 23:59)
+    return 'noite'; // 19:00 até 04:59
   }
 
   async listarTodas() {
@@ -80,13 +104,68 @@ class CorridasService {
 
   /**
    * Calcula o valor da corrida usando a regra de: distanciaKm * tarifa por km da classe e horario.
+   * Valida todas as entradas e nunca retorna NaN, null, undefined, Infinity ou 0
+   * quando a distância é positiva e a classe/data são válidas.
+   *
+   * @throws {AppError} se qualquer entrada for inválida
    */
   calcularValor({ distanciaKm, classe, dataHorario }) {
-    const tarifasClasse = CorridasService.TARIFAS_KM[classe] || CorridasService.TARIFAS_KM.default;
-    const faixa = CorridasService._determinarFaixaHorario(dataHorario);
+    // Validar distanciaKm
+    const distancia = Number(distanciaKm);
+    if (!Number.isFinite(distancia) || distancia <= 0) {
+      throw new AppError(
+        'distanciaKm invalido: deve ser um numero positivo. Recebido: ' + distanciaKm,
+        400
+      );
+    }
+
+    // Validar classe
+    if (!classe || typeof classe !== 'string') {
+      throw new AppError('classe invalida: deve ser BASICO, NORMAL ou PREMIUM. Recebido: ' + classe, 400);
+    }
+    const classeNorm = classe.toUpperCase();
+    if (!CLASSES_VALIDAS.includes(classeNorm)) {
+      throw new AppError(
+        'classe invalida: deve ser BASICO, NORMAL ou PREMIUM. Recebido: ' + classe,
+        400
+      );
+    }
+
+    // Validar dataHorario
+    if (!dataHorario) {
+      throw new AppError('dataHorario e obrigatorio para calcular o valor da corrida.', 400);
+    }
+
+    // Determinar faixa (pode lançar erro internamente)
+    let faixa;
+    try {
+      faixa = CorridasService._determinarFaixaHorario(dataHorario);
+    } catch (e) {
+      throw new AppError('dataHorario invalido: ' + e.message, 400);
+    }
+
+    const tarifasClasse = CorridasService.TARIFAS_KM[classeNorm];
     const tarifa = tarifasClasse[faixa];
-    
-    return parseFloat((distanciaKm * tarifa).toFixed(2));
+
+    // Verificação defensiva da tarifa
+    if (!tarifa || !Number.isFinite(tarifa) || tarifa <= 0) {
+      throw new AppError(
+        'Tarifa nao encontrada para classe ' + classeNorm + ' na faixa ' + faixa,
+        500
+      );
+    }
+
+    const valor = parseFloat((distancia * tarifa).toFixed(2));
+
+    // Verificação final do resultado
+    if (!Number.isFinite(valor) || valor <= 0) {
+      throw new AppError(
+        'Valor calculado invalido: ' + valor + ' para distancia=' + distancia + ' classe=' + classeNorm,
+        500
+      );
+    }
+
+    return valor;
   }
 
   /**
@@ -108,8 +187,11 @@ class CorridasService {
     if (!usuarioId || !origemNome || !destinoNome) {
       throw new AppError('usuarioId, origemNome e destinoNome sao obrigatorios.', 400);
     }
-    if (!distanciaKm || distanciaKm <= 0) {
-      throw new AppError('Distancia invalida para a corrida.', 400);
+
+    // Coerce distanciaKm para numero e valida
+    const distanciaKmNum = Number(distanciaKm);
+    if (!Number.isFinite(distanciaKmNum) || distanciaKmNum <= 0) {
+      throw new AppError('Distancia invalida para a corrida. Valor recebido: ' + distanciaKm, 400);
     }
     if (duracaoMin != null && duracaoMin <= 0) {
       throw new AppError('Duracao invalida para a corrida.', 400);
@@ -139,7 +221,13 @@ class CorridasService {
     }
 
     const dataHorarioEfetivo = dataHorario || new Date().toISOString();
-    const valor = this.calcularValor({ distanciaKm, classe: classeNorm, dataHorario: dataHorarioEfetivo });
+    // Backend sempre recalcula o valor — nunca confia no valor enviado pelo frontend
+    const valor = this.calcularValor({ distanciaKm: distanciaKmNum, classe: classeNorm, dataHorario: dataHorarioEfetivo });
+
+    // Validação final: valor calculado deve ser positivo
+    if (!Number.isFinite(valor) || valor <= 0) {
+      throw new AppError('Nao foi possivel calcular um valor valido para esta corrida.', 500);
+    }
 
     const novaCorrida = await corridasRepository.create({
       usuarioId,
@@ -154,7 +242,7 @@ class CorridasService {
       rotaCaminho:        rotaCaminho   || [origemNome, destinoNome],
       rotasAlternativas:  rotasAlternativas || [],
       polyline:           polyline      || null,
-      distanciaKm,
+      distanciaKm:        distanciaKmNum,
       duracaoMin:         duracaoMin    || null,
       valor,
       classe:             classeNorm,
