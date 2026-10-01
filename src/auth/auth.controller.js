@@ -16,6 +16,15 @@ const login = async (req, res, next) => {
   }
 };
 
+const verificarDisponibilidadeCadastro = async (req, res, next) => {
+  try {
+    const resultado = await authService.verificarDisponibilidadeCadastro(req.body);
+    return success(res, resultado, 'Disponibilidade dos dados verificada.');
+  } catch (err) {
+    next(err);
+  }
+};
+
 /**
  * POST /api/auth/cadastrar
  * Cria conta publica (USUARIO ou MOTORISTA — nunca ADMINISTRADOR).
@@ -36,4 +45,4 @@ const cadastrar = async (req, res, next) => {
   }
 };
 
-module.exports = { login, cadastrar };
+module.exports = { login, cadastrar, verificarDisponibilidadeCadastro };
