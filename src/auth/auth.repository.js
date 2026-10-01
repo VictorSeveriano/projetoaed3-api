@@ -104,9 +104,16 @@ class AuthRepository {
         perfil: dados.perfil,
         endereco: dados.endereco ? {
           create: enderecoParaPrisma(dados.endereco)
+        } : undefined,
+        motorista: dados.cnh ? {
+          create: {
+            cnh: dados.cnh,
+            statusCadastro: 'PENDENTE',
+            statusPresenca: 'OFFLINE',
+          }
         } : undefined
       },
-      include: { endereco: true }
+      include: { endereco: true, motorista: true }
     });
     return formatarUsuario(novoUsuario);
   }

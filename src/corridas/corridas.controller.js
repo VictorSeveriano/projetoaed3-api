@@ -72,15 +72,11 @@ const criar = async (req, res, next) => {
 /** PATCH /api/corridas/:id/aceitar — Motorista aceita a corrida */
 const aceitar = async (req, res, next) => {
   try {
-    const { motoristaUsuarioId } = req.body;
-    if (!motoristaUsuarioId) {
-      return next(new AppError('motoristaUsuarioId e obrigatorio.', 400));
-    }
-    const corridaAceita = await corridasService.aceitar(req.params.id, motoristaUsuarioId);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id || motoristaUsuarioId, perfil: req.usuario?.perfil || 'MOTORISTA', acao: 'ACEITE_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO', entidade: 'Corrida', entidadeId: req.params.id }, req);
+    const corridaAceita = await corridasService.aceitar(req.params.id, req.usuario.id);
+    await auditoriaService.registrar({ usuarioId: req.usuario.id, perfil: req.usuario.perfil, acao: 'ACEITE_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO', entidade: 'Corrida', entidadeId: req.params.id }, req);
     return success(res, corridaAceita, 'Corrida aceita com sucesso.');
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id || req.body.motoristaUsuarioId, perfil: req.usuario?.perfil || 'MOTORISTA', acao: 'ACEITE_CORRIDA_FALHA', modulo: 'CORRIDAS', resultado: 'FALHA', entidade: 'Corrida', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ACEITE_CORRIDA_FALHA', modulo: 'CORRIDAS', resultado: 'FALHA', entidade: 'Corrida', entidadeId: req.params.id }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };
