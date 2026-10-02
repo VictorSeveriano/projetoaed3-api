@@ -2,8 +2,8 @@
 /**
  * auth.service.js — Regras de negócio relacionadas à autenticação.
  *
- * NOTA: Login simulado sem JWT por enquanto.
- * Estrutura preparada para adicionar JWT e bcrypt futuramente.
+ * NOTA: Utiliza JWT para autenticação segura.
+ * Senhas legadas em texto são migradas automaticamente para bcrypt (hash) no momento do login.
  *
  * Todos os métodos são async para suportar o repositório PostgreSQL.
  */
