@@ -73,6 +73,20 @@ describe('HTTP Authorization Tests', () => {
     });
   });
 
+  describe('POST /veiculos', () => {
+    test('Cadastro de veículo -> utiliza usuário autenticado -> 201', async () => {
+      veiculosRepository.findByMotoristaId.mockResolvedValue(null);
+      veiculosRepository.create.mockResolvedValue({ id: 'v2', motoristaId: 'mot-1', porte: 'Pequeno' });
+      const res = await request(app).post('/api/veiculos')
+        .set('x-auth-token', tokenMotA)
+        .send({
+          marca: 'Fiat', modelo: 'Uno', ano: 2025, placa: 'ABC1234', porte: 'Pequeno', quilometragem: 0, quantidadePassageiros: 4, possuiArCondicionado: true, possuiExtintor: true, possuiCintoSeguranca: true, documentacaoRegularizada: true
+        });
+      expect(res.statusCode).toBe(201);
+      expect(veiculosRepository.create).toHaveBeenCalledWith(expect.objectContaining({ motoristaId: 'mot-1' }));
+    });
+  });
+
   describe('PATCH /veiculos/:id/aprovar', () => {
     test('Motorista tenta aprovar veículo -> 403', async () => {
       const res = await request(app).patch('/api/veiculos/v1/aprovar').set('x-auth-token', tokenMotA);

@@ -158,25 +158,6 @@ class VeiculosService {
       throw new AppError('Acesso negado. Você só pode alterar seu próprio veículo.', 403);
     }
 
-    if (dados.classe !== undefined) {
-      delete dados.classe;
-    }
-
-    if (dados.porte) {
-      const PORTES_VALIDOS = ['Pequeno', 'Medio', 'Grande'];
-      const pStr = (dados.porte || '').trim();
-      const pValido = PORTES_VALIDOS.find(p => p.toLowerCase() === pStr.toLowerCase());
-      
-      if (!pValido) {
-        throw new AppError('Porte inválido. Use Pequeno, Medio ou Grande.', 400);
-      }
-      if (pValido !== veiculo.porte) {
-        dados.porte = pValido;
-        dados.classe = this._determinarClasseServico(pValido);
-      }
-    }
-    
-    // Filtra campos permitidos (classe NÃO está aqui, pois só é alterada via porte)
     const camposPermitidos = ['marca', 'modelo', 'ano', 'placa', 'cor', 'porte', 'quilometragem', 'quantidadePassageiros', 'possuiArCondicionado', 'possuiExtintor', 'possuiCintoSeguranca', 'documentacaoRegularizada'];
     const dadosLimpos = Object.keys(dados)
       .filter(key => camposPermitidos.includes(key))
@@ -184,10 +165,20 @@ class VeiculosService {
         obj[key] = dados[key];
         return obj;
       }, {});
-    
-    // Se o porte foi alterado e a classe foi recalculada internamente, anexa
-    if (dados.classe) {
-      dadosLimpos.classe = dados.classe;
+
+    if (dadosLimpos.porte) {
+      const PORTES_VALIDOS = ['Pequeno', 'Medio', 'Grande'];
+      const pStr = dadosLimpos.porte.trim();
+      const pValido = PORTES_VALIDOS.find(p => p.toLowerCase() === pStr.toLowerCase());
+      
+      if (!pValido) {
+        throw new AppError('Porte inválido. Use Pequeno, Medio ou Grande.', 400);
+      }
+      
+      dadosLimpos.porte = pValido;
+      if (pValido !== veiculo.porte) {
+        dadosLimpos.classe = this._determinarClasseServico(pValido);
+      }
     }
     
     return this._enriquecer(await veiculosRepository.update(id, dadosLimpos));

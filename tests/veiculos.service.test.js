@@ -146,4 +146,11 @@ describe('VeiculosService aprovação e classe', () => {
     // repository agora deve receber porte e a classe nova recalculada
     expect(veiculosRepository.update).toHaveBeenCalledWith('v1', { porte: 'Grande', classe: 'PREMIUM' });
   });
+
+  test('Atualização genérica: porte inválido -> 400', async () => {
+    veiculosRepository.findById.mockResolvedValue({ id: 'v1', motoristaId: 'mot-1', porte: 'Medio', classe: 'NORMAL' });
+    const payload = { porte: 'Gigante' }; // porte invalido
+    await expect(veiculosService.atualizar('v1', payload, { id: 'mot-1', perfil: 'MOTORISTA' }))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
 });

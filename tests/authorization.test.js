@@ -64,11 +64,19 @@ describe('Testes de Autorização (IDOR)', () => {
         .resolves.toEqual(corridaMock);
     });
     
-    test('Criação de corrida: usuario autenticado A tenta criar passando usuarioId de B -> ignore e usa A', async () => {
-      // Quando criar é chamado, mockResolvedValue recebe os argumentos, ou retorna um valor.
-      // Vou interceptar pra checar o que foi salvo!
+    test('Contrato normal de criação: usuário autenticado A cria sem enviar usuarioId -> corrida pertence a A', async () => {
       corridasRepository.create.mockImplementationOnce(async (dados) => {
-        expect(dados.usuarioId).toBe('user-a'); // Garante que a identidade autenticada prevaleceu!
+        expect(dados.usuarioId).toBe('user-a');
+        return { id: 11, usuarioId: dados.usuarioId };
+      });
+      await expect(corridasService.criar({
+        origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
+      }, { id: 'user-a', perfil: 'USUARIO' })).resolves.toBeDefined();
+    });
+
+    test('Segurança/Compatibilidade: tentativa de enviar usuarioId arbitrário (ex: user-b) é ignorada, prevalecendo a identidade autenticada', async () => {
+      corridasRepository.create.mockImplementationOnce(async (dados) => {
+        expect(dados.usuarioId).toBe('user-a');
         return { id: 10, usuarioId: dados.usuarioId };
       });
       await expect(corridasService.criar({
@@ -80,16 +88,6 @@ describe('Testes de Autorização (IDOR)', () => {
       await expect(corridasService.criar({
         origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
       }, null)).rejects.toThrow(AppError);
-    });
-
-    test('Criação de corrida: usuario autenticado A cria -> corrida pertence a A sem enviar usuarioId', async () => {
-      corridasRepository.create.mockImplementationOnce(async (dados) => {
-        expect(dados.usuarioId).toBe('user-a');
-        return { id: 11, usuarioId: dados.usuarioId };
-      });
-      await expect(corridasService.criar({
-        origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
-      }, { id: 'user-a', perfil: 'USUARIO' })).resolves.toBeDefined();
     });
 
     test('USUARIO A cancela corrida de A -> permitido', async () => {
