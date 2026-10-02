@@ -6,7 +6,7 @@ const auditoriaService = require('../auditoria/auditoria.service');
 /** GET /api/usuarios/:id */
 const buscarPorId = async (req, res, next) => {
   try {
-    const dados = await usuariosService.buscarPorId(req.params.id);
+    const dados = await usuariosService.buscarPorId(req.params.id, req.usuario);
     return success(res, dados, 'Usuário encontrado.');
   } catch (err) { next(err); }
 };
@@ -62,7 +62,7 @@ const criar = async (req, res, next) => {
 /** GET /api/usuarios/:id/corridas */
 const listarCorridas = async (req, res, next) => {
   try {
-    const corridas = await usuariosService.listarCorridas(req.params.id);
+    const corridas = await usuariosService.listarCorridas(req.params.id, req.usuario);
     return success(res, corridas, 'Corridas do usuário listadas.');
   } catch (err) { next(err); }
 };

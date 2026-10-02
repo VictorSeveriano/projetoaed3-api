@@ -5,9 +5,15 @@
  */
 
 const corridasRepository = require('../corridas/corridas.repository');
+const AppError = require('../utils/AppError');
 
 class RelatorioMotoristaService {
-  async gerarRelatorioMensal(motoristaId, mes, ano) {
+  async gerarRelatorioMensal(motoristaId, mes, ano, usuarioLogado = null) {
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (usuarioLogado.id !== motoristaId) {
+        throw new AppError('Voce nao tem permissao para acessar este relatorio.', 403);
+      }
+    }
     const corridas = await corridasRepository.findByMotoristaIdAndPeriodo(motoristaId, mes, ano);
 
     const finalizadas = corridas.filter((c) => c.status === 'FINALIZADA');

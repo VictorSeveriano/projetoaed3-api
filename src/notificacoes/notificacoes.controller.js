@@ -15,18 +15,15 @@ const listar = async (req, res, next) => {
 /** PATCH /api/notificacoes/:id/ler */
 const marcarLida = async (req, res, next) => {
   try {
-    const n = await notificacoesService.marcarLida(req.params.id);
+    const n = await notificacoesService.marcarLida(req.params.id, req.usuario);
     return success(res, n, 'Notificação marcada como lida.');
   } catch (err) { next(err); }
 };
 
-/** PATCH /api/notificacoes/ler-todas?destinatarioId= */
+/** PATCH /api/notificacoes/ler-todas */
 const marcarTodasLidas = async (req, res, next) => {
   try {
-    const { destinatarioId } = req.query;
-    if (!destinatarioId) {
-      return res.status(400).json({ success: false, message: 'destinatarioId é obrigatório.' });
-    }
+    const destinatarioId = req.usuario.id;
     await notificacoesService.marcarTodasLidas(destinatarioId);
     return success(res, null, 'Todas as notificações marcadas como lidas.');
   } catch (err) { next(err); }

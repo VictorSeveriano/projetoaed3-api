@@ -110,7 +110,13 @@ class MotoristasService {
 
   // ----- Consultas do próprio motorista -----
 
-  async buscarPorUsuarioId(usuarioId) {
+  async buscarPorUsuarioId(usuarioId, usuarioLogado = null) {
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (usuarioLogado.id !== usuarioId) {
+        throw new AppError('Voce nao tem permissao para acessar este perfil.', 403);
+      }
+    }
+    
     const usuario = await authRepository.encontrarPorId(usuarioId);
     if (!usuario) throw new AppError('Usuário não encontrado.', 404);
     if (usuario.perfil !== 'MOTORISTA') throw new AppError('Usuário não é motorista.', 403);
@@ -121,17 +127,34 @@ class MotoristasService {
     return this._enriquecer(motorista);
   }
 
-  async buscarPorId(id) {
+  async buscarPorId(id, usuarioLogado = null) {
     const m = await motoristasRepository.findById(id);
     if (!m) throw new AppError('Motorista não encontrado.', 404);
+    
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (m.usuarioId !== usuarioLogado.id) {
+        throw new AppError('Voce nao tem permissao para acessar este motorista.', 403);
+      }
+    }
+    
     return this._enriquecer(m);
   }
 
-  async listarCorridas(usuarioId) {
+  async listarCorridas(usuarioId, usuarioLogado = null) {
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (usuarioLogado.id !== usuarioId) {
+        throw new AppError('Voce nao tem permissao para acessar as corridas deste motorista.', 403);
+      }
+    }
     return corridasRepository.findByMotoristaId(usuarioId);
   }
 
-  async buscarVeiculo(usuarioId) {
+  async buscarVeiculo(usuarioId, usuarioLogado = null) {
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (usuarioLogado.id !== usuarioId) {
+        throw new AppError('Voce nao tem permissao para acessar o veiculo deste motorista.', 403);
+      }
+    }
     return veiculosRepository.findByMotoristaId(usuarioId);
   }
 

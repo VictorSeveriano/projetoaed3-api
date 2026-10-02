@@ -11,6 +11,7 @@
  */
 
 const notificacoesRepository = require('./notificacoes.repository');
+const AppError = require('../utils/AppError');
 
 class NotificacoesService {
   async listar(destinatarioId) {
@@ -94,7 +95,14 @@ class NotificacoesService {
     });
   }
 
-  async marcarLida(id) {
+  async marcarLida(id, usuarioLogado = null) {
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      const n = await notificacoesRepository.findById(id);
+      if (!n) throw new AppError('Notificacao nao encontrada.', 404);
+      if (n.destinatarioId !== usuarioLogado.id) {
+        throw new AppError('Voce nao tem permissao para acessar esta notificacao.', 403);
+      }
+    }
     return notificacoesRepository.marcarLida(id);
   }
 

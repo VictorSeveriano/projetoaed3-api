@@ -96,9 +96,22 @@ class CorridasService {
       : corridasRepository.findByUsuarioId(usuarioId);
   }
 
-  async buscarPorId(id) {
+  async buscarPorId(id, usuarioLogado = null) {
     const corrida = await corridasRepository.findById(id);
     if (!corrida) throw new AppError('Corrida ' + id + ' nao encontrada.', 404);
+    
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (usuarioLogado.perfil === 'MOTORISTA') {
+        if (corrida.motoristaId && corrida.motoristaId !== usuarioLogado.id) {
+          throw new AppError('Voce nao tem permissao para acessar esta corrida.', 403);
+        }
+      } else if (usuarioLogado.perfil === 'USUARIO') {
+        if (corrida.usuarioId !== usuarioLogado.id) {
+          throw new AppError('Voce nao tem permissao para acessar esta corrida.', 403);
+        }
+      }
+    }
+    
     return corrida;
   }
 
@@ -387,8 +400,8 @@ class CorridasService {
     return { message: 'Corrida recusada com sucesso.' };
   }
 
-  async cancelar(id) {
-    const corrida = await this.buscarPorId(id);
+  async cancelar(id, usuarioLogado = null) {
+    const corrida = await this.buscarPorId(id, usuarioLogado);
 
     if (corrida.status === 'CANCELADA') {
       throw new AppError('Esta corrida ja esta cancelada.', 409);
@@ -412,8 +425,8 @@ class CorridasService {
    * Motorista confirma pagamento e finaliza a corrida.
    * A corrida só é FINALIZADA após confirmação do recebimento do pagamento.
    */
-  async confirmarPagamentoEFinalizar(id, motoristaUsuarioId) {
-    const corrida = await this.buscarPorId(id);
+  async confirmarPagamentoEFinalizar(id, usuarioLogado = null) {
+    const corrida = await this.buscarPorId(id, usuarioLogado);
 
     if (corrida.status === 'FINALIZADA') {
       throw new AppError('Esta corrida ja esta finalizada.', 409);
@@ -425,11 +438,9 @@ class CorridasService {
       throw new AppError('A corrida ainda nao foi aceita por um motorista.', 409);
     }
 
-    // Validar que é o motorista correto (se fornecido)
-    if (motoristaUsuarioId) {
-      const motorista = await motoristasRepository.findByUsuarioId(motoristaUsuarioId);
-      if (motorista && corrida.motoristaId && corrida.motoristaId !== motorista.usuarioId) {
-        throw new AppError('Voce nao e o motorista responsavel por esta corrida.', 403);
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (usuarioLogado.perfil !== 'MOTORISTA') {
+        throw new AppError('Apenas motoristas ou administradores podem confirmar pagamento e finalizar.', 403);
       }
     }
 
@@ -459,8 +470,8 @@ class CorridasService {
    * @deprecated Use confirmarPagamentoEFinalizar para o fluxo correto.
    * Mantido para compatibilidade com admin que pode finalizar diretamente.
    */
-  async finalizar(id) {
-    return this.confirmarPagamentoEFinalizar(id, null);
+  async finalizar(id, usuarioLogado = null) {
+    return this.confirmarPagamentoEFinalizar(id, usuarioLogado);
   }
 }
 

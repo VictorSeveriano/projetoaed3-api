@@ -13,6 +13,12 @@ class NotificacoesRepository {
     });
   }
 
+  async findById(id) {
+    return prisma.notificacao.findUnique({
+      where: { id }
+    });
+  }
+
   async findNaoLidas(destinatarioId) {
     return prisma.notificacao.findMany({
       where: {

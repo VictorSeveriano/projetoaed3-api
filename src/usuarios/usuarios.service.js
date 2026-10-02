@@ -15,7 +15,13 @@ const {
   normalizarCPF, normalizarCelular, normalizarEmail, normalizarCNH, validarCNH
 } = require('../utils/validators');
 class UsuariosService {
-  async buscarPorId(id) {
+  async buscarPorId(id, usuarioLogado = null) {
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (usuarioLogado.id !== id) {
+        throw new AppError('Voce nao tem permissao para acessar os dados deste usuario.', 403);
+      }
+    }
+    
     const user = await authRepository.encontrarPorId(id);
     if (!user) throw new AppError('Usuário não encontrado.', 404);
     const { senha, ...dadosSeguros } = user;
@@ -74,7 +80,12 @@ class UsuariosService {
     return dadosSeguros;
   }
 
-  async listarCorridas(usuarioId) {
+  async listarCorridas(usuarioId, usuarioLogado = null) {
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (usuarioLogado.id !== usuarioId) {
+        throw new AppError('Voce nao tem permissao para acessar as corridas deste usuario.', 403);
+      }
+    }
     return corridasRepository.findByUsuarioId(usuarioId);
   }
 

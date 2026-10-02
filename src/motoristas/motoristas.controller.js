@@ -30,7 +30,7 @@ const listarOnline = async (req, res, next) => {
 /** GET /api/motoristas/perfil/:usuarioId — Próprio motorista: busca pelo usuarioId */
 const buscarPerfil = async (req, res, next) => {
   try {
-    const dados = await motoristasService.buscarPorUsuarioId(req.params.usuarioId);
+    const dados = await motoristasService.buscarPorUsuarioId(req.params.usuarioId, req.usuario);
     return success(res, dados, dados ? 'Perfil encontrado.' : 'Sem solicitação registrada.');
   } catch (err) { next(err); }
 };
@@ -38,7 +38,7 @@ const buscarPerfil = async (req, res, next) => {
 /** GET /api/motoristas/:id — Admin: busca pelo id do registro */
 const buscarPorId = async (req, res, next) => {
   try {
-    const dados = await motoristasService.buscarPorId(req.params.id);
+    const dados = await motoristasService.buscarPorId(req.params.id, req.usuario);
     return success(res, dados, 'Motorista encontrado.');
   } catch (err) { next(err); }
 };
@@ -98,7 +98,7 @@ const atualizar = async (req, res, next) => {
 /** GET /api/motoristas/:id/corridas — Corridas do motorista */
 const listarCorridas = async (req, res, next) => {
   try {
-    const corridas = await motoristasService.listarCorridas(req.params.id);
+    const corridas = await motoristasService.listarCorridas(req.params.id, req.usuario);
     return success(res, corridas, 'Corridas do motorista listadas.');
   } catch (err) { next(err); }
 };
@@ -106,7 +106,7 @@ const listarCorridas = async (req, res, next) => {
 /** GET /api/motoristas/:id/veiculo — Veículo do motorista */
 const buscarVeiculo = async (req, res, next) => {
   try {
-    const veiculo = await motoristasService.buscarVeiculo(req.params.id);
+    const veiculo = await motoristasService.buscarVeiculo(req.params.id, req.usuario);
     return success(res, veiculo, veiculo ? 'Veículo encontrado.' : 'Nenhum veículo associado.');
   } catch (err) { next(err); }
 };
@@ -119,7 +119,7 @@ const getRelatorio = async (req, res, next) => {
     if (!mes || mes < 1 || mes > 12 || !ano || ano < 2000) {
       return next(new AppError('Parâmetros mes (1-12) e ano são obrigatórios.', 400));
     }
-    const relatorio = await relatorioService.gerarRelatorioMensal(req.params.id, mes, ano);
+    const relatorio = await relatorioService.gerarRelatorioMensal(req.params.id, mes, ano, req.usuario);
     return success(res, relatorio, 'Relatório gerado com sucesso.');
   } catch (err) { next(err); }
 };
