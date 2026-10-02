@@ -197,7 +197,11 @@ class CorridasService {
       classe, formaPagamento,
     } = dados;
 
-    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+    if (!usuarioLogado) {
+      throw new AppError('Acesso negado. É necessário estar autenticado para criar uma corrida.', 401);
+    }
+
+    if (usuarioLogado.perfil !== 'ADMINISTRADOR') {
       if (usuarioId !== usuarioLogado.id) {
         throw new AppError('Você não tem permissão para criar uma corrida para outro usuário.', 403);
       }
