@@ -102,7 +102,7 @@ class CorridasService {
     
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
       if (usuarioLogado.perfil === 'MOTORISTA') {
-        if (corrida.motoristaId && corrida.motoristaId !== usuarioLogado.id) {
+        if (!corrida.motoristaId || corrida.motoristaId !== usuarioLogado.id) {
           throw new AppError('Voce nao tem permissao para acessar esta corrida.', 403);
         }
       } else if (usuarioLogado.perfil === 'USUARIO') {
@@ -186,7 +186,7 @@ class CorridasService {
    * Valida classe solicitada, disponibilidade de veículo da classe,
    * forma de pagamento e notifica motoristas elegíveis.
    */
-  async criar(dados) {
+  async criar(dados, usuarioLogado = null) {
     const {
       usuarioId,
       origemNome, destinoNome,
@@ -196,6 +196,12 @@ class CorridasService {
       polyline, distanciaKm, duracaoMin, dataHorario,
       classe, formaPagamento,
     } = dados;
+
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (usuarioId !== usuarioLogado.id) {
+        throw new AppError('Você não tem permissão para criar uma corrida para outro usuário.', 403);
+      }
+    }
 
     if (!usuarioId || !origemNome || !destinoNome) {
       throw new AppError('usuarioId, origemNome e destinoNome sao obrigatorios.', 400);

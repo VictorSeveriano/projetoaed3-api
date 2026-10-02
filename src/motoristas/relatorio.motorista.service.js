@@ -4,17 +4,21 @@
  * Async para suportar o repositório PostgreSQL.
  */
 
+const motoristasRepository = require('./motoristas.repository');
 const corridasRepository = require('../corridas/corridas.repository');
 const AppError = require('../utils/AppError');
 
 class RelatorioMotoristaService {
-  async gerarRelatorioMensal(motoristaId, mes, ano, usuarioLogado = null) {
+  async gerarRelatorioMensal(id, mes, ano, usuarioLogado = null) {
+    const m = await motoristasRepository.findById(id);
+    if (!m) throw new AppError('Motorista não encontrado.', 404);
+
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
-      if (usuarioLogado.id !== motoristaId) {
+      if (usuarioLogado.id !== m.usuarioId) {
         throw new AppError('Voce nao tem permissao para acessar este relatorio.', 403);
       }
     }
-    const corridas = await corridasRepository.findByMotoristaIdAndPeriodo(motoristaId, mes, ano);
+    const corridas = await corridasRepository.findByMotoristaIdAndPeriodo(m.usuarioId, mes, ano);
 
     const finalizadas = corridas.filter((c) => c.status === 'FINALIZADA');
     const canceladas  = corridas.filter((c) => c.status === 'CANCELADA');

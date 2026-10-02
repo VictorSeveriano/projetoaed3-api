@@ -57,14 +57,25 @@ const calcularValorPrevia = (req, res, next) => {
 const criar = async (req, res, next) => {
   try {
     const { usuarioId, origemNome, destinoNome, distanciaKm } = req.body;
-    if (!usuarioId || !origemNome || !destinoNome || distanciaKm == null) {
-      return next(new AppError('Campos obrigatorios: usuarioId, origemNome, destinoNome, distanciaKm.', 400));
+    
+    if (usuarioId && usuarioId !== req.usuario.id) {
+      return next(new AppError('Você não tem permissão para criar uma corrida para outro usuário.', 403));
     }
-    const novaCorrida = await corridasService.criar(req.body);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id || usuarioId, perfil: req.usuario?.perfil, acao: 'SOLICITACAO_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: novaCorrida.id });
+
+    if (!origemNome || !destinoNome || distanciaKm == null) {
+      return next(new AppError('Campos obrigatorios: origemNome, destinoNome, distanciaKm.', 400));
+    }
+    
+    const dadosCorrida = {
+      ...req.body,
+      usuarioId: req.usuario.id
+    };
+
+    const novaCorrida = await corridasService.criar(dadosCorrida, req.usuario);
+    await auditoriaService.registrar({ usuarioId: req.usuario.id, perfil: req.usuario.perfil, acao: 'SOLICITACAO_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: novaCorrida.id });
     return res.status(201).json({ success: true, data: novaCorrida, message: 'Corrida criada com sucesso.' });
   } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id || req.body.usuarioId, perfil: req.usuario?.perfil, acao: 'SOLICITACAO_CORRIDA_FALHA', modulo: 'CORRIDAS', resultado: 'FALHA' }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'SOLICITACAO_CORRIDA_FALHA', modulo: 'CORRIDAS', resultado: 'FALHA' }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });
     next(err);
   }
 };

@@ -140,22 +140,28 @@ class MotoristasService {
     return this._enriquecer(m);
   }
 
-  async listarCorridas(usuarioId, usuarioLogado = null) {
+  async listarCorridas(id, usuarioLogado = null) {
+    const m = await motoristasRepository.findById(id);
+    if (!m) throw new AppError('Motorista não encontrado.', 404);
+
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
-      if (usuarioLogado.id !== usuarioId) {
+      if (m.usuarioId !== usuarioLogado.id) {
         throw new AppError('Voce nao tem permissao para acessar as corridas deste motorista.', 403);
       }
     }
-    return corridasRepository.findByMotoristaId(usuarioId);
+    return corridasRepository.findByMotoristaId(m.usuarioId);
   }
 
-  async buscarVeiculo(usuarioId, usuarioLogado = null) {
+  async buscarVeiculo(id, usuarioLogado = null) {
+    const m = await motoristasRepository.findById(id);
+    if (!m) throw new AppError('Motorista não encontrado.', 404);
+
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
-      if (usuarioLogado.id !== usuarioId) {
+      if (m.usuarioId !== usuarioLogado.id) {
         throw new AppError('Voce nao tem permissao para acessar o veiculo deste motorista.', 403);
       }
     }
-    return veiculosRepository.findByMotoristaId(usuarioId);
+    return veiculosRepository.findByMotoristaId(m.usuarioId);
   }
 
   // ----- Privado -----

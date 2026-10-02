@@ -19,9 +19,15 @@ describe('Testes de Autorização (IDOR)', () => {
 
   describe('Corridas', () => {
     const corridaMock = { id: 1, usuarioId: 'user-a', motoristaId: 'mot-a', status: 'CONFIRMADA' };
+    const corridaSemMotorista = { id: 2, usuarioId: 'user-a', motoristaId: null, status: 'SOLICITADA' };
 
     beforeEach(() => {
-      corridasRepository.findById.mockResolvedValue(corridaMock);
+      corridasRepository.findById.mockImplementation(async (id) => {
+        if (id === 1) return corridaMock;
+        if (id === 2) return corridaSemMotorista;
+        return null;
+      });
+      corridasRepository.updateStatus.mockResolvedValue(corridaMock);
     });
 
     test('USUARIO A acessa corrida de A -> permitido', async () => {
@@ -34,19 +40,70 @@ describe('Testes de Autorização (IDOR)', () => {
         .rejects.toThrow(AppError);
     });
 
-    test('MOTORISTA A acessa corrida de A -> permitido', async () => {
+    test('MOTORISTA A acessa corrida atribuída a A -> permitido', async () => {
       await expect(corridasService.buscarPorId(1, { id: 'mot-a', perfil: 'MOTORISTA' }))
         .resolves.toEqual(corridaMock);
     });
 
-    test('MOTORISTA B acessa corrida de A -> negado', async () => {
+    test('MOTORISTA B acessa corrida atribuída a A -> negado', async () => {
       await expect(corridasService.buscarPorId(1, { id: 'mot-b', perfil: 'MOTORISTA' }))
+        .rejects.toThrow(AppError);
+    });
+
+    test('MOTORISTA A acessa corrida sem motorista -> negado', async () => {
+      await expect(corridasService.buscarPorId(2, { id: 'mot-a', perfil: 'MOTORISTA' }))
         .rejects.toThrow(AppError);
     });
 
     test('ADMINISTRADOR acessa corrida de qualquer usuario -> permitido', async () => {
       await expect(corridasService.buscarPorId(1, { id: 'admin-1', perfil: 'ADMINISTRADOR' }))
         .resolves.toEqual(corridaMock);
+    });
+    
+    test('Criação de corrida: usuario autenticado A tenta criar para B -> negado', async () => {
+      await expect(corridasService.criar({
+        usuarioId: 'user-b', origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
+      }, { id: 'user-a', perfil: 'USUARIO' })).rejects.toThrow(AppError);
+    });
+
+    test('USUARIO A cancela corrida de A -> permitido', async () => {
+      await expect(corridasService.cancelar(1, { id: 'user-a', perfil: 'USUARIO' }))
+        .resolves.toBeDefined();
+    });
+
+    test('USUARIO A cancela corrida de B -> negado', async () => {
+      await expect(corridasService.cancelar(1, { id: 'user-b', perfil: 'USUARIO' }))
+        .rejects.toThrow(AppError);
+    });
+
+    test('MOTORISTA A cancela corrida de B -> negado', async () => {
+      await expect(corridasService.cancelar(1, { id: 'mot-b', perfil: 'MOTORISTA' }))
+        .rejects.toThrow(AppError);
+    });
+
+    test('MOTORISTA A cancela corrida sem motorista -> negado', async () => {
+      await expect(corridasService.cancelar(2, { id: 'mot-a', perfil: 'MOTORISTA' }))
+        .rejects.toThrow(AppError);
+    });
+
+    test('MOTORISTA A finaliza corrida de A -> permitido', async () => {
+      await expect(corridasService.confirmarPagamentoEFinalizar(1, { id: 'mot-a', perfil: 'MOTORISTA' }))
+        .resolves.toBeDefined();
+    });
+
+    test('MOTORISTA A finaliza corrida de B -> negado', async () => {
+      await expect(corridasService.confirmarPagamentoEFinalizar(1, { id: 'mot-b', perfil: 'MOTORISTA' }))
+        .rejects.toThrow(AppError);
+    });
+
+    test('MOTORISTA A finaliza corrida sem motorista -> negado', async () => {
+      await expect(corridasService.confirmarPagamentoEFinalizar(2, { id: 'mot-a', perfil: 'MOTORISTA' }))
+        .rejects.toThrow(AppError);
+    });
+
+    test('USUARIO tenta finalizar -> negado', async () => {
+      await expect(corridasService.confirmarPagamentoEFinalizar(1, { id: 'user-a', perfil: 'USUARIO' }))
+        .rejects.toThrow(AppError);
     });
   });
 
@@ -87,21 +144,50 @@ describe('Testes de Autorização (IDOR)', () => {
         .rejects.toThrow(AppError);
     });
   });
-  
   describe('Motoristas', () => {
     beforeEach(() => {
-      motoristasRepository.findById.mockResolvedValue({ id: 1, usuarioId: 'mot-a' });
-      motoristasRepository.findByUsuarioId.mockResolvedValue({ id: 1, usuarioId: 'mot-a' });
+      motoristasRepository.findById.mockImplementation(async (id) => {
+        if (id === 'mot-a') return { id: 'mot-a', usuarioId: 'mot-a' };
+        if (id === 'mot-b') return { id: 'mot-b', usuarioId: 'mot-b' };
+        return null;
+      });
+      motoristasRepository.findByUsuarioId.mockImplementation(async (usuarioId) => {
+        if (usuarioId === 'mot-a') return { id: 'mot-a', usuarioId: 'mot-a' };
+        if (usuarioId === 'mot-b') return { id: 'mot-b', usuarioId: 'mot-b' };
+        return null;
+      });
       authRepository.encontrarPorId.mockResolvedValue({ id: 'mot-a', perfil: 'MOTORISTA' });
+      corridasRepository.findByMotoristaId.mockResolvedValue([{ id: 1 }]);
+      veiculosRepository.findByMotoristaId.mockResolvedValue({ id: 1 });
     });
 
-    test('MOTORISTA A consulta próprio perfil -> permitido', async () => {
+    test('Motorista A acessa seu próprio registro -> permitido', async () => {
       await expect(motoristasService.buscarPorUsuarioId('mot-a', { id: 'mot-a', perfil: 'MOTORISTA' }))
         .resolves.toBeDefined();
     });
 
-    test('MOTORISTA A consulta perfil de MOTORISTA B -> negado', async () => {
+    test('Motorista A acessa registro do motorista B -> negado', async () => {
       await expect(motoristasService.buscarPorUsuarioId('mot-b', { id: 'mot-a', perfil: 'MOTORISTA' }))
+        .rejects.toThrow(AppError);
+    });
+
+    test('Motorista A consulta suas corridas -> permitido', async () => {
+      await expect(motoristasService.listarCorridas('mot-a', { id: 'mot-a', perfil: 'MOTORISTA' }))
+        .resolves.toBeDefined();
+    });
+
+    test('Motorista A consulta corridas de B -> negado', async () => {
+      await expect(motoristasService.listarCorridas('mot-b', { id: 'mot-a', perfil: 'MOTORISTA' }))
+        .rejects.toThrow(AppError);
+    });
+
+    test('Motorista A consulta seu veículo -> permitido', async () => {
+      await expect(motoristasService.buscarVeiculo('mot-a', { id: 'mot-a', perfil: 'MOTORISTA' }))
+        .resolves.toBeDefined();
+    });
+
+    test('Motorista A consulta veículo de B -> negado', async () => {
+      await expect(motoristasService.buscarVeiculo('mot-b', { id: 'mot-a', perfil: 'MOTORISTA' }))
         .rejects.toThrow(AppError);
     });
   });

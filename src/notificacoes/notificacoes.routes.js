@@ -5,7 +5,7 @@ const { authMiddleware } = require('../middlewares/auth.middleware');
 const router = express.Router();
 
 router.get('/',                    authMiddleware, listar);
-router.patch('/ler-todas',         marcarTodasLidas);
-router.patch('/:id/ler',           marcarLida);
+router.patch('/ler-todas',         authMiddleware, marcarTodasLidas);
+router.patch('/:id/ler',           authMiddleware, marcarLida);
 
 module.exports = router;
