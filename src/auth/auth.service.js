@@ -12,6 +12,7 @@ const authRepository = require('./auth.repository');
 const notificacoesService = require('../notificacoes/notificacoes.service');
 const AppError = require('../utils/AppError');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const {
   validarCPF, validarCNH, validarEmail, validarCelular, validarCEP, validarSenha,
   normalizarCPF, normalizarCNH, normalizarEmail, normalizarCelular,
@@ -41,7 +42,7 @@ class AuthService {
       await authRepository.atualizarSenha(user.id, senhaHash);
     }
 
-    const token = `session-token-${user.id}`;
+    const token = this._gerarToken(user);
     return {
       token,
       usuario: {
@@ -209,7 +210,7 @@ class AuthService {
    */
   async cadastrar(dados) {
     const novoUsuario = await this.executarCadastro(dados, ['USUARIO', 'MOTORISTA']);
-    const token = `session-token-${novoUsuario.id}`;
+    const token = this._gerarToken(novoUsuario);
     return {
       token,
       usuario: {
@@ -221,6 +222,15 @@ class AuthService {
         celular:  novoUsuario.celular,
       },
     };
+  }
+
+  _gerarToken(user) {
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET não está configurado no ambiente.');
+    }
+    return jwt.sign({ sub: user.id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN || '8h',
+    });
   }
 }
 

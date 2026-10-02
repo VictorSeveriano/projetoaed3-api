@@ -1,6 +1,7 @@
 'use strict';
 const AppError      = require('../utils/AppError');
 const authRepository = require('../auth/auth.repository');
+const jwt           = require('jsonwebtoken');
 
 /**
  * Middleware de autenticacao.
@@ -14,22 +15,23 @@ const authMiddleware = async (req, res, next) => {
     return next(new AppError('Nao autorizado. Token nao fornecido.', 401));
   }
 
-  // Token format: session-token-{id}
-  if (!token.startsWith('session-token-')) {
-    return next(new AppError('Nao autorizado. Token invalido.', 401));
+  if (token.startsWith('session-token-')) {
+    return next(new AppError('Nao autorizado. Formato de token invalido.', 401));
   }
 
-  const id = token.replace('session-token-', '');
-
   try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const id = decoded.sub;
+
     const user = await authRepository.encontrarPorId(id);
     if (!user) {
       return next(new AppError('Nao autorizado. Usuario nao encontrado.', 401));
     }
+    
     req.usuario = { id: user.id, usuario: user.usuario, nome: user.nome, perfil: user.perfil };
     next();
   } catch (err) {
-    next(new AppError('Erro ao verificar autenticacao.', 500));
+    return next(new AppError('Nao autorizado.', 401));
   }
 };
 

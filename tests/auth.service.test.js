@@ -24,8 +24,20 @@ const prisma = require('../src/database/prisma');
 const motoristasService = require('../src/motoristas/motoristas.service');
 const authService = require('../src/auth/auth.service');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 describe('AuthService cadastro availability', () => {
+  let oldSecret;
+
+  beforeAll(() => {
+    oldSecret = process.env.JWT_SECRET;
+    process.env.JWT_SECRET = 'test_secret';
+  });
+
+  afterAll(() => {
+    process.env.JWT_SECRET = oldSecret;
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     authRepository.existsByCpf.mockResolvedValue(false);
@@ -197,9 +209,13 @@ describe('AuthService cadastro availability', () => {
     const resultado = await authService.login('anasilva', 'senha-legada');
 
     expect(resultado).toMatchObject({
-      token: 'session-token-usuario-id',
+      token: expect.any(String),
       usuario: { id: 'usuario-id', perfil: 'USUARIO' },
     });
+    
+    const decoded = jwt.verify(resultado.token, 'test_secret');
+    expect(decoded.sub).toBe('usuario-id');
+    
     const senhaGravada = authRepository.atualizarSenha.mock.calls[0][1];
     await expect(bcrypt.compare('senha-legada', senhaGravada)).resolves.toBe(true);
   });
@@ -214,9 +230,14 @@ describe('AuthService cadastro availability', () => {
       senha: senhaHash,
     });
 
-    await expect(authService.login('anasilva', 'senha-atual')).resolves.toMatchObject({
-      token: 'session-token-usuario-id',
+    const resultado = await authService.login('anasilva', 'senha-atual');
+    expect(resultado).toMatchObject({
+      token: expect.any(String),
     });
+    
+    const decoded = jwt.verify(resultado.token, 'test_secret');
+    expect(decoded.sub).toBe('usuario-id');
+    
     expect(authRepository.atualizarSenha).not.toHaveBeenCalled();
   });
 
