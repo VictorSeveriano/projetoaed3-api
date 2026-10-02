@@ -58,22 +58,13 @@ const calcularValorPrevia = (req, res, next) => {
 /** POST /api/corridas */
 const criar = async (req, res, next) => {
   try {
-    const { usuarioId, origemNome, destinoNome, distanciaKm } = req.body;
-    
-    if (usuarioId && usuarioId !== req.usuario.id) {
-      return next(new AppError('Você não tem permissão para criar uma corrida para outro usuário.', 403));
-    }
+    const { origemNome, destinoNome, distanciaKm } = req.body;
 
     if (!origemNome || !destinoNome || distanciaKm == null) {
       return next(new AppError('Campos obrigatorios: origemNome, destinoNome, distanciaKm.', 400));
     }
     
-    const dadosCorrida = {
-      ...req.body,
-      usuarioId: req.usuario.id
-    };
-
-    const novaCorrida = await corridasService.criar(dadosCorrida, req.usuario);
+    const novaCorrida = await corridasService.criar(req.body, req.usuario);
     await auditoriaService.registrar({ usuarioId: req.usuario.id, perfil: req.usuario.perfil, acao: 'SOLICITACAO_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: novaCorrida.id });
     return res.status(201).json({ success: true, data: novaCorrida, message: 'Corrida criada com sucesso.' });
   } catch (err) {

@@ -188,7 +188,6 @@ class CorridasService {
    */
   async criar(dados, usuarioLogado = null) {
     const {
-      usuarioId,
       origemNome, destinoNome,
       origemLat, origemLng, destinoLat, destinoLng,
       origemEndereco, destinoEndereco,
@@ -200,15 +199,11 @@ class CorridasService {
     if (!usuarioLogado) {
       throw new AppError('Acesso negado. É necessário estar autenticado para criar uma corrida.', 401);
     }
+    
+    const usuarioId = usuarioLogado.id;
 
-    if (usuarioLogado.perfil !== 'ADMINISTRADOR') {
-      if (usuarioId !== usuarioLogado.id) {
-        throw new AppError('Você não tem permissão para criar uma corrida para outro usuário.', 403);
-      }
-    }
-
-    if (!usuarioId || !origemNome || !destinoNome) {
-      throw new AppError('usuarioId, origemNome e destinoNome sao obrigatorios.', 400);
+    if (!origemNome || !destinoNome) {
+      throw new AppError('origemNome e destinoNome sao obrigatorios.', 400);
     }
 
     // Coerce distanciaKm para numero e valida

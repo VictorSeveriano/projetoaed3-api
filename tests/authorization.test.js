@@ -64,21 +64,31 @@ describe('Testes de Autorização (IDOR)', () => {
         .resolves.toEqual(corridaMock);
     });
     
-    test('Criação de corrida: usuario autenticado A tenta criar para B -> negado', async () => {
+    test('Criação de corrida: usuario autenticado A tenta criar passando usuarioId de B -> ignore e usa A', async () => {
+      // Quando criar é chamado, mockResolvedValue recebe os argumentos, ou retorna um valor.
+      // Vou interceptar pra checar o que foi salvo!
+      corridasRepository.create.mockImplementationOnce(async (dados) => {
+        expect(dados.usuarioId).toBe('user-a'); // Garante que a identidade autenticada prevaleceu!
+        return { id: 10, usuarioId: dados.usuarioId };
+      });
       await expect(corridasService.criar({
         usuarioId: 'user-b', origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
-      }, { id: 'user-a', perfil: 'USUARIO' })).rejects.toThrow(AppError);
+      }, { id: 'user-a', perfil: 'USUARIO' })).resolves.toBeDefined();
     });
 
     test('Criação de corrida: sem usuario autenticado -> negado', async () => {
       await expect(corridasService.criar({
-        usuarioId: 'user-a', origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
+        origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
       }, null)).rejects.toThrow(AppError);
     });
 
-    test('Criação de corrida: usuario autenticado A cria para A -> permitido', async () => {
+    test('Criação de corrida: usuario autenticado A cria -> corrida pertence a A sem enviar usuarioId', async () => {
+      corridasRepository.create.mockImplementationOnce(async (dados) => {
+        expect(dados.usuarioId).toBe('user-a');
+        return { id: 11, usuarioId: dados.usuarioId };
+      });
       await expect(corridasService.criar({
-        usuarioId: 'user-a', origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
+        origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
       }, { id: 'user-a', perfil: 'USUARIO' })).resolves.toBeDefined();
     });
 
