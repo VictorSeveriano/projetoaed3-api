@@ -164,11 +164,10 @@ describe('AuthService cadastro availability', () => {
     })).rejects.toMatchObject({ statusCode: 409, message: 'Já existe um cadastro com esses dados.' });
   });
 
-  test('persists the motorista record as a nested write with the new account', async () => {
+  test('does NOT persist the motorista record as a nested write with the new account', async () => {
     prisma.usuario.create.mockResolvedValue({
       id: 'usuario-id',
       endereco: null,
-      motorista: { id: 'motorista-id' },
     });
     const authRepositoryReal = jest.requireActual('../src/auth/auth.repository');
 
@@ -185,16 +184,13 @@ describe('AuthService cadastro availability', () => {
 
     expect(prisma.usuario.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        motorista: {
-          create: {
-            cnh: '12345678901',
-            statusCadastro: 'PENDENTE',
-            statusPresenca: 'OFFLINE',
-          },
-        },
+        cpf: '12345678901',
       }),
       include: { endereco: true, motorista: true },
     }));
+
+    const callArgs = prisma.usuario.create.mock.calls[0][0];
+    expect(callArgs.data).not.toHaveProperty('motorista');
   });
 
   test('accepts a legacy plaintext password and replaces it with a bcrypt hash', async () => {

@@ -12,8 +12,7 @@ const router = express.Router();
 router.get('/analise',               authMiddleware, requireAdmin, listarAnalise);
 router.get('/online',                authMiddleware, listarOnline);
 router.get('/perfil/:usuarioId',     authMiddleware, buscarPerfil);
-
-router.post('/',                     authMiddleware, requireAdmin, solicitar);
+router.post('/',                     authMiddleware, solicitar);
 
 router.get('/:id',                   authMiddleware, buscarPorId);
 router.patch('/:id',                 authMiddleware, atualizar);

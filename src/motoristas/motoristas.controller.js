@@ -46,9 +46,15 @@ const buscarPorId = async (req, res, next) => {
 /** POST /api/motoristas — Motorista: solicita cadastro */
 const solicitar = async (req, res, next) => {
   try {
-    const { usuarioId, cnh } = req.body;
-    if (!usuarioId || !cnh) {
-      return next(new AppError('usuarioId e cnh são obrigatórios.', 400));
+    const { cnh } = req.body;
+    const usuarioId = req.usuario.id;
+
+    if (req.usuario.perfil !== 'MOTORISTA') {
+      return next(new AppError('Apenas usuários com perfil MOTORISTA podem solicitar cadastro.', 403));
+    }
+
+    if (!cnh) {
+      return next(new AppError('A cnh é obrigatória.', 400));
     }
     const motorista = await motoristasService.solicitar(usuarioId, cnh);
     await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'SOLICITACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO', entidade: 'Motorista', entidadeId: motorista.id }, req);
