@@ -19,8 +19,10 @@ const listarTodas = async (req, res, next) => {
 
 /**
  * GET /api/corridas/minhas
- * Lista corridas filtradas por perfil do usuario autenticado.
- * Query params: usuarioId, perfil, status (opcional)
+ * Lista corridas filtradas pelo usuário autenticado.
+ * A identidade (usuarioId) e o perfil são obtidos exclusivamente de req.usuario (via JWT).
+ * O frontend NÃO deve enviar usuarioId nem perfil.
+ * Query params: status (opcional)
  */
 const listarMinhas = async (req, res, next) => {
   try {

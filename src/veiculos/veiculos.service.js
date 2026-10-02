@@ -176,14 +176,19 @@ class VeiculosService {
       }
     }
     
-    // Filtra campos não permitidos para edição por esta rota
-    const camposPermitidos = ['marca', 'modelo', 'ano', 'placa', 'cor', 'porte', 'classe'];
+    // Filtra campos permitidos (classe NÃO está aqui, pois só é alterada via porte)
+    const camposPermitidos = ['marca', 'modelo', 'ano', 'placa', 'cor', 'porte', 'quilometragem', 'quantidadePassageiros', 'possuiArCondicionado', 'possuiExtintor', 'possuiCintoSeguranca', 'documentacaoRegularizada'];
     const dadosLimpos = Object.keys(dados)
       .filter(key => camposPermitidos.includes(key))
       .reduce((obj, key) => {
         obj[key] = dados[key];
         return obj;
       }, {});
+    
+    // Se o porte foi alterado e a classe foi recalculada internamente, anexa
+    if (dados.classe) {
+      dadosLimpos.classe = dados.classe;
+    }
     
     return this._enriquecer(await veiculosRepository.update(id, dadosLimpos));
   }
