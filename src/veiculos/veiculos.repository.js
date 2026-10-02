@@ -25,7 +25,11 @@ class VeiculosRepository {
       where.motoristaId = filtros.motoristaId;
     }
     if (filtros.porte) {
-      where.porte = filtros.porte.toUpperCase();
+      const p = filtros.porte.toLowerCase();
+      if (p === 'pequeno') where.porte = 'Pequeno';
+      else if (p === 'medio') where.porte = 'Medio';
+      else if (p === 'grande') where.porte = 'Grande';
+      else where.porte = filtros.porte;
     }
     const veiculos = await prisma.veiculo.findMany({
       where,

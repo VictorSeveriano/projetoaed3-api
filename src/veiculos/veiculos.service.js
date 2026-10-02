@@ -158,6 +158,10 @@ class VeiculosService {
       throw new AppError('Acesso negado. Você só pode alterar seu próprio veículo.', 403);
     }
 
+    if (dados.classe !== undefined) {
+      delete dados.classe;
+    }
+
     if (dados.porte) {
       const PORTES_VALIDOS = ['Pequeno', 'Medio', 'Grande'];
       const pStr = (dados.porte || '').trim();

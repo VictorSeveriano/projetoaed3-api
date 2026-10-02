@@ -48,6 +48,7 @@ class Corrida {
     this.usuarioId = dados.usuarioId;
     this.motoristaId = dados.motoristaId || null;
     this.veiculoId = dados.veiculoId || null;
+    this.veiculo = dados.veiculo || null;
 
     // Origem e destino — nome para exibição
     this.origemNome = dados.origemNome;
@@ -97,6 +98,7 @@ class Corrida {
       usuarioId: this.usuarioId,
       motoristaId: this.motoristaId,
       veiculoId: this.veiculoId,
+      veiculo: this.veiculo,
       origemNome: this.origemNome,
       destinoNome: this.destinoNome,
       distanciaKm: this.distanciaKm,

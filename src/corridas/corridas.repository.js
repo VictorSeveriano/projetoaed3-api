@@ -66,7 +66,7 @@ function rotaParaPrisma(rota, ordem, selecionada = false) {
 class CorridasRepository {
   async findAll() {
     const corridas = await prisma.corrida.findMany({
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } },
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
       orderBy: { criadaEm: 'desc' }
     });
     return corridas.map(formatarCorrida);
@@ -75,7 +75,7 @@ class CorridasRepository {
   async findById(id) {
     const corrida = await prisma.corrida.findUnique({
       where: { id },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } }
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true }
     });
     return formatarCorrida(corrida) || undefined;
   }
@@ -83,7 +83,7 @@ class CorridasRepository {
   async findByUsuarioId(usuarioId) {
     const corridas = await prisma.corrida.findMany({
       where: { usuarioId },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } },
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
       orderBy: { criadaEm: 'desc' }
     });
     return corridas.map(formatarCorrida);
@@ -92,7 +92,7 @@ class CorridasRepository {
   async findByMotoristaId(motoristaId) {
     const corridas = await prisma.corrida.findMany({
       where: { motoristaId },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } },
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
       orderBy: { criadaEm: 'desc' }
     });
     return corridas.map(formatarCorrida);
@@ -111,7 +111,7 @@ class CorridasRepository {
           lt: dataFinal
         }
       },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } },
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
       orderBy: { dataHorario: 'desc' }
     });
     return corridas.map(formatarCorrida);
@@ -120,7 +120,7 @@ class CorridasRepository {
   async findByUsuarioIdAndStatus(usuarioId, status) {
     const corridas = await prisma.corrida.findMany({
       where: { usuarioId, status },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } },
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
       orderBy: { criadaEm: 'desc' }
     });
     return corridas.map(formatarCorrida);
@@ -129,7 +129,7 @@ class CorridasRepository {
   async findByMotoristaIdAndStatus(motoristaId, status) {
     const corridas = await prisma.corrida.findMany({
       where: { motoristaId, status },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } },
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
       orderBy: { criadaEm: 'desc' }
     });
     return corridas.map(formatarCorrida);
@@ -138,7 +138,7 @@ class CorridasRepository {
   async findByVeiculo(veiculoId) {
     const corridas = await prisma.corrida.findMany({
       where: { veiculoId },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } },
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
       orderBy: { criadaEm: 'desc' }
     });
     return corridas.map(formatarCorrida);
@@ -184,7 +184,7 @@ class CorridasRepository {
           create: rotasCriacao
         }
       },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } }
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true }
     });
 
     return formatarCorrida(novaCorrida);
@@ -230,7 +230,7 @@ class CorridasRepository {
           status,
           atualizadaEm: new Date()
         },
-        include: { rotasAlternativas: { orderBy: { ordem: 'asc' } } }
+        include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true }
       });
       return formatarCorrida(atualizada);
     } catch (error) {

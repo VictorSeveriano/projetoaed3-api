@@ -23,10 +23,7 @@ const listarTodos = async (req, res, next) => {
 /** POST /api/veiculos — Motorista: cadastra veículo */
 const cadastrar = async (req, res, next) => {
   try {
-    const { usuarioId, ...dadosVeiculo } = req.body || {};
-    if (usuarioId && usuarioId !== req.usuario.id) {
-      throw new AppError('O usuário informado não corresponde ao usuário autenticado.', 403);
-    }
+    const dadosVeiculo = req.body || {};
     if (req.usuario.perfil !== 'MOTORISTA') {
       throw new AppError('Apenas motoristas podem cadastrar veículos.', 403);
     }
