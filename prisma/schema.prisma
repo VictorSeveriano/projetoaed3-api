@@ -110,6 +110,7 @@ model Veiculo {
   @@index([motoristaId], map: "idx_veiculos_motorista_id")
   @@index([status], map: "idx_veiculos_status")
   @@index([statusAprovacao], map: "idx_veiculos_status_aprovacao")
+  @@index([statusAprovacao, status, classe], map: "idx_veiculos_aprovacao_status_classe")
   @@map("veiculos")
 }
 
@@ -148,8 +149,11 @@ model Corrida {
 
   @@index([dataHorario], map: "idx_corridas_data_horario")
   @@index([motoristaId], map: "idx_corridas_motorista_id")
+  @@index([motoristaId, status], map: "idx_corridas_motorista_status")
+  @@index([motoristaId, dataHorario], map: "idx_corridas_motorista_data_horario")
   @@index([status], map: "idx_corridas_status")
   @@index([usuarioId], map: "idx_corridas_usuario_id")
+  @@index([usuarioId, status], map: "idx_corridas_usuario_status")
   @@index([veiculoId], map: "idx_corridas_veiculo_id")
   @@map("corridas")
 }

@@ -1,4 +1,14 @@
 require('dotenv').config();
+const { validarVariaveisDeAmbiente } = require('./config/env');
+
+// Falha rapido (sem expor valores) se JWT_SECRET ou DATABASE_URL estiverem ausentes
+try {
+  validarVariaveisDeAmbiente();
+} catch (err) {
+  console.error('[CONFIG]', err.message);
+  process.exit(1);
+}
+
 const app = require('./app');
 
 const PORT = process.env.PORT || 3001;

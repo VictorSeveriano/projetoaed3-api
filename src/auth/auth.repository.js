@@ -11,6 +11,11 @@ const prisma = require('../database/prisma');
 // utilizava "rua" ao invés de "logradouro", então ainda precisamos
 // fazer o mapeamento do logradouro para rua.
 
+function paraNumeroOuNull(valor) {
+  if (valor == null) return null;
+  return typeof valor.toNumber === 'function' ? valor.toNumber() : Number(valor);
+}
+
 function formatarUsuario(usuarioPrisma) {
   if (!usuarioPrisma) return null;
   const { endereco, ...resto } = usuarioPrisma;
@@ -19,8 +24,8 @@ function formatarUsuario(usuarioPrisma) {
     resto.endereco = {
       ...endereco,
       rua: endereco.logradouro,
-      latitude: endereco.latitude ? endereco.latitude.toNumber() : null,
-      longitude: endereco.longitude ? endereco.longitude.toNumber() : null
+      latitude: paraNumeroOuNull(endereco.latitude),
+      longitude: paraNumeroOuNull(endereco.longitude)
     };
   } else {
     resto.endereco = null;
@@ -48,8 +53,8 @@ function enderecoParaPrisma(endereco) {
     uf:          endereco.uf          || null,
     cep:         endereco.cep         ? endereco.cep.replace(/\D/g, '') : null,
     pais:        endereco.pais        || 'Brasil',
-    latitude:    endereco.latitude    || null,
-    longitude:   endereco.longitude   || null
+    latitude:    endereco.latitude    ?? null,
+    longitude:   endereco.longitude   ?? null
   };
 }
 

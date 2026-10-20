@@ -55,10 +55,10 @@ class Corrida {
     this.destinoNome = dados.destinoNome;
 
     // Coordenadas geográficas
-    this.origemLat = dados.origemLat || null;
-    this.origemLng = dados.origemLng || null;
-    this.destinoLat = dados.destinoLat || null;
-    this.destinoLng = dados.destinoLng || null;
+    this.origemLat = dados.origemLat ?? null;
+    this.origemLng = dados.origemLng ?? null;
+    this.destinoLat = dados.destinoLat ?? null;
+    this.destinoLng = dados.destinoLng ?? null;
 
     // Endereços estruturados (retornados pelo ViaCEP + Nominatim)
     this.origemEndereco = dados.origemEndereco || null;
@@ -71,7 +71,7 @@ class Corrida {
 
     // Métricas da rota
     this.distanciaKm = dados.distanciaKm || 0;
-    this.duracaoMin = dados.duracaoMin || null;
+    this.duracaoMin = dados.duracaoMin ?? null;
 
     // Financeiro
     this.valor = dados.valor || 0;

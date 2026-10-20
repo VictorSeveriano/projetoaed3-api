@@ -6,9 +6,13 @@
  *   - Validação de classe e formaPagamento
  *   - Verificação de disponibilidade de veículos por classe
  *   - Criação de corridas com notificação aos motoristas elegíveis
- *   - Aceite e recusa de corrida pelo motorista (com prevenção de duplo aceite)
+ *   - Aceite e recusa de corrida pelo motorista (com prevenção de duplo aceite e de dupla alocação de veículo)
  *   - Confirmação de pagamento e finalização
  *   - Cancelamento
+ *
+ * Política de notificações: uma notificação é um efeito colateral. Se ela falhar DEPOIS de a operação
+ * de negócio ter sido confirmada (corrida criada/aceita/finalizada), a falha é registrada em log com
+ * contexto e a operação NÃO é revertida nem retorna erro ao cliente.
  */
 
 const corridasRepository   = require('./corridas.repository');
@@ -16,13 +20,32 @@ const veiculosRepository   = require('../veiculos/veiculos.repository');
 const motoristasRepository = require('../motoristas/motoristas.repository');
 const notificacoesService  = require('../notificacoes/notificacoes.service');
 const AppError             = require('../utils/AppError');
+const {
+  CLASSES_VALIDAS,
+  FORMAS_PAGAMENTO_VALIDAS,
+  STATUS_CORRIDA,
+  BUSINESS_TIMEZONE,
+} = require('../utils/constants');
+const {
+  ausente,
+  exigirTexto,
+  exigirNumeroPositivo,
+  numeroPositivoOpcional,
+  latitudeOpcional,
+  longitudeOpcional,
+  enumOpcional,
+  lerDataHorario,
+  horaNoFusoDoNegocio,
+} = require('../utils/inputValidators');
 
-const CLASSES_VALIDAS         = ['BASICO', 'NORMAL', 'PREMIUM'];
-const FORMAS_PAGAMENTO_VALIDAS = ['DINHEIRO', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'PIX'];
+const NOME_LOCAL_MAX = 255; // varchar(255) em corridas.origem_nome / destino_nome
+
+const ehObjetoSimples = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 class CorridasService {
   /**
    * Tarifa base por km por classe de veículo (R$/km) dependendo da faixa de horário.
+   * Faixas definidas no fuso do negócio (America/Sao_Paulo):
    * 05:00–12:59 → manha
    * 13:00–18:59 → tarde
    * 19:00–04:59 → noite
@@ -37,34 +60,29 @@ class CorridasService {
   }
 
   /**
-   * Determina a faixa de horário baseada no dataHorario da corrida.
-   * Extrai a hora diretamente da string ISO sem conversão de timezone,
-   * garantindo que o horário local escolhido pelo usuário seja respeitado
-   * independentemente do TZ do servidor.
+   * Determina a faixa tarifária de um instante.
    *
-   * Aceita strings no formato:
-   *   - "2026-10-01T13:05:00.000Z"  → extrai hora 13 (campo T + HH)
-   *   - "2026-10-01T13:05"          → extrai hora 13
-   *   - Date object                  → usa getHours() como fallback
+   * Contrato de dataHorario (frontend ⇄ backend): string ISO 8601 que representa um INSTANTE.
+   * O frontend envia `new Date(valorDoInput).toISOString()` (ex.: "2026-10-01T17:00:00.000Z").
+   * A hora relevante para a tarifa é a hora no fuso do negócio (BUSINESS_TIMEZONE = America/Sao_Paulo),
+   * e NÃO a hora UTC contida na string. Strings sem offset são interpretadas como horário de parede
+   * do fuso do negócio. Instâncias de Date também são aceitas (uso interno).
+   *
+   * @returns {'manha'|'tarde'|'noite'}
    */
   static _determinarFaixaHorario(dataHorario) {
-    let hora;
-
-    if (typeof dataHorario === 'string' && dataHorario.includes('T')) {
-      // Extrai a parte de hora diretamente da string ISO: "YYYY-MM-DDTHH:mm..."
-      // Isso evita qualquer conversão de timezone
-      const horaStr = dataHorario.split('T')[1].split(':')[0];
-      hora = parseInt(horaStr, 10);
-    } else {
-      // Fallback para Date object
-      const data = new Date(dataHorario);
-      if (isNaN(data.getTime())) {
+    let instante;
+    if (dataHorario instanceof Date) {
+      if (Number.isNaN(dataHorario.getTime())) {
         throw new Error('dataHorario invalido para calculo de faixa horaria');
       }
-      hora = data.getHours();
+      instante = dataHorario;
+    } else {
+      instante = lerDataHorario(dataHorario);
     }
 
-    if (isNaN(hora) || hora < 0 || hora > 23) {
+    const hora = horaNoFusoDoNegocio(instante, BUSINESS_TIMEZONE);
+    if (Number.isNaN(hora) || hora < 0 || hora > 23) {
       throw new Error('Hora invalida extraida de dataHorario: ' + dataHorario);
     }
 
@@ -123,14 +141,8 @@ class CorridasService {
    * @throws {AppError} se qualquer entrada for inválida
    */
   calcularValor({ distanciaKm, classe, dataHorario }) {
-    // Validar distanciaKm
-    const distancia = Number(distanciaKm);
-    if (!Number.isFinite(distancia) || distancia <= 0) {
-      throw new AppError(
-        'distanciaKm invalido: deve ser um numero positivo. Recebido: ' + distanciaKm,
-        400
-      );
-    }
+    // Validar distanciaKm (sem coerção cega: booleanos, arrays, objetos, '' e NaN/Infinity são rejeitados)
+    const distancia = exigirNumeroPositivo(distanciaKm, 'distanciaKm');
 
     // Validar classe
     if (!classe || typeof classe !== 'string') {
@@ -145,17 +157,12 @@ class CorridasService {
     }
 
     // Validar dataHorario
-    if (!dataHorario) {
+    if (ausente(dataHorario) || dataHorario === '') {
       throw new AppError('dataHorario e obrigatorio para calcular o valor da corrida.', 400);
     }
 
-    // Determinar faixa (pode lançar erro internamente)
-    let faixa;
-    try {
-      faixa = CorridasService._determinarFaixaHorario(dataHorario);
-    } catch (e) {
-      throw new AppError('dataHorario invalido: ' + e.message, 400);
-    }
+    // Determinar faixa (lança AppError 400 para datas inválidas)
+    const faixa = CorridasService._determinarFaixaHorario(dataHorario);
 
     const tarifasClasse = CorridasService.TARIFAS_KM[classeNorm];
     const tarifa = tarifasClasse[faixa];
@@ -168,7 +175,12 @@ class CorridasService {
       );
     }
 
-    const valor = parseFloat((distancia * tarifa).toFixed(2));
+    const bruto = distancia * tarifa;
+    if (!Number.isFinite(bruto)) {
+      throw new AppError('distanciaKm invalido: valor fora do intervalo suportado.', 400);
+    }
+
+    const valor = parseFloat(bruto.toFixed(2));
 
     // Verificação final do resultado
     if (!Number.isFinite(valor) || valor <= 0) {
@@ -182,65 +194,100 @@ class CorridasService {
   }
 
   /**
+   * Valida e normaliza o payload de criação. Retorna somente valores normalizados
+   * (nunca reaproveita o valor bruto recebido). Lança AppError 400 em entradas inválidas.
+   * Observação: `usuarioId`, `status`, `valor`, `motoristaId` e `veiculoId` enviados pelo cliente são ignorados.
+   */
+  _validarDadosCriacao(dados) {
+    if (!ehObjetoSimples(dados)) {
+      throw new AppError('Corpo da requisicao invalido.', 400);
+    }
+
+    const origemNome  = exigirTexto(dados.origemNome, 'origemNome', { max: NOME_LOCAL_MAX });
+    const destinoNome = exigirTexto(dados.destinoNome, 'destinoNome', { max: NOME_LOCAL_MAX });
+
+    const distanciaKm = exigirNumeroPositivo(dados.distanciaKm, 'distanciaKm');
+    // duracaoMin é opcional; coluna Int → quando informada deve ser inteiro positivo
+    const duracaoMin  = numeroPositivoOpcional(dados.duracaoMin, 'duracaoMin', { inteiro: true });
+
+    const classe         = enumOpcional(dados.classe, 'Classe', CLASSES_VALIDAS, 'NORMAL');
+    const formaPagamento = enumOpcional(dados.formaPagamento, 'Forma de pagamento', FORMAS_PAGAMENTO_VALIDAS, 'DINHEIRO');
+
+    const dataHorario = ausente(dados.dataHorario) ? new Date() : lerDataHorario(dados.dataHorario);
+
+    const origemLat  = latitudeOpcional(dados.origemLat, 'origemLat');
+    const origemLng  = longitudeOpcional(dados.origemLng, 'origemLng');
+    const destinoLat = latitudeOpcional(dados.destinoLat, 'destinoLat');
+    const destinoLng = longitudeOpcional(dados.destinoLng, 'destinoLng');
+
+    let polyline = null;
+    if (!ausente(dados.polyline)) {
+      if (typeof dados.polyline !== 'string') throw new AppError('polyline invalida: deve ser um texto.', 400);
+      polyline = dados.polyline;
+    }
+
+    let rotaCaminho = [origemNome, destinoNome];
+    if (!ausente(dados.rotaCaminho)) {
+      if (!Array.isArray(dados.rotaCaminho) || dados.rotaCaminho.some((p) => typeof p !== 'string')) {
+        throw new AppError('rotaCaminho invalido: deve ser uma lista de textos.', 400);
+      }
+      rotaCaminho = dados.rotaCaminho;
+    }
+
+    let rotasAlternativas = [];
+    if (!ausente(dados.rotasAlternativas)) {
+      if (!Array.isArray(dados.rotasAlternativas) || dados.rotasAlternativas.some((r) => !ehObjetoSimples(r))) {
+        throw new AppError('rotasAlternativas invalido: deve ser uma lista de objetos.', 400);
+      }
+      rotasAlternativas = dados.rotasAlternativas;
+    }
+
+    const enderecos = {};
+    for (const campo of ['origemEndereco', 'destinoEndereco']) {
+      if (ausente(dados[campo])) {
+        enderecos[campo] = null;
+      } else if (!ehObjetoSimples(dados[campo])) {
+        throw new AppError(`${campo} invalido: deve ser um objeto.`, 400);
+      } else {
+        enderecos[campo] = dados[campo];
+      }
+    }
+
+    return {
+      origemNome, destinoNome, distanciaKm, duracaoMin, classe, formaPagamento, dataHorario,
+      origemLat, origemLng, destinoLat, destinoLng,
+      polyline, rotaCaminho, rotasAlternativas, ...enderecos,
+    };
+  }
+
+  /**
    * Cria uma nova corrida.
    * Valida classe solicitada, disponibilidade de veículo da classe,
    * forma de pagamento e notifica motoristas elegíveis.
+   * O proprietário é SEMPRE o usuário autenticado (usuarioLogado.id).
    */
   async criar(dados, usuarioLogado = null) {
-    const {
-      origemNome, destinoNome,
-      origemLat, origemLng, destinoLat, destinoLng,
-      origemEndereco, destinoEndereco,
-      rotaCaminho, rotasAlternativas,
-      polyline, distanciaKm, duracaoMin, dataHorario,
-      classe, formaPagamento,
-    } = dados;
-
     if (!usuarioLogado) {
       throw new AppError('Acesso negado. É necessário estar autenticado para criar uma corrida.', 401);
     }
-    
+
     const usuarioId = usuarioLogado.id;
-
-    if (!origemNome || !destinoNome) {
-      throw new AppError('origemNome e destinoNome sao obrigatorios.', 400);
-    }
-
-    // Coerce distanciaKm para numero e valida
-    const distanciaKmNum = Number(distanciaKm);
-    if (!Number.isFinite(distanciaKmNum) || distanciaKmNum <= 0) {
-      throw new AppError('Distancia invalida para a corrida. Valor recebido: ' + distanciaKm, 400);
-    }
-    if (duracaoMin != null && duracaoMin <= 0) {
-      throw new AppError('Duracao invalida para a corrida.', 400);
-    }
-
-    // Validação da classe
-    const classeNorm = (classe || 'NORMAL').toUpperCase();
-    if (!CLASSES_VALIDAS.includes(classeNorm)) {
-      throw new AppError('Classe invalida. Use BASICO, NORMAL ou PREMIUM.', 400);
-    }
-
-    // Validação da forma de pagamento
-    const formaPagamentoNorm = (formaPagamento || 'DINHEIRO').toUpperCase();
-    if (!FORMAS_PAGAMENTO_VALIDAS.includes(formaPagamentoNorm)) {
-      throw new AppError('Forma de pagamento invalida. Use DINHEIRO, CARTAO_DEBITO, CARTAO_CREDITO ou PIX.', 400);
-    }
+    const v = this._validarDadosCriacao(dados);
 
     // Verificar disponibilidade de veículo da classe solicitada
     const veiculosDisponiveis = await veiculosRepository.findDisponiveis();
-    const veiculosDaClasse = veiculosDisponiveis.filter((v) => v.classe === classeNorm);
+    const veiculosDaClasse = veiculosDisponiveis.filter((ve) => ve.classe === v.classe);
 
     if (veiculosDaClasse.length === 0) {
       throw new AppError(
-        `Nao ha veiculos da classe ${classeNorm} disponiveis. Selecione outra classe ou tente novamente mais tarde.`,
+        `Nao ha veiculos da classe ${v.classe} disponiveis. Selecione outra classe ou tente novamente mais tarde.`,
         409
       );
     }
 
-    const dataHorarioEfetivo = dataHorario || new Date().toISOString();
+    const dataHorarioEfetivo = v.dataHorario.toISOString();
     // Backend sempre recalcula o valor — nunca confia no valor enviado pelo frontend
-    const valor = this.calcularValor({ distanciaKm: distanciaKmNum, classe: classeNorm, dataHorario: dataHorarioEfetivo });
+    const valor = this.calcularValor({ distanciaKm: v.distanciaKm, classe: v.classe, dataHorario: dataHorarioEfetivo });
 
     // Validação final: valor calculado deve ser positivo
     if (!Number.isFinite(valor) || valor <= 0) {
@@ -249,57 +296,81 @@ class CorridasService {
 
     const novaCorrida = await corridasRepository.create({
       usuarioId,
-      origemNome,
-      destinoNome,
-      origemLat:          origemLat     || null,
-      origemLng:          origemLng     || null,
-      destinoLat:         destinoLat    || null,
-      destinoLng:         destinoLng    || null,
-      origemEndereco:     origemEndereco  || null,
-      destinoEndereco:    destinoEndereco || null,
-      rotaCaminho:        rotaCaminho   || [origemNome, destinoNome],
-      rotasAlternativas:  rotasAlternativas || [],
-      polyline:           polyline      || null,
-      distanciaKm:        distanciaKmNum,
-      duracaoMin:         duracaoMin    || null,
+      origemNome:         v.origemNome,
+      destinoNome:        v.destinoNome,
+      origemLat:          v.origemLat,
+      origemLng:          v.origemLng,
+      destinoLat:         v.destinoLat,
+      destinoLng:         v.destinoLng,
+      origemEndereco:     v.origemEndereco,
+      destinoEndereco:    v.destinoEndereco,
+      rotaCaminho:        v.rotaCaminho,
+      rotasAlternativas:  v.rotasAlternativas,
+      polyline:           v.polyline,
+      distanciaKm:        v.distanciaKm,
+      duracaoMin:         v.duracaoMin,
       valor,
-      classe:             classeNorm,
-      formaPagamento:     formaPagamentoNorm,
+      classe:             v.classe,
+      formaPagamento:     v.formaPagamento,
       dataHorario:        dataHorarioEfetivo,
-      status:             'SOLICITADA',
+      status:             STATUS_CORRIDA.SOLICITADA,
     });
 
-    // Notificar motoristas elegíveis para a classe solicitada
+    // Corrida já persistida: falha na notificação não a desfaz (ver política no topo do arquivo)
     await this._notificarMotoristasElegiveis(novaCorrida);
 
     return novaCorrida;
   }
 
   /**
+   * Executa uma notificação pós-commit sem propagar falhas.
+   * Registra o erro com contexto (somente identificadores; sem dados pessoais).
+   * @returns {Promise<boolean>} true se enviada
+   * @private
+   */
+  async _notificarSemFalhar(contexto, fn) {
+    try {
+      await fn();
+      return true;
+    } catch (e) {
+      console.error(`[CorridasService] Falha ao enviar notificacao (${contexto}):`, e.message);
+      return false;
+    }
+  }
+
+  /**
    * Notifica todos os motoristas APROVADOS com veículo DISPONIVEL da classe solicitada.
+   * Falha de um destinatário não impede os demais.
    * @private
    */
   async _notificarMotoristasElegiveis(corrida) {
+    let usuarioIds = [];
     try {
       const veiculosDisponiveis = await veiculosRepository.findDisponiveis();
       const veiculosDaClasse = veiculosDisponiveis.filter((v) => v.classe === corrida.classe);
 
       // veiculo.motoristaId = ID do usuário
-      const usuarioIds = [...new Set(
+      usuarioIds = [...new Set(
         veiculosDaClasse
           .filter((v) => v.motoristaId)
           .map((v) => v.motoristaId)
       )];
+    } catch (e) {
+      console.error(`[CorridasService] Falha ao listar motoristas elegiveis (corrida ${corrida.id}):`, e.message);
+      return;
+    }
 
-      for (const usuarioId of usuarioIds) {
+    const dataFormatada = new Date(corrida.dataHorario).toLocaleString('pt-BR', {
+      timeZone: BUSINESS_TIMEZONE,
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+
+    for (const usuarioId of usuarioIds) {
+      await this._notificarSemFalhar(`nova corrida ${corrida.id} -> motorista ${usuarioId}`, async () => {
         // Buscar por ID do usuário
         const motorista = await motoristasRepository.findByUsuarioId(usuarioId);
-        if (!motorista || motorista.statusCadastro !== 'APROVADO') continue;
-
-        const dataFormatada = new Date(corrida.dataHorario).toLocaleString('pt-BR', {
-          day: '2-digit', month: '2-digit', year: 'numeric',
-          hour: '2-digit', minute: '2-digit',
-        });
+        if (!motorista || motorista.statusCadastro !== 'APROVADO') return;
 
         await notificacoesService.notificarNovaCorrida(usuarioId, {
           corridaId:   corrida.id,
@@ -309,10 +380,7 @@ class CorridasService {
           dataFormatada,
           distanciaKm: corrida.distanciaKm,
         });
-      }
-    } catch (e) {
-      // Não falhar a criação da corrida por erro na notificação
-      console.error('[CorridasService] Erro ao notificar motoristas:', e.message);
+      });
     }
   }
 
@@ -320,13 +388,15 @@ class CorridasService {
   /**
    * Motorista aceita uma corrida.
    * Valida que a corrida ainda está disponível (SOLICITADA) e que o motorista é elegível.
-   * Prevenção de duplo aceite: usa transação implícita — apenas o primeiro aceite é processado.
+   * As leituras abaixo servem apenas para mensagens de erro claras; a garantia real contra
+   * duplo aceite e dupla alocação de veículo é dada pela transação com UPDATEs condicionais
+   * em corridasRepository.aceitarComReservaDeVeiculo.
    */
   async aceitar(corridaId, motoristaUsuarioId) {
     const corrida = await corridasRepository.findById(corridaId);
     if (!corrida) throw new AppError('Corrida nao encontrada.', 404);
 
-    if (corrida.status !== 'SOLICITADA') {
+    if (corrida.status !== STATUS_CORRIDA.SOLICITADA) {
       throw new AppError(
         'Esta corrida ja foi assumida ou nao esta disponivel para aceite.',
         409
@@ -356,30 +426,35 @@ class CorridasService {
       );
     }
 
-    // Aceitar: associar motorista (usuarioId) e veículo, mudar status para CONFIRMADA
-    const corridaAtualizada = await corridasRepository.aceitarCorrida(
+    // Aceitar de forma atômica: reserva o veículo (→ EM_CORRIDA) e confirma a corrida na mesma transação
+    const resultado = await corridasRepository.aceitarComReservaDeVeiculo(
       corridaId,
       motorista.usuarioId,
       veiculo.id
     );
 
-    if (!corridaAtualizada) {
-      // Ocorreu corrida de dados — outro motorista aceitou primeiro
-      throw new AppError('Esta corrida ja foi assumida por outro motorista.', 409);
+    if (!resultado || !resultado.ok) {
+      switch (resultado && resultado.motivo) {
+        case 'CORRIDA_INDISPONIVEL':
+          throw new AppError('Esta corrida ja foi assumida por outro motorista.', 409);
+        case 'VEICULO_COM_CORRIDA_ATIVA':
+          throw new AppError('O veiculo ja esta alocado a outra corrida ativa.', 409);
+        default:
+          throw new AppError('O veiculo nao esta disponivel.', 409);
+      }
     }
+    const corridaAtualizada = resultado.corrida;
 
-    // Atualizar status do veículo
-    await veiculosRepository.updateStatus(veiculo.id, 'EM_CORRIDA');
+    // Pós-commit: notificações não revertem o aceite (falhas são registradas em log)
+    await this._notificarSemFalhar(`aceite ${corridaId}: atualizar acao do motorista`, () =>
+      notificacoesService.atualizarAcaoMotorista(corridaId, motorista.usuarioId, 'ACEITA'));
 
-    // Marcar notificação do motorista como ACEITA
-    await notificacoesService.atualizarAcaoMotorista(corridaId, motorista.usuarioId, 'ACEITA');
-
-    // Notificar o passageiro
-    await notificacoesService.notificarPassageiroAceite(corrida.usuarioId, {
-      corridaId,
-      origemNome:  corrida.origemNome,
-      destinoNome: corrida.destinoNome,
-    });
+    await this._notificarSemFalhar(`aceite ${corridaId}: notificar passageiro`, () =>
+      notificacoesService.notificarPassageiroAceite(corrida.usuarioId, {
+        corridaId,
+        origemNome:  corrida.origemNome,
+        destinoNome: corrida.destinoNome,
+      }));
 
     return corridaAtualizada;
   }
@@ -392,7 +467,7 @@ class CorridasService {
     const corrida = await corridasRepository.findById(corridaId);
     if (!corrida) throw new AppError('Corrida nao encontrada.', 404);
 
-    if (corrida.status !== 'SOLICITADA') {
+    if (corrida.status !== STATUS_CORRIDA.SOLICITADA) {
       throw new AppError('Esta corrida nao esta mais disponivel.', 409);
     }
 
@@ -405,22 +480,23 @@ class CorridasService {
     return { message: 'Corrida recusada com sucesso.' };
   }
 
+  /**
+   * Cancela a corrida e libera o veículo (se houver) na mesma transação.
+   * Quem pode cancelar segue buscarPorId (dono, motorista da corrida ou administrador).
+   */
   async cancelar(id, usuarioLogado = null) {
     const corrida = await this.buscarPorId(id, usuarioLogado);
 
-    if (corrida.status === 'CANCELADA') {
+    if (corrida.status === STATUS_CORRIDA.CANCELADA) {
       throw new AppError('Esta corrida ja esta cancelada.', 409);
     }
-    if (corrida.status === 'FINALIZADA') {
+    if (corrida.status === STATUS_CORRIDA.FINALIZADA) {
       throw new AppError('Nao e possivel cancelar uma corrida finalizada.', 409);
     }
 
-    const corridaAtualizada = await corridasRepository.updateStatus(id, 'CANCELADA');
-
-    if (corrida.veiculoId) {
-      try {
-        await veiculosRepository.updateStatus(corrida.veiculoId, 'DISPONIVEL');
-      } catch (e) { /* veículo pode não existir — ok */ }
+    const corridaAtualizada = await corridasRepository.transicionarComLiberacaoDeVeiculo(id, 'cancelar');
+    if (!corridaAtualizada) {
+      throw new AppError('O estado da corrida foi alterado por outra operacao. Atualize e tente novamente.', 409);
     }
 
     return corridaAtualizada;
@@ -429,17 +505,18 @@ class CorridasService {
   /**
    * Motorista confirma pagamento e finaliza a corrida.
    * A corrida só é FINALIZADA após confirmação do recebimento do pagamento.
+   * Finalização e liberação do veículo ocorrem na mesma transação.
    */
   async confirmarPagamentoEFinalizar(id, usuarioLogado = null) {
     const corrida = await this.buscarPorId(id, usuarioLogado);
 
-    if (corrida.status === 'FINALIZADA') {
+    if (corrida.status === STATUS_CORRIDA.FINALIZADA) {
       throw new AppError('Esta corrida ja esta finalizada.', 409);
     }
-    if (corrida.status === 'CANCELADA') {
+    if (corrida.status === STATUS_CORRIDA.CANCELADA) {
       throw new AppError('Nao e possivel finalizar uma corrida cancelada.', 409);
     }
-    if (corrida.status === 'SOLICITADA') {
+    if (corrida.status === STATUS_CORRIDA.SOLICITADA) {
       throw new AppError('A corrida ainda nao foi aceita por um motorista.', 409);
     }
 
@@ -449,23 +526,19 @@ class CorridasService {
       }
     }
 
-    const corridaFinalizada = await corridasRepository.updateStatus(id, 'FINALIZADA');
-
-    if (corrida.veiculoId) {
-      try {
-        await veiculosRepository.updateStatus(corrida.veiculoId, 'DISPONIVEL');
-      } catch (e) { /* ok */ }
+    const corridaFinalizada = await corridasRepository.transicionarComLiberacaoDeVeiculo(id, 'finalizar');
+    if (!corridaFinalizada) {
+      throw new AppError('O estado da corrida foi alterado por outra operacao. Atualize e tente novamente.', 409);
     }
 
-    // Notificar o passageiro que a corrida foi finalizada
+    // Pós-commit: notificar o passageiro (falha não reverte a finalização)
     if (corrida.usuarioId) {
-      try {
-        await notificacoesService.notificarPassageiroFinalizacao(corrida.usuarioId, {
+      await this._notificarSemFalhar(`finalizacao ${id}: notificar passageiro`, () =>
+        notificacoesService.notificarPassageiroFinalizacao(corrida.usuarioId, {
           corridaId: id,
           origemNome:  corrida.origemNome,
           destinoNome: corrida.destinoNome,
-        });
-      } catch (e) { /* ok */ }
+        }));
     }
 
     return corridaFinalizada;

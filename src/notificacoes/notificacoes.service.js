@@ -103,7 +103,10 @@ class NotificacoesService {
         throw new AppError('Voce nao tem permissao para acessar esta notificacao.', 403);
       }
     }
-    return notificacoesRepository.marcarLida(id);
+    const atualizada = await notificacoesRepository.marcarLida(id);
+    // Repositorio retorna null quando o registro nao existe: nao reportar sucesso falso (ex.: perfil ADMIN)
+    if (!atualizada) throw new AppError('Notificacao nao encontrada.', 404);
+    return atualizada;
   }
 
   async marcarTodasLidas(destinatarioId) {

@@ -29,6 +29,7 @@ describe('Testes de Autorização (IDOR)', () => {
         return null;
       });
       corridasRepository.updateStatus.mockResolvedValue(corridaMock);
+      corridasRepository.transicionarComLiberacaoDeVeiculo.mockResolvedValue(corridaMock);
       corridasRepository.create.mockResolvedValue({ id: 10 });
       veiculosRepository.findDisponiveis.mockResolvedValue([{ classe: 'BASICO', motoristaId: 'mot-a' }]);
       motoristasRepository.findByUsuarioId.mockResolvedValue({ statusCadastro: 'APROVADO' });
@@ -163,7 +164,7 @@ describe('Testes de Autorização (IDOR)', () => {
   describe('Notificações', () => {
     beforeEach(() => {
       notificacoesRepository.findById.mockResolvedValue({ id: 1, destinatarioId: 'user-a' });
-      notificacoesRepository.marcarLida.mockResolvedValue(true);
+      notificacoesRepository.marcarLida.mockResolvedValue({ id: 1, lida: true });
       notificacoesRepository.marcarTodasLidas.mockResolvedValue(true);
     });
 
@@ -175,6 +176,12 @@ describe('Testes de Autorização (IDOR)', () => {
     test('Usuário A marca notificação de B -> negado', async () => {
       await expect(notificacoesService.marcarLida(1, { id: 'user-b', perfil: 'USUARIO' }))
         .rejects.toThrow(AppError);
+    });
+
+    test('marcarLida retorna 404 se o repositório retornar null na persistência', async () => {
+      notificacoesRepository.marcarLida.mockResolvedValueOnce(null);
+      await expect(notificacoesService.marcarLida(1, { id: 'user-a', perfil: 'USUARIO' }))
+        .rejects.toMatchObject({ statusCode: 404 });
     });
 
     test('marcarTodasLidas: opera somente sobre o req.usuario.id', async () => {

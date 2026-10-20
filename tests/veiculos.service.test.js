@@ -1,6 +1,11 @@
 jest.mock('../src/veiculos/veiculos.repository', () => ({
   create: jest.fn(),
   findByMotoristaId: jest.fn(),
+  findById: jest.fn(),
+  updateStatusAprovacao: jest.fn(),
+  updateClasse: jest.fn(),
+  update: jest.fn(),
+  softDelete: jest.fn(),
 }));
 
 jest.mock('../src/motoristas/motoristas.repository', () => ({
@@ -21,7 +26,7 @@ const authRepository = require('../src/auth/auth.repository');
 const notificacoesService = require('../src/notificacoes/notificacoes.service');
 const veiculosService = require('../src/veiculos/veiculos.service');
 
-describe('VeiculosService cadastro', () => {
+describe('VeiculosService cadastro e validação de porte/classe', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     authRepository.encontrarPorId.mockResolvedValue({ id: 'motorista-id', nome: 'Ana Silva' });
@@ -34,6 +39,18 @@ describe('VeiculosService cadastro', () => {
       statusAprovacao: 'PENDENTE',
       status: 'INDISPONIVEL',
     });
+  });
+
+  test('_determinarClasseServico nunca aplica fallback para NORMAL quando porte é inválido, nulo ou ausente', () => {
+    expect(() => veiculosService._determinarClasseServico(undefined)).toThrow();
+    expect(() => veiculosService._determinarClasseServico(null)).toThrow();
+    expect(() => veiculosService._determinarClasseServico('')).toThrow();
+    expect(() => veiculosService._determinarClasseServico('   ')).toThrow();
+    expect(() => veiculosService._determinarClasseServico('Gigante')).toThrow();
+    expect(() => veiculosService._determinarClasseServico(123)).toThrow();
+    expect(veiculosService._determinarClasseServico('Pequeno')).toBe('BASICO');
+    expect(veiculosService._determinarClasseServico('Medio')).toBe('NORMAL');
+    expect(veiculosService._determinarClasseServico('Grande')).toBe('PREMIUM');
   });
 
   test('returns the persisted vehicle when administrator notification fails', async () => {
@@ -69,22 +86,30 @@ describe('VeiculosService cadastro', () => {
     })).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  test('Porte Pequeno -> BASICO, Medio -> NORMAL, Grande -> PREMIUM', async () => {
+  test('Porte Pequeno -> BASICO, Medio -> NORMAL, Grande -> PREMIUM (ignora classe manipulada pelo cliente)', async () => {
     veiculosRepository.create.mockImplementation(async (dados) => dados);
-    const p = await veiculosService.cadastrar('motorista-id', { marca: 'M', modelo: 'M', ano: 2025, placa: 'A', porte: 'Pequeno' });
+    const p = await veiculosService.cadastrar('motorista-id', {
+      marca: 'M', modelo: 'M', ano: 2025, placa: 'A', porte: 'Pequeno', classe: 'PREMIUM'
+    });
     expect(p.classe).toBe('BASICO');
 
-    const m = await veiculosService.cadastrar('motorista-id', { marca: 'M', modelo: 'M', ano: 2025, placa: 'A', porte: 'Medio' });
+    const m = await veiculosService.cadastrar('motorista-id', {
+      marca: 'M', modelo: 'M', ano: 2025, placa: 'A', porte: 'Medio', classe: 'PREMIUM'
+    });
     expect(m.classe).toBe('NORMAL');
 
-    const g = await veiculosService.cadastrar('motorista-id', { marca: 'M', modelo: 'M', ano: 2025, placa: 'A', porte: 'Grande' });
+    const g = await veiculosService.cadastrar('motorista-id', {
+      marca: 'M', modelo: 'M', ano: 2025, placa: 'A', porte: 'Grande', classe: 'BASICO'
+    });
     expect(g.classe).toBe('PREMIUM');
   });
 
-  test('Porte inválido no cadastro -> rejeitado (400) e não persiste', async () => {
-    await expect(veiculosService.cadastrar('motorista-id', {
-      marca: 'M', modelo: 'M', ano: 2025, placa: 'ABC1234', porte: 'Gigante'
-    })).rejects.toMatchObject({ statusCode: 400 });
+  test('Porte ausente, nulo, vazio ou desconhecido no cadastro -> rejeitado (400) e não persiste', async () => {
+    for (const porteInvalido of [undefined, null, '', '   ', 'Gigante', 'SUV', 123, {}, []]) {
+      await expect(veiculosService.cadastrar('motorista-id', {
+        marca: 'M', modelo: 'M', ano: 2025, placa: 'ABC1234', porte: porteInvalido
+      })).rejects.toMatchObject({ statusCode: 400 });
+    }
     expect(veiculosRepository.create).not.toHaveBeenCalled();
   });
 
@@ -122,14 +147,9 @@ describe('VeiculosService cadastro', () => {
   });
 });
 
-describe('VeiculosService aprovação e classe', () => {
+describe('VeiculosService aprovação, classe e restrição de alteração de porte ao ADMINISTRADOR', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    veiculosRepository.findById = jest.fn();
-    veiculosRepository.updateStatusAprovacao = jest.fn();
-    veiculosRepository.updateClasse = jest.fn();
-    veiculosRepository.update = jest.fn();
-    veiculosRepository.softDelete = jest.fn();
   });
 
   test('Aprovação: veiculo pendente -> aprovado', async () => {
@@ -138,6 +158,12 @@ describe('VeiculosService aprovação e classe', () => {
     const v = await veiculosService.aprovar('v1');
     expect(veiculosRepository.updateStatusAprovacao).toHaveBeenCalledWith('v1', 'APROVADO', 'NORMAL');
     expect(v.statusAprovacao).toBe('APROVADO');
+  });
+
+  test('Aprovação: rejeita aprovação se o veículo possuir porte inválido e não persiste', async () => {
+    veiculosRepository.findById.mockResolvedValue({ id: 'v1', statusAprovacao: 'PENDENTE', porte: 'Desconhecido' });
+    await expect(veiculosService.aprovar('v1')).rejects.toMatchObject({ statusCode: 400 });
+    expect(veiculosRepository.updateStatusAprovacao).not.toHaveBeenCalled();
   });
 
   test('Aprovação: veiculo já aprovado -> 409', async () => {
@@ -150,20 +176,18 @@ describe('VeiculosService aprovação e classe', () => {
     await expect(veiculosService.aprovar('v1')).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  test('Aprovação: veiculo excluido -> rejeitado', async () => {
+  test('Aprovação: veiculo excluido -> rejeitado (404)', async () => {
     veiculosRepository.findById.mockResolvedValue({ id: 'v1', statusAprovacao: 'EXCLUIDO' });
     await expect(veiculosService.aprovar('v1')).rejects.toMatchObject({ statusCode: 404 });
   });
 
   test('Aprovação: mantém/recalcula classe correta para Pequeno (BASICO) e Grande (PREMIUM) e corrige inconsistência prévia', async () => {
-    // Veículo Pequeno pendente
     veiculosRepository.findById.mockResolvedValueOnce({ id: 'v-peq', statusAprovacao: 'PENDENTE', porte: 'Pequeno', classe: 'BASICO' });
     veiculosRepository.updateStatusAprovacao.mockResolvedValueOnce({ id: 'v-peq', statusAprovacao: 'APROVADO', porte: 'Pequeno', classe: 'BASICO' });
     const vPeq = await veiculosService.aprovar('v-peq');
     expect(veiculosRepository.updateStatusAprovacao).toHaveBeenCalledWith('v-peq', 'APROVADO', 'BASICO');
     expect(vPeq.classe).toBe('BASICO');
 
-    // Veículo Grande com classe inconsistente antes da aprovação -> aprovar recalcula a partir do porte
     veiculosRepository.findById.mockResolvedValueOnce({ id: 'v-inconsistente', statusAprovacao: 'PENDENTE', porte: 'Grande', classe: 'BASICO' });
     veiculosRepository.updateStatusAprovacao.mockResolvedValueOnce({ id: 'v-inconsistente', statusAprovacao: 'APROVADO', porte: 'Grande', classe: 'PREMIUM' });
     const vCorr = await veiculosService.aprovar('v-inconsistente');
@@ -192,14 +216,13 @@ describe('VeiculosService aprovação e classe', () => {
     expect(veiculosRepository.updateClasse).not.toHaveBeenCalled();
   });
 
-  test('Atualização genérica: PATCH veiculos/:id tenta alterar classe e é ignorado', async () => {
+  test('Atualização genérica: PATCH veiculos/:id tenta alterar classe diretamente e é ignorado', async () => {
     veiculosRepository.findById.mockResolvedValue({ id: 'v1', motoristaId: 'mot-1', porte: 'Medio', classe: 'NORMAL' });
     veiculosRepository.update.mockImplementation(async (id, dados) => ({ id, ...dados }));
 
-    const payload = { marca: 'Fiat', classe: 'PREMIUM' }; // tentando fraudar classe
+    const payload = { marca: 'Fiat', classe: 'PREMIUM' };
     await veiculosService.atualizar('v1', payload, { id: 'mot-1', perfil: 'MOTORISTA' });
 
-    // repository não deve receber classe PREMIUM! (só altera classe se alterar porte)
     expect(veiculosRepository.update).toHaveBeenCalledWith('v1', { marca: 'Fiat' });
   });
 
@@ -211,62 +234,69 @@ describe('VeiculosService aprovação e classe', () => {
     expect(veiculosRepository.update).toHaveBeenCalledWith('v1', { cor: 'Prata' });
   });
 
-  test('Atualização genérica: PATCH veiculos/:id alterando porte recalcula classe', async () => {
+  test('MOTORISTA NÃO pode alterar o porte após o cadastro (403) e dados não são modificados', async () => {
+    veiculosRepository.findById.mockResolvedValue({ id: 'v1', motoristaId: 'mot-1', porte: 'Pequeno', classe: 'BASICO' });
+
+    await expect(
+      veiculosService.atualizar('v1', { porte: 'Grande' }, { id: 'mot-1', perfil: 'MOTORISTA' })
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    await expect(
+      veiculosService.atualizar('v1', { porte: 'Pequeno' }, { id: 'mot-1', perfil: 'MOTORISTA' })
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(veiculosRepository.update).not.toHaveBeenCalled();
+  });
+
+  test('ADMINISTRADOR pode alterar o porte e a classe é recalculada automaticamente', async () => {
     veiculosRepository.findById.mockResolvedValue({ id: 'v1', motoristaId: 'mot-1', porte: 'Medio', classe: 'NORMAL' });
     veiculosRepository.update.mockImplementation(async (id, dados) => ({ id, ...dados }));
 
-    const payload = { porte: 'Grande' }; // mudou porte
-    await veiculosService.atualizar('v1', payload, { id: 'mot-1', perfil: 'MOTORISTA' });
-
-    // repository agora deve receber porte e a classe nova recalculada
+    await veiculosService.atualizar('v1', { porte: 'Grande' }, { id: 'admin-1', perfil: 'ADMINISTRADOR' });
     expect(veiculosRepository.update).toHaveBeenCalledWith('v1', { porte: 'Grande', classe: 'PREMIUM' });
   });
 
-  test('Atualização genérica: alteração de porte em veículo aprovado recalcula classe para todas as transições e corrige eventual inconsistência', async () => {
+  test('ADMINISTRADOR alterando porte em veículo aprovado recalcula classe para todas as transições', async () => {
     veiculosRepository.update.mockImplementation(async (id, dados) => ({ id, ...dados }));
 
-    // Grande (PREMIUM) -> Pequeno (BASICO) em veículo aprovado
     veiculosRepository.findById.mockResolvedValueOnce({
       id: 'v1', motoristaId: 'mot-1', porte: 'Grande', classe: 'PREMIUM', statusAprovacao: 'APROVADO', status: 'DISPONIVEL'
     });
-    const resPeq = await veiculosService.atualizar('v1', { porte: 'Pequeno' }, { id: 'mot-1', perfil: 'MOTORISTA' });
+    const resPeq = await veiculosService.atualizar('v1', { porte: 'Pequeno' }, { id: 'admin-1', perfil: 'ADMINISTRADOR' });
     expect(veiculosRepository.update).toHaveBeenLastCalledWith('v1', { porte: 'Pequeno', classe: 'BASICO' });
     expect(resPeq).toMatchObject({ porte: 'Pequeno', classe: 'BASICO' });
 
-    // Pequeno (BASICO) -> Medio (NORMAL) em veículo aprovado
     veiculosRepository.findById.mockResolvedValueOnce({
       id: 'v1', motoristaId: 'mot-1', porte: 'Pequeno', classe: 'BASICO', statusAprovacao: 'APROVADO', status: 'DISPONIVEL'
     });
-    const resMed = await veiculosService.atualizar('v1', { porte: 'Medio' }, { id: 'mot-1', perfil: 'MOTORISTA' });
+    const resMed = await veiculosService.atualizar('v1', { porte: 'Medio' }, { id: 'admin-1', perfil: 'ADMINISTRADOR' });
     expect(veiculosRepository.update).toHaveBeenLastCalledWith('v1', { porte: 'Medio', classe: 'NORMAL' });
     expect(resMed).toMatchObject({ porte: 'Medio', classe: 'NORMAL' });
-
-    // Veículo com inconsistência prévia (porte Grande, mas classe BASICO) recebendo porte Grande -> corrige classe para PREMIUM
-    veiculosRepository.findById.mockResolvedValueOnce({
-      id: 'v1', motoristaId: 'mot-1', porte: 'Grande', classe: 'BASICO', statusAprovacao: 'APROVADO'
-    });
-    const resInconsistente = await veiculosService.atualizar('v1', { porte: 'Grande' }, { id: 'mot-1', perfil: 'MOTORISTA' });
-    expect(veiculosRepository.update).toHaveBeenLastCalledWith('v1', { porte: 'Grande', classe: 'PREMIUM' });
-    expect(resInconsistente).toMatchObject({ porte: 'Grande', classe: 'PREMIUM' });
   });
 
-  test('Atualização genérica: porte inválido -> 400', async () => {
+  test('ADMINISTRADOR enviando porte inválido -> 400 e não persiste', async () => {
     veiculosRepository.findById.mockResolvedValue({ id: 'v1', motoristaId: 'mot-1', porte: 'Medio', classe: 'NORMAL' });
-    const payload = { porte: 'Gigante' }; // porte invalido
-    await expect(veiculosService.atualizar('v1', payload, { id: 'mot-1', perfil: 'MOTORISTA' }))
-      .rejects.toMatchObject({ statusCode: 400 });
+    for (const porteInvalido of ['Gigante', '', null, 123]) {
+      await expect(
+        veiculosService.atualizar('v1', { porte: porteInvalido }, { id: 'admin-1', perfil: 'ADMINISTRADOR' })
+      ).rejects.toMatchObject({ statusCode: 400 });
+    }
     expect(veiculosRepository.update).not.toHaveBeenCalled();
+  });
+
+  test('Falha de persistência na atualização propaga erro ou 404 sem corromper estado', async () => {
+    veiculosRepository.findById.mockResolvedValue({ id: 'v1', motoristaId: 'mot-1', porte: 'Medio', classe: 'NORMAL' });
+    veiculosRepository.update.mockResolvedValueOnce(null);
+
+    await expect(
+      veiculosService.atualizar('v1', { porte: 'Grande' }, { id: 'admin-1', perfil: 'ADMINISTRADOR' })
+    ).rejects.toMatchObject({ statusCode: 404 });
   });
 });
 
 describe('VeiculosService exclusão, rejeição e autorização', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    veiculosRepository.findById = jest.fn();
-    veiculosRepository.updateStatusAprovacao = jest.fn();
-    veiculosRepository.updateClasse = jest.fn();
-    veiculosRepository.update = jest.fn();
-    veiculosRepository.softDelete = jest.fn();
   });
 
   test('Exclusão: motorista proprietário exclui próprio veículo disponível -> softDelete chamado', async () => {

@@ -45,8 +45,6 @@ async function limparDadosTeste(tx) {
     await tx.corrida.deleteMany({ where: { motoristaId: { in: idsUsuarios } } });
     
     // Veiculos
-    const motoristas = await tx.motorista.findMany({ where: { usuarioId: { in: idsUsuarios } } });
-    // Let's check Veiculo schema: motoristaId points to Usuario
     await tx.veiculo.deleteMany({ where: { motoristaId: { in: idsUsuarios } } });
 
     // Motoristas
@@ -192,8 +190,7 @@ async function main() {
       }
     }
 
-    // 5. Criar veículos para os motoristas aprovados (5) e talvez pendentes
-    // A regra costuma ser que motorista pode cadastrar veículo e ele tb passa por aprovação
+    // 5. Criar veículos para os motoristas aprovados (5) e pendentes
     const classes = ['BASICO', 'NORMAL', 'PREMIUM'];
     const portes = ['Pequeno', 'Medio', 'Grande'];
     const veiculos = [];
@@ -221,10 +218,9 @@ async function main() {
       veiculos.push(v);
     }
 
-    // 6. Criar 10 Corridas
-    // Vamos distribuir entre os 10 passageiros
-    // E distribuir entre os 5 motoristas aprovados
+    // 6. Criar 10 Corridas respeitando no máximo 1 corrida ativa por veículo
     const statusCorridas = ['SOLICITADA', 'CONFIRMADA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA'];
+    const statusNaoAtivos = ['SOLICITADA', 'FINALIZADA', 'CANCELADA'];
     const formasPgto = ['DINHEIRO', 'CARTAO_CREDITO', 'PIX'];
     
     // Horarios para teste: Manha (08:00), Tarde (15:00), Noite (22:00)
@@ -241,7 +237,7 @@ async function main() {
       const veiculo = veiculos[i % 5 + 5]; // Motoristas 5 a 9 sao os aprovados
       const motoristaUser = motoristasUsers[i % 5 + 5];
       
-      const st = statusCorridas[i % 5];
+      const st = i < 5 ? statusCorridas[i] : statusNaoAtivos[i % 3];
       const dist = distancias[i];
       
       const tarifaBase = {
@@ -276,7 +272,7 @@ async function main() {
           origemNome: `Rua Origem ${i}`,
           destinoNome: `Rua Destino ${i}`,
           distanciaKm: dist,
-          duracaoMin: Math.floor(dist * 2), // aprox
+          duracaoMin: Math.floor(dist * 2),
           valor: valor,
           dataHorario: horarios[horaIdx],
           status: st,
@@ -286,6 +282,11 @@ async function main() {
       });
 
       if (st === 'CONFIRMADA' || st === 'EM_ANDAMENTO') {
+        await tx.veiculo.update({
+          where: { id: veiculo.id },
+          data: { status: 'EM_CORRIDA' }
+        });
+
         await tx.notificacao.create({
           data: {
             destinatarioId: motoristaUser.id,
