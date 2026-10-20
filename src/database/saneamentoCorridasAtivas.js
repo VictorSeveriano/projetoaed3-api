@@ -109,20 +109,29 @@ async function diagnosticarConflitosVeiculoAtivo(db = prismaDefault, resolucoesE
         classe: corridaTitular.classe,
         criadaEm: corridaTitular.criadaEm,
       },
-      corridasExcedentes: corridasExcedentes.map((c) => ({
-        id: c.id,
-        status: c.status,
-        motoristaId: c.motoristaId,
-        usuarioId: c.usuarioId,
-        classe: c.classe,
-        criadaEm: c.criadaEm,
-        atualizadaEm: c.atualizadaEm,
-        saneavelAutomaticamente: c.status === 'CONFIRMADA',
-        motivo:
-          c.status === 'CONFIRMADA'
+      corridasExcedentes: corridasExcedentes.map((c) => {
+        const empateComTitularConfirmada =
+          c.status === 'CONFIRMADA' &&
+          corridaTitular.status === 'CONFIRMADA' &&
+          new Date(c.criadaEm).getTime() === new Date(corridaTitular.criadaEm).getTime();
+        const saneavelAutomaticamente = c.status === 'CONFIRMADA' && !empateComTitularConfirmada;
+
+        return {
+          id: c.id,
+          status: c.status,
+          motoristaId: c.motoristaId,
+          usuarioId: c.usuarioId,
+          classe: c.classe,
+          criadaEm: c.criadaEm,
+          atualizadaEm: c.atualizadaEm,
+          saneavelAutomaticamente,
+          motivo: saneavelAutomaticamente
             ? 'Reserva duplicada em veículo já alocado; corrida ainda não iniciada.'
-            : 'Conflito ambíguo: corrida consta como EM_ANDAMENTO em veículo já em uso. Requer resolução explícita justificada.',
-      })),
+            : empateComTitularConfirmada
+              ? 'Conflito ambíguo: reservas CONFIRMADA com mesmo instante de criação sem corrida EM_ANDAMENTO titular. Requer resolução explícita justificada.'
+              : 'Conflito ambíguo: corrida consta como EM_ANDAMENTO em veículo já em uso. Requer resolução explícita justificada.',
+        };
+      }),
     });
   }
 
@@ -269,9 +278,9 @@ async function sanearConflitosVeiculoAtivo(db = prismaDefault, opcoes = {}) {
           atualizadaEm: corridaAtual.atualizadaEm,
         };
 
-        // Caso 1: Corrida CONFIRMADA (ainda não iniciada) ou resolução explícita DESVINCULAR_PARA_SOLICITADA
+        // Caso 1: Corrida CONFIRMADA determinística (ainda não iniciada) ou resolução explícita DESVINCULAR_PARA_SOLICITADA
         const podeDesvincular =
-          (corridaAtual.status === 'CONFIRMADA' && !resolucao) ||
+          (corridaAtual.status === 'CONFIRMADA' && excedente.saneavelAutomaticamente && !resolucao) ||
           (resolucao && resolucao.acao === 'DESVINCULAR_PARA_SOLICITADA');
 
         if (podeDesvincular) {

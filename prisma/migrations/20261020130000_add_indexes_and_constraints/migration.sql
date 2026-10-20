@@ -1,16 +1,54 @@
--- 1. Identificação, saneamento seguro de reservas CONFIRMADA excedentes e bloqueio de conflitos EM_ANDAMENTO ambíguos
--- Regra de integridade (Seção 5):
+-- 1. Validação prévia de integridade, saneamento determinístico de reservas CONFIRMADA excedentes
+--    e bloqueio transacional de conflitos ambíguos (EM_ANDAMENTO ou reservas empatadas)
+--
+-- Regras de integridade (Seções 4 e 5):
 --   - Nenhuma corrida ativa (CONFIRMADA / EM_ANDAMENTO) é convertida em FINALIZADA ou CANCELADA.
---   - Se existirem conflitos envolvendo múltiplas corridas EM_ANDAMENTO no mesmo veículo (que não podem
---     ser resolvidos automaticamente com segurança), a migração interrompe a execução e lista os registros afetados.
---   - Reservas CONFIRMADA excedentes (ainda não iniciadas em veículo já ocupado por corrida titular)
---     são registradas na tabela de auditoria e retornam para SOLICITADA (veiculo_id = NULL, motorista_id = NULL).
+--   - Nenhuma alteração de dados é realizada antes de validar que todas as corridas e veículos
+--     respeitam as regras de domínio e que não há conflitos ambíguos.
+--   - Conflitos ambíguos (múltiplas corridas EM_ANDAMENTO no mesmo veículo, reservas CONFIRMADA
+--     empatadas no menor criada_em sem corrida EM_ANDAMENTO titular, ou corridas ativas sem
+--     veículo/motorista) interrompem imediatamente a migração com RAISE EXCEPTION listando os registros.
+--   - Reservas CONFIRMADA excedentes determinísticas (em veículo já ocupado por corrida titular
+--     EM_ANDAMENTO ou por reserva CONFIRMADA estritamente anterior) retornam para SOLICITADA
+--     (veiculo_id = NULL, motorista_id = NULL) com registro atômico na tabela de auditoria.
 DO $$
 DECLARE
+  v_agora TIMESTAMPTZ := CURRENT_TIMESTAMP;
+  v_ativas_inconsistentes INTEGER;
+  v_detalhes_ativas_inconsistentes TEXT;
   v_conflitos_ambiguos INTEGER;
   v_detalhes_ambiguos TEXT;
+  v_veiculos_invalidos INTEGER;
+  v_detalhes_veiculos_invalidos TEXT;
+  v_corridas_invalidas INTEGER;
+  v_detalhes_corridas_invalidas TEXT;
+  v_conflitos_remanescentes INTEGER;
 BEGIN
-  -- 1.1. Verifica se existem conflitos EM_ANDAMENTO que exigem resolução explícita
+  -- 1.1. Verifica corridas ativas (CONFIRMADA / EM_ANDAMENTO) sem veículo ou sem motorista vinculado
+  SELECT
+    COUNT(*),
+    STRING_AGG(
+      FORMAT(
+        'corrida=%s (status=%s, veiculo=%s, motorista=%s)',
+        c.id,
+        c.status,
+        COALESCE(c.veiculo_id::text, 'null'),
+        COALESCE(c.motorista_id::text, 'null')
+      ),
+      '; ' ORDER BY c.criada_em ASC, c.id ASC
+    )
+  INTO v_ativas_inconsistentes, v_detalhes_ativas_inconsistentes
+  FROM "corridas" c
+  WHERE c."status" IN ('CONFIRMADA', 'EM_ANDAMENTO')
+    AND (c."veiculo_id" IS NULL OR c."motorista_id" IS NULL);
+
+  IF v_ativas_inconsistentes > 0 THEN
+    RAISE EXCEPTION 'Encontrada(s) % corrida(s) ativa(s) inconsistente(s) sem veículo ou motorista vinculado (conflito ambíguo que exige revisão manual). Registros afetados: [%].', v_ativas_inconsistentes, v_detalhes_ativas_inconsistentes;
+  END IF;
+
+  -- 1.2. Verifica conflitos ambíguos entre corridas ativas no mesmo veículo:
+  --   (a) qualquer veículo com corrida EM_ANDAMENTO excedente (múltiplas EM_ANDAMENTO no mesmo veículo), OU
+  --   (b) veículo sem corrida EM_ANDAMENTO, mas com múltiplas corridas CONFIRMADA empatadas no menor criada_em.
   WITH classificadas AS (
     SELECT
       id,
@@ -18,6 +56,9 @@ BEGIN
       motorista_id,
       status,
       criada_em,
+      COUNT(*) OVER (PARTITION BY veiculo_id) AS total_ativas_veiculo,
+      COUNT(*) FILTER (WHERE status = 'EM_ANDAMENTO') OVER (PARTITION BY veiculo_id) AS total_em_andamento_veiculo,
+      MIN(criada_em) FILTER (WHERE status = 'CONFIRMADA') OVER (PARTITION BY veiculo_id) AS min_criada_em_confirmada,
       ROW_NUMBER() OVER (
         PARTITION BY veiculo_id
         ORDER BY CASE WHEN status = 'EM_ANDAMENTO' THEN 0 ELSE 1 END, criada_em ASC, id ASC
@@ -26,32 +67,114 @@ BEGIN
     WHERE "status" IN ('CONFIRMADA', 'EM_ANDAMENTO')
       AND "veiculo_id" IS NOT NULL
   ),
-  veiculos_com_excedente_em_andamento AS (
+  empates_confirmada AS (
+    SELECT veiculo_id
+    FROM classificadas
+    WHERE total_ativas_veiculo > 1
+      AND total_em_andamento_veiculo = 0
+      AND status = 'CONFIRMADA'
+      AND criada_em = min_criada_em_confirmada
+    GROUP BY veiculo_id
+    HAVING COUNT(*) > 1
+  ),
+  veiculos_com_conflito_ambiguo AS (
     SELECT DISTINCT veiculo_id
     FROM classificadas
     WHERE rn > 1 AND status = 'EM_ANDAMENTO'
+    UNION
+    SELECT DISTINCT veiculo_id
+    FROM empates_confirmada
   )
   SELECT
     COUNT(DISTINCT c.veiculo_id),
     STRING_AGG(
-      FORMAT('corrida=%s (veiculo=%s, motorista=%s, status=%s)', c.id, c.veiculo_id, COALESCE(c.motorista_id::text, 'null'), c.status),
+      FORMAT(
+        'corrida=%s (veiculo=%s, motorista=%s, status=%s, criada_em=%s)',
+        c.id,
+        c.veiculo_id,
+        COALESCE(c.motorista_id::text, 'null'),
+        c.status,
+        to_char(c.criada_em AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+      ),
       '; ' ORDER BY c.veiculo_id, c.rn
     )
   INTO v_conflitos_ambiguos, v_detalhes_ambiguos
   FROM classificadas c
-  INNER JOIN veiculos_com_excedente_em_andamento v ON v.veiculo_id = c.veiculo_id;
+  INNER JOIN veiculos_com_conflito_ambiguo v ON v.veiculo_id = c.veiculo_id;
 
   IF v_conflitos_ambiguos > 0 THEN
-    RAISE EXCEPTION 'Encontrados % veículo(s) com conflito ambíguo de corridas EM_ANDAMENTO que não podem ser resolvidos automaticamente. Registros afetados: [%]. Execute o saneamento explícito via src/database/saneamentoCorridasAtivas.js.', v_conflitos_ambiguos, v_detalhes_ambiguos;
+    RAISE EXCEPTION 'Encontrados % veículo(s) com conflito ambíguo de corridas EM_ANDAMENTO ou reservas sem precedência determinística que não podem ser resolvidos automaticamente. Registros afetados: [%]. Execute o saneamento explícito via src/database/saneamentoCorridasAtivas.js.', v_conflitos_ambiguos, v_detalhes_ambiguos;
   END IF;
 
-  -- 1.2. Saneia com auditoria reservas CONFIRMADA excedentes (ainda não iniciadas)
+  -- 1.3. Valida previamente os dados de veículos antes de qualquer alteração de estado ou adição de constraints
+  SELECT
+    COUNT(*),
+    STRING_AGG(
+      FORMAT(
+        'veiculo=%s (placa=%s, porte=%s, classe=%s, status=%s, status_aprovacao=%s)',
+        v.id,
+        COALESCE(v.placa, 'null'),
+        COALESCE(v.porte, 'null'),
+        COALESCE(v.classe, 'null'),
+        COALESCE(v.status, 'null'),
+        COALESCE(v.status_aprovacao, 'null')
+      ),
+      '; ' ORDER BY v.id ASC
+    )
+  INTO v_veiculos_invalidos, v_detalhes_veiculos_invalidos
+  FROM "veiculos" v
+  WHERE v."porte" IS NULL
+     OR v."porte" NOT IN ('Pequeno', 'Medio', 'Grande')
+     OR v."classe" IS NULL
+     OR v."classe" NOT IN ('BASICO', 'NORMAL', 'PREMIUM')
+     OR NOT (
+       (v."porte" = 'Pequeno' AND v."classe" = 'BASICO') OR
+       (v."porte" = 'Medio' AND v."classe" = 'NORMAL') OR
+       (v."porte" = 'Grande' AND v."classe" = 'PREMIUM')
+     )
+     OR v."status" IS NULL
+     OR v."status" NOT IN ('DISPONIVEL', 'EM_CORRIDA', 'INDISPONIVEL')
+     OR v."status_aprovacao" IS NULL
+     OR v."status_aprovacao" NOT IN ('PENDENTE', 'APROVADO', 'REJEITADO', 'EXCLUIDO');
+
+  IF v_veiculos_invalidos > 0 THEN
+    RAISE EXCEPTION 'Encontrado(s) % veículo(s) com dados incompatíveis com as restrições de integridade (porte/classe/status). Registros afetados: [%].', v_veiculos_invalidos, v_detalhes_veiculos_invalidos;
+  END IF;
+
+  -- 1.4. Valida previamente os dados de corridas antes de qualquer alteração de estado ou adição de constraints
+  SELECT
+    COUNT(*),
+    STRING_AGG(
+      FORMAT(
+        'corrida=%s (status=%s, classe=%s, forma_pagamento=%s)',
+        c.id,
+        COALESCE(c.status, 'null'),
+        COALESCE(c.classe, 'null'),
+        COALESCE(c.forma_pagamento, 'null')
+      ),
+      '; ' ORDER BY c.id ASC
+    )
+  INTO v_corridas_invalidas, v_detalhes_corridas_invalidas
+  FROM "corridas" c
+  WHERE c."status" IS NULL
+     OR c."status" NOT IN ('SOLICITADA', 'CONFIRMADA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA')
+     OR c."classe" IS NULL
+     OR c."classe" NOT IN ('BASICO', 'NORMAL', 'PREMIUM')
+     OR c."forma_pagamento" IS NULL
+     OR c."forma_pagamento" NOT IN ('DINHEIRO', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'PIX', 'VOUCHER');
+
+  IF v_corridas_invalidas > 0 THEN
+    RAISE EXCEPTION 'Encontrada(s) % corrida(s) com dados incompatíveis com as restrições de domínio (status/classe/forma_pagamento). Registros afetados: [%].', v_corridas_invalidas, v_detalhes_corridas_invalidas;
+  END IF;
+
+  -- 1.5. Saneia de forma determinística e auditável apenas reservas CONFIRMADA excedentes (ainda não iniciadas)
   WITH classificadas AS (
     SELECT
       id,
       veiculo_id,
       motorista_id,
       status,
+      criada_em,
       atualizada_em,
       FIRST_VALUE(id) OVER (
         PARTITION BY veiculo_id
@@ -72,110 +195,183 @@ BEGIN
   excedentes_confirmadas AS (
     SELECT * FROM classificadas WHERE rn > 1 AND status = 'CONFIRMADA'
   ),
-  registro_auditoria AS (
-    INSERT INTO "auditoria" (
-      "perfil",
-      "acao",
-      "modulo",
-      "entidade",
-      "entidade_id",
-      "descricao",
-      "dados_anteriores",
-      "dados_novos",
-      "resultado"
-    )
-    SELECT
-      'SISTEMA',
-      'SANEAMENTO_CONFLITO_VEICULO_ATIVO',
-      'CORRIDAS',
-      'Corrida',
-      ec.id,
-      FORMAT(
-        'Saneamento de reserva duplicada na migração: veículo %s já estava alocado à corrida titular %s (%s). Corrida retornada para SOLICITADA sem alterar histórico de conclusão.',
-        ec.veiculo_id,
-        ec.titular_id,
-        ec.titular_status
-      ),
-      jsonb_build_object(
-        'status', ec.status,
-        'motoristaId', ec.motorista_id,
-        'veiculoId', ec.veiculo_id,
-        'atualizadaEm', ec.atualizada_em
-      ),
-      jsonb_build_object(
+  corridas_atualizadas AS (
+    UPDATE "corridas" c
+    SET
+      "status" = 'SOLICITADA',
+      "motorista_id" = NULL,
+      "veiculo_id" = NULL,
+      "atualizada_em" = v_agora
+    FROM excedentes_confirmadas ec
+    WHERE c."id" = ec.id
+      AND c."status" = 'CONFIRMADA'
+      AND c."veiculo_id" = ec.veiculo_id
+    RETURNING
+      c."id",
+      ec.veiculo_id AS veiculo_id_anterior,
+      ec.motorista_id AS motorista_id_anterior,
+      ec.status AS status_anterior,
+      ec.criada_em AS criada_em_anterior,
+      ec.atualizada_em AS atualizada_em_anterior,
+      ec.titular_id,
+      ec.titular_status
+  ),
+  pendencias_resolvidas AS (
+    UPDATE "auditoria" a
+    SET
+      "resultado" = 'RESOLVIDO',
+      "dados_novos" = jsonb_build_object(
         'status', 'SOLICITADA',
         'motoristaId', NULL,
-        'veiculoId', NULL
-      ),
-      'SUCESSO'
-    FROM excedentes_confirmadas ec
-    RETURNING entidade_id
+        'veiculoId', NULL,
+        'atualizadaEm', v_agora
+      )
+    FROM corridas_atualizadas ca
+    WHERE a."entidade" = 'Corrida'
+      AND a."entidade_id" = ca.id
+      AND a."acao" = 'CONFLITO_VEICULO_ATIVO_NAO_RESOLVIDO'
+      AND a."resultado" = 'PENDENTE'
+    RETURNING a."id"
   )
-  UPDATE "corridas" c
-  SET
-    "status" = 'SOLICITADA',
-    "motorista_id" = NULL,
-    "veiculo_id" = NULL,
-    "atualizada_em" = CURRENT_TIMESTAMP
-  WHERE c."id" IN (SELECT id FROM excedentes_confirmadas);
+  INSERT INTO "auditoria" (
+    "perfil",
+    "acao",
+    "modulo",
+    "entidade",
+    "entidade_id",
+    "descricao",
+    "dados_anteriores",
+    "dados_novos",
+    "resultado",
+    "criado_em"
+  )
+  SELECT
+    'SISTEMA',
+    'SANEAMENTO_CONFLITO_VEICULO_ATIVO',
+    'CORRIDAS',
+    'Corrida',
+    ca.id,
+    FORMAT(
+      'Saneamento de reserva duplicada na migração: veículo %s já estava alocado à corrida titular %s (%s). Corrida retornada para SOLICITADA sem alterar histórico de conclusão.',
+      ca.veiculo_id_anterior,
+      ca.titular_id,
+      ca.titular_status
+    ),
+    jsonb_build_object(
+      'status', ca.status_anterior,
+      'motoristaId', ca.motorista_id_anterior,
+      'veiculoId', ca.veiculo_id_anterior,
+      'criadaEm', ca.criada_em_anterior,
+      'atualizadaEm', ca.atualizada_em_anterior,
+      'corridaTitularId', ca.titular_id,
+      'corridaTitularStatus', ca.titular_status
+    ),
+    jsonb_build_object(
+      'status', 'SOLICITADA',
+      'motoristaId', NULL,
+      'veiculoId', NULL,
+      'atualizadaEm', v_agora
+    ),
+    'SUCESSO',
+    v_agora
+  FROM corridas_atualizadas ca;
+
+  -- 1.6. Sincroniza status EM_CORRIDA nos veículos que possuem corrida ativa legítima
+  UPDATE "veiculos" v
+  SET "status" = 'EM_CORRIDA',
+      "atualizado_em" = v_agora
+  WHERE EXISTS (
+    SELECT 1
+    FROM "corridas" c
+    WHERE c."veiculo_id" = v."id"
+      AND c."status" IN ('CONFIRMADA', 'EM_ANDAMENTO')
+  )
+  AND v."status" = 'DISPONIVEL';
+
+  -- 1.7. Confirma ausência de qualquer conflito remanescente antes de aplicar índice único e constraints
+  SELECT COUNT(*) INTO v_conflitos_remanescentes
+  FROM (
+    SELECT "veiculo_id"
+    FROM "corridas"
+    WHERE "status" IN ('CONFIRMADA', 'EM_ANDAMENTO')
+      AND "veiculo_id" IS NOT NULL
+    GROUP BY "veiculo_id"
+    HAVING COUNT(*) > 1
+  ) remanescentes;
+
+  IF v_conflitos_remanescentes > 0 THEN
+    RAISE EXCEPTION 'Permanecem % veículo(s) com múltiplas corridas ativas após etapa de saneamento; migração abortada por segurança.', v_conflitos_remanescentes;
+  END IF;
+
+  -- 1.8. Adiciona constraints de domínio e coerência apenas se ainda não existirem (sem recriar estruturas válidas)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'veiculos'::regclass AND conname = 'ck_veiculos_porte'
+  ) THEN
+    ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_porte"
+      CHECK ("porte" IN ('Pequeno', 'Medio', 'Grande'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'veiculos'::regclass AND conname = 'ck_veiculos_classe'
+  ) THEN
+    ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_classe"
+      CHECK ("classe" IN ('BASICO', 'NORMAL', 'PREMIUM'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'veiculos'::regclass AND conname = 'ck_veiculos_porte_classe'
+  ) THEN
+    ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_porte_classe"
+      CHECK (
+        ("porte" = 'Pequeno' AND "classe" = 'BASICO') OR
+        ("porte" = 'Medio' AND "classe" = 'NORMAL') OR
+        ("porte" = 'Grande' AND "classe" = 'PREMIUM')
+      );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'veiculos'::regclass AND conname = 'ck_veiculos_status'
+  ) THEN
+    ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_status"
+      CHECK ("status" IN ('DISPONIVEL', 'EM_CORRIDA', 'INDISPONIVEL'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'veiculos'::regclass AND conname = 'ck_veiculos_status_aprovacao'
+  ) THEN
+    ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_status_aprovacao"
+      CHECK ("status_aprovacao" IN ('PENDENTE', 'APROVADO', 'REJEITADO', 'EXCLUIDO'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'corridas'::regclass AND conname = 'ck_corridas_status'
+  ) THEN
+    ALTER TABLE "corridas" ADD CONSTRAINT "ck_corridas_status"
+      CHECK ("status" IN ('SOLICITADA', 'CONFIRMADA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'corridas'::regclass AND conname = 'ck_corridas_classe'
+  ) THEN
+    ALTER TABLE "corridas" ADD CONSTRAINT "ck_corridas_classe"
+      CHECK ("classe" IN ('BASICO', 'NORMAL', 'PREMIUM'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'corridas'::regclass AND conname = 'ck_corridas_forma_pagamento'
+  ) THEN
+    ALTER TABLE "corridas" ADD CONSTRAINT "ck_corridas_forma_pagamento"
+      CHECK ("forma_pagamento" IN ('DINHEIRO', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'PIX', 'VOUCHER'));
+  END IF;
+
+  -- 1.9. Índices compostos para consultas frequentes (idempotentes via IF NOT EXISTS)
+  CREATE INDEX IF NOT EXISTS "idx_veiculos_aprovacao_status_classe" ON "veiculos"("status_aprovacao", "status", "classe");
+  CREATE INDEX IF NOT EXISTS "idx_corridas_motorista_status" ON "corridas"("motorista_id", "status");
+  CREATE INDEX IF NOT EXISTS "idx_corridas_motorista_data_horario" ON "corridas"("motorista_id", "data_horario");
+  CREATE INDEX IF NOT EXISTS "idx_corridas_usuario_status" ON "corridas"("usuario_id", "status");
+
+  -- 1.10. Índice único parcial para impedir múltiplas corridas ativas no mesmo veículo
+  CREATE UNIQUE INDEX IF NOT EXISTS "uq_corridas_veiculo_ativo"
+    ON "corridas"("veiculo_id")
+    WHERE "status" IN ('CONFIRMADA', 'EM_ANDAMENTO') AND "veiculo_id" IS NOT NULL;
 END $$;
-
--- Sincronizar status dos veículos que possuem corrida ativa
-UPDATE "veiculos" v
-SET "status" = 'EM_CORRIDA',
-    "atualizado_em" = CURRENT_TIMESTAMP
-WHERE EXISTS (
-  SELECT 1
-  FROM "corridas" c
-  WHERE c."veiculo_id" = v."id"
-    AND c."status" IN ('CONFIRMADA', 'EM_ANDAMENTO')
-)
-AND v."status" = 'DISPONIVEL';
-
--- 2. Índices compostos para consultas frequentes
-CREATE INDEX IF NOT EXISTS "idx_veiculos_aprovacao_status_classe" ON "veiculos"("status_aprovacao", "status", "classe");
-CREATE INDEX IF NOT EXISTS "idx_corridas_motorista_status" ON "corridas"("motorista_id", "status");
-CREATE INDEX IF NOT EXISTS "idx_corridas_motorista_data_horario" ON "corridas"("motorista_id", "data_horario");
-CREATE INDEX IF NOT EXISTS "idx_corridas_usuario_status" ON "corridas"("usuario_id", "status");
-
--- 3. Índice único parcial para impedir múltiplas corridas ativas no mesmo veículo
-CREATE UNIQUE INDEX IF NOT EXISTS "uq_corridas_veiculo_ativo"
-  ON "corridas"("veiculo_id")
-  WHERE "status" IN ('CONFIRMADA', 'EM_ANDAMENTO') AND "veiculo_id" IS NOT NULL;
-
--- 4. Constraints de domínio e coerência em veiculos e corridas
-ALTER TABLE "veiculos" DROP CONSTRAINT IF EXISTS "ck_veiculos_porte";
-ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_porte"
-  CHECK ("porte" IN ('Pequeno', 'Medio', 'Grande'));
-
-ALTER TABLE "veiculos" DROP CONSTRAINT IF EXISTS "ck_veiculos_classe";
-ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_classe"
-  CHECK ("classe" IN ('BASICO', 'NORMAL', 'PREMIUM'));
-
-ALTER TABLE "veiculos" DROP CONSTRAINT IF EXISTS "ck_veiculos_porte_classe";
-ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_porte_classe"
-  CHECK (
-    ("porte" = 'Pequeno' AND "classe" = 'BASICO') OR
-    ("porte" = 'Medio' AND "classe" = 'NORMAL') OR
-    ("porte" = 'Grande' AND "classe" = 'PREMIUM')
-  );
-
-ALTER TABLE "veiculos" DROP CONSTRAINT IF EXISTS "ck_veiculos_status";
-ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_status"
-  CHECK ("status" IN ('DISPONIVEL', 'EM_CORRIDA', 'INDISPONIVEL'));
-
-ALTER TABLE "veiculos" DROP CONSTRAINT IF EXISTS "ck_veiculos_status_aprovacao";
-ALTER TABLE "veiculos" ADD CONSTRAINT "ck_veiculos_status_aprovacao"
-  CHECK ("status_aprovacao" IN ('PENDENTE', 'APROVADO', 'REJEITADO', 'EXCLUIDO'));
-
-ALTER TABLE "corridas" DROP CONSTRAINT IF EXISTS "ck_corridas_status";
-ALTER TABLE "corridas" ADD CONSTRAINT "ck_corridas_status"
-  CHECK ("status" IN ('SOLICITADA', 'CONFIRMADA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA'));
-
-ALTER TABLE "corridas" DROP CONSTRAINT IF EXISTS "ck_corridas_classe";
-ALTER TABLE "corridas" ADD CONSTRAINT "ck_corridas_classe"
-  CHECK ("classe" IN ('BASICO', 'NORMAL', 'PREMIUM'));
-
-ALTER TABLE "corridas" DROP CONSTRAINT IF EXISTS "ck_corridas_forma_pagamento";
-ALTER TABLE "corridas" ADD CONSTRAINT "ck_corridas_forma_pagamento"
-  CHECK ("forma_pagamento" IN ('DINHEIRO', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'PIX', 'VOUCHER'));
