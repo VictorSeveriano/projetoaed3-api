@@ -177,15 +177,13 @@ describe('HTTP Authorization Tests', () => {
     });
   });
 
-  describe('PATCH /veiculos/:id/classe', () => {
-    test('Motorista tenta editar classe diretamente -> 403', async () => {
-      const res = await request(app).patch('/api/veiculos/v1/classe').set('x-auth-token', tokenMotA).send({ classe: 'PREMIUM' });
-      expect(res.statusCode).toBe(403);
-    });
+  describe('Remoção da rota enganosa PATCH /veiculos/:id/classe', () => {
+    test('Rota PATCH /veiculos/:id/classe não está mais registrada -> 404 para qualquer perfil', async () => {
+      const resMot = await request(app).patch('/api/veiculos/v1/classe').set('x-auth-token', tokenMotA).send({ classe: 'PREMIUM' });
+      expect(resMot.statusCode).toBe(404);
 
-    test('Admin tenta editar classe diretamente sem alterar porte -> 400 (classe derivada exclusivamente do porte)', async () => {
-      const res = await request(app).patch('/api/veiculos/v1/classe').set('x-auth-token', tokenAdmin).send({ classe: 'PREMIUM' });
-      expect(res.statusCode).toBe(400);
+      const resAdmin = await request(app).patch('/api/veiculos/v1/classe').set('x-auth-token', tokenAdmin).send({ classe: 'PREMIUM' });
+      expect(resAdmin.statusCode).toBe(404);
     });
   });
 
@@ -194,6 +192,18 @@ describe('HTTP Authorization Tests', () => {
       veiculosRepository.update.mockResolvedValue({ id: 'v1', marca: 'Ford' });
       const res = await request(app).patch('/api/veiculos/v1').set('x-auth-token', tokenMotA).send({ marca: 'Ford' });
       expect(res.statusCode).toBe(200);
+    });
+
+    test('Motorista tenta alterar porte via PATCH /veiculos/:id -> 403', async () => {
+      const res = await request(app).patch('/api/veiculos/v1').set('x-auth-token', tokenMotA).send({ porte: 'Grande' });
+      expect(res.statusCode).toBe(403);
+      expect(veiculosRepository.update).not.toHaveBeenCalled();
+    });
+
+    test('Motorista tenta alterar classe diretamente via PATCH /veiculos/:id -> 403', async () => {
+      const res = await request(app).patch('/api/veiculos/v1').set('x-auth-token', tokenMotA).send({ classe: 'PREMIUM' });
+      expect(res.statusCode).toBe(403);
+      expect(veiculosRepository.update).not.toHaveBeenCalled();
     });
 
     test('Admin altera porte do veículo e recalcula classe atomicamente -> 200', async () => {

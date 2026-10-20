@@ -13,7 +13,7 @@
  *  - A classe é derivada exclusivamente do porte (Pequeno→BASICO, Medio→NORMAL, Grande→PREMIUM);
  *    porte desconhecido é rejeitado (400) — não existe fallback para NORMAL.
  *  - Ao alterar o porte, porte e classe são persistidos no MESMO UPDATE (operação atômica).
- *  - Não é permitida alteração direta de classe sem alteração correspondente do porte.
+ *  - Não existe alteração direta ou independente de classe sem alteração correspondente do porte.
  */
 
 const veiculosRepository   = require('./veiculos.repository');
@@ -25,7 +25,6 @@ const {
   ADMIN_ID,
   PORTES_VALIDOS,
   PORTE_PARA_CLASSE,
-  CLASSES_VALIDAS,
   STATUS_APROVACAO_VEICULO,
   STATUS_VEICULO,
 } = require('../utils/constants');
@@ -121,20 +120,6 @@ class VeiculosService {
     return this._enriquecer(await veiculosRepository.updateStatusAprovacao(id, STATUS_APROVACAO_VEICULO.APROVADO, classe));
   }
 
-  async editarClasse(id, classe) {
-    if (typeof classe !== 'string' || !CLASSES_VALIDAS.includes(classe)) {
-      throw new AppError('Classe de serviço inválida.', 400);
-    }
-    const v = await veiculosRepository.findById(id);
-    if (!v) throw new AppError('Veículo não encontrado.', 404);
-    this._garantirNaoExcluido(v);
-
-    throw new AppError(
-      'A classe de serviço é derivada exclusivamente do porte do veículo. Altere o porte como administrador para recalcular a classe.',
-      400
-    );
-  }
-
   async rejeitar(id) {
     const v = await veiculosRepository.findById(id);
     if (!v) throw new AppError('Veículo não encontrado.', 404);
@@ -194,6 +179,17 @@ class VeiculosService {
       const novoPorte = exigirPorte(dadosLimpos.porte, PORTES_VALIDOS);
       dadosLimpos.porte = novoPorte;
       dadosLimpos.classe = this._determinarClasseServico(novoPorte);
+    } else if (
+      Object.keys(dadosLimpos).length === 0 &&
+      Object.prototype.hasOwnProperty.call(dados, 'classe')
+    ) {
+      if (!isAdmin) {
+        throw new AppError('Apenas administradores podem alterar o porte e a classe derivada do veículo.', 403);
+      }
+      throw new AppError(
+        'A classe de serviço é derivada exclusivamente do porte do veículo. Altere o porte para recalcular a classe.',
+        400
+      );
     }
     
     const atualizado = await veiculosRepository.update(id, dadosLimpos);

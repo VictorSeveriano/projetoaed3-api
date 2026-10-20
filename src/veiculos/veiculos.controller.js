@@ -54,20 +54,6 @@ const aprovar = async (req, res, next) => {
   }
 };
 
-/** PATCH /api/veiculos/:id/classe — Admin */
-const editarClasse = async (req, res, next) => {
-  try {
-    const { classe } = req.body;
-    if (!classe) return next(new AppError('classe é obrigatória.', 400));
-    const dados = await veiculosService.editarClasse(req.params.id, classe);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_CLASSE_VEICULO', modulo: 'VEICULOS', resultado: 'SUCESSO' }, req, { entidade: 'Veiculo', entidadeId: req.params.id, dadosNovos: { classe } });
-    return success(res, dados, 'Classe do veículo atualizada.');
-  } catch (err) {
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'ALTERACAO_CLASSE_VEICULO_FALHA', modulo: 'VEICULOS', resultado: 'FALHA' }, req, { entidade: 'Veiculo', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
-    next(err);
-  }
-};
-
 /** PATCH /api/veiculos/:id/rejeitar — Admin */
 const rejeitar = async (req, res, next) => {
   try {
@@ -104,4 +90,4 @@ const excluir = async (req, res, next) => {
   }
 };
 
-module.exports = { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, editarClasse, atualizar, excluir };
+module.exports = { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, atualizar, excluir };

@@ -1,23 +1,123 @@
--- 1. Verificação de integridade antes de criar o índice único parcial de corridas ativas por veículo
--- Nenhuma corrida ativa (CONFIRMADA / EM_ANDAMENTO) é alterada para FINALIZADA ou CANCELADA na migração.
--- Caso existam alocações duplicadas, execute o saneamento auditável em src/database/saneamentoCorridasAtivas.js antes de aplicar a migração.
+-- 1. Identificação, saneamento seguro de reservas CONFIRMADA excedentes e bloqueio de conflitos EM_ANDAMENTO ambíguos
+-- Regra de integridade (Seção 5):
+--   - Nenhuma corrida ativa (CONFIRMADA / EM_ANDAMENTO) é convertida em FINALIZADA ou CANCELADA.
+--   - Se existirem conflitos envolvendo múltiplas corridas EM_ANDAMENTO no mesmo veículo (que não podem
+--     ser resolvidos automaticamente com segurança), a migração interrompe a execução e lista os registros afetados.
+--   - Reservas CONFIRMADA excedentes (ainda não iniciadas em veículo já ocupado por corrida titular)
+--     são registradas na tabela de auditoria e retornam para SOLICITADA (veiculo_id = NULL, motorista_id = NULL).
 DO $$
 DECLARE
-  v_conflitos INTEGER;
+  v_conflitos_ambiguos INTEGER;
+  v_detalhes_ambiguos TEXT;
 BEGIN
-  SELECT COUNT(*) INTO v_conflitos
-  FROM (
-    SELECT "veiculo_id"
+  -- 1.1. Verifica se existem conflitos EM_ANDAMENTO que exigem resolução explícita
+  WITH classificadas AS (
+    SELECT
+      id,
+      veiculo_id,
+      motorista_id,
+      status,
+      criada_em,
+      ROW_NUMBER() OVER (
+        PARTITION BY veiculo_id
+        ORDER BY CASE WHEN status = 'EM_ANDAMENTO' THEN 0 ELSE 1 END, criada_em ASC, id ASC
+      ) AS rn
     FROM "corridas"
     WHERE "status" IN ('CONFIRMADA', 'EM_ANDAMENTO')
       AND "veiculo_id" IS NOT NULL
-    GROUP BY "veiculo_id"
-    HAVING COUNT(*) > 1
-  ) duplicados;
+  ),
+  veiculos_com_excedente_em_andamento AS (
+    SELECT DISTINCT veiculo_id
+    FROM classificadas
+    WHERE rn > 1 AND status = 'EM_ANDAMENTO'
+  )
+  SELECT
+    COUNT(DISTINCT c.veiculo_id),
+    STRING_AGG(
+      FORMAT('corrida=%s (veiculo=%s, motorista=%s, status=%s)', c.id, c.veiculo_id, COALESCE(c.motorista_id::text, 'null'), c.status),
+      '; ' ORDER BY c.veiculo_id, c.rn
+    )
+  INTO v_conflitos_ambiguos, v_detalhes_ambiguos
+  FROM classificadas c
+  INNER JOIN veiculos_com_excedente_em_andamento v ON v.veiculo_id = c.veiculo_id;
 
-  IF v_conflitos > 0 THEN
-    RAISE EXCEPTION 'Encontrados % veículo(s) com múltiplas corridas ativas (CONFIRMADA/EM_ANDAMENTO). Execute o saneamento auditável (src/database/saneamentoCorridasAtivas.js) antes de criar uq_corridas_veiculo_ativo — corridas ativas nunca devem ser convertidas em FINALIZADA/CANCELADA sem comprovação.', v_conflitos;
+  IF v_conflitos_ambiguos > 0 THEN
+    RAISE EXCEPTION 'Encontrados % veículo(s) com conflito ambíguo de corridas EM_ANDAMENTO que não podem ser resolvidos automaticamente. Registros afetados: [%]. Execute o saneamento explícito via src/database/saneamentoCorridasAtivas.js.', v_conflitos_ambiguos, v_detalhes_ambiguos;
   END IF;
+
+  -- 1.2. Saneia com auditoria reservas CONFIRMADA excedentes (ainda não iniciadas)
+  WITH classificadas AS (
+    SELECT
+      id,
+      veiculo_id,
+      motorista_id,
+      status,
+      atualizada_em,
+      FIRST_VALUE(id) OVER (
+        PARTITION BY veiculo_id
+        ORDER BY CASE WHEN status = 'EM_ANDAMENTO' THEN 0 ELSE 1 END, criada_em ASC, id ASC
+      ) AS titular_id,
+      FIRST_VALUE(status) OVER (
+        PARTITION BY veiculo_id
+        ORDER BY CASE WHEN status = 'EM_ANDAMENTO' THEN 0 ELSE 1 END, criada_em ASC, id ASC
+      ) AS titular_status,
+      ROW_NUMBER() OVER (
+        PARTITION BY veiculo_id
+        ORDER BY CASE WHEN status = 'EM_ANDAMENTO' THEN 0 ELSE 1 END, criada_em ASC, id ASC
+      ) AS rn
+    FROM "corridas"
+    WHERE "status" IN ('CONFIRMADA', 'EM_ANDAMENTO')
+      AND "veiculo_id" IS NOT NULL
+  ),
+  excedentes_confirmadas AS (
+    SELECT * FROM classificadas WHERE rn > 1 AND status = 'CONFIRMADA'
+  ),
+  registro_auditoria AS (
+    INSERT INTO "auditoria" (
+      "perfil",
+      "acao",
+      "modulo",
+      "entidade",
+      "entidade_id",
+      "descricao",
+      "dados_anteriores",
+      "dados_novos",
+      "resultado"
+    )
+    SELECT
+      'SISTEMA',
+      'SANEAMENTO_CONFLITO_VEICULO_ATIVO',
+      'CORRIDAS',
+      'Corrida',
+      ec.id,
+      FORMAT(
+        'Saneamento de reserva duplicada na migração: veículo %s já estava alocado à corrida titular %s (%s). Corrida retornada para SOLICITADA sem alterar histórico de conclusão.',
+        ec.veiculo_id,
+        ec.titular_id,
+        ec.titular_status
+      ),
+      jsonb_build_object(
+        'status', ec.status,
+        'motoristaId', ec.motorista_id,
+        'veiculoId', ec.veiculo_id,
+        'atualizadaEm', ec.atualizada_em
+      ),
+      jsonb_build_object(
+        'status', 'SOLICITADA',
+        'motoristaId', NULL,
+        'veiculoId', NULL
+      ),
+      'SUCESSO'
+    FROM excedentes_confirmadas ec
+    RETURNING entidade_id
+  )
+  UPDATE "corridas" c
+  SET
+    "status" = 'SOLICITADA',
+    "motorista_id" = NULL,
+    "veiculo_id" = NULL,
+    "atualizada_em" = CURRENT_TIMESTAMP
+  WHERE c."id" IN (SELECT id FROM excedentes_confirmadas);
 END $$;
 
 -- Sincronizar status dos veículos que possuem corrida ativa
@@ -79,4 +179,3 @@ ALTER TABLE "corridas" ADD CONSTRAINT "ck_corridas_classe"
 ALTER TABLE "corridas" DROP CONSTRAINT IF EXISTS "ck_corridas_forma_pagamento";
 ALTER TABLE "corridas" ADD CONSTRAINT "ck_corridas_forma_pagamento"
   CHECK ("forma_pagamento" IN ('DINHEIRO', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'PIX', 'VOUCHER'));
-

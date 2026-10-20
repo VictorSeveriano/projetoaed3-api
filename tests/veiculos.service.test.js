@@ -3,7 +3,6 @@ jest.mock('../src/veiculos/veiculos.repository', () => ({
   findByMotoristaId: jest.fn(),
   findById: jest.fn(),
   updateStatusAprovacao: jest.fn(),
-  updateClasse: jest.fn(),
   update: jest.fn(),
   softDelete: jest.fn(),
 }));
@@ -195,24 +194,29 @@ describe('VeiculosService aprovação, classe e restrição de alteração de po
     expect(vCorr.classe).toBe('PREMIUM');
   });
 
-  test('Classe: tentativa de alterar classe diretamente via editarClasse sem alterar porte -> rejeitado (400)', async () => {
-    veiculosRepository.findById.mockResolvedValue({ id: 'v1', statusAprovacao: 'APROVADO', porte: 'Pequeno', classe: 'BASICO' });
-    await expect(veiculosService.editarClasse('v1', 'PREMIUM')).rejects.toMatchObject({ statusCode: 400 });
+  test('Classe: método editarClasse independente foi removido (classe derivada exclusivamente do porte)', () => {
+    expect(veiculosService.editarClasse).toBeUndefined();
+    expect(veiculosRepository.updateClasse).toBeUndefined();
+  });
+
+  test('Classe: tentativa de enviar apenas classe na atualização sem porte é bloqueada (403 para motorista, 400 para admin)', async () => {
+    veiculosRepository.findById.mockResolvedValue({
+      id: 'v1',
+      motoristaId: 'mot-1',
+      porte: 'Pequeno',
+      classe: 'BASICO',
+      statusAprovacao: 'APROVADO',
+    });
+
+    await expect(
+      veiculosService.atualizar('v1', { classe: 'PREMIUM' }, { id: 'mot-1', perfil: 'MOTORISTA' })
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    await expect(
+      veiculosService.atualizar('v1', { classe: 'PREMIUM' }, { id: 'admin-1', perfil: 'ADMINISTRADOR' })
+    ).rejects.toMatchObject({ statusCode: 400 });
+
     expect(veiculosRepository.update).not.toHaveBeenCalled();
-  });
-
-  test('Classe: classe inválida -> 400', async () => {
-    await expect(veiculosService.editarClasse('v1', 'LUXO')).rejects.toMatchObject({ statusCode: 400 });
-  });
-
-  test('Classe: editarClasse em veículo inexistente ou excluído -> 404 e não persiste', async () => {
-    veiculosRepository.findById.mockResolvedValueOnce(null);
-    await expect(veiculosService.editarClasse('v-inexistente', 'NORMAL')).rejects.toMatchObject({ statusCode: 404 });
-
-    veiculosRepository.findById.mockResolvedValueOnce({ id: 'v-excluido', statusAprovacao: 'EXCLUIDO' });
-    await expect(veiculosService.editarClasse('v-excluido', 'NORMAL')).rejects.toMatchObject({ statusCode: 404 });
-
-    expect(veiculosRepository.updateClasse).not.toHaveBeenCalled();
   });
 
   test('Atualização genérica: PATCH veiculos/:id tenta alterar classe diretamente e é ignorado', async () => {

@@ -59,10 +59,14 @@ class MotoristasService {
 
     const novoMotorista = await motoristasRepository.create({ usuarioId, cnh: cnhNorm });
 
-    await notificacoesService.notificarSolicitacaoMotorista(ADMIN_ID, {
-      nomeMotorista: usuario.nome,
-      motoristaId:   novoMotorista.id,
-    });
+    try {
+      await notificacoesService.notificarSolicitacaoMotorista(ADMIN_ID, {
+        nomeMotorista: usuario.nome,
+        motoristaId:   novoMotorista.id,
+      });
+    } catch (error) {
+      console.error('[MotoristasService] Falha ao notificar solicitação de motorista:', error.message);
+    }
 
     return novoMotorista;
   }
