@@ -11,6 +11,7 @@ const {
   STATUS_APROVACAO_VEICULO,
   TRANSICOES_CORRIDA,
 } = require('../utils/constants');
+const { paraNumeroOuNull, enderecoParaPrisma } = require('../utils/prismaMappers');
 
 /** Erro interno usado para abortar (rollback) uma transacao com um motivo de dominio. */
 class RollbackError extends Error {
@@ -21,11 +22,6 @@ class RollbackError extends Error {
 }
 
 // ---------- Helpers de mapeamento ----------
-
-function paraNumeroOuNull(valor) {
-  if (valor == null) return null;
-  return typeof valor.toNumber === 'function' ? valor.toNumber() : Number(valor);
-}
 
 function formatarCorrida(cPrisma) {
   if (!cPrisma) return null;
@@ -48,22 +44,6 @@ function formatarCorrida(cPrisma) {
       distanciaKm: r.distanciaKm != null ? paraNumeroOuNull(r.distanciaKm) : 0
     }))
   });
-}
-
-function enderecoParaPrisma(endereco, lat, lng) {
-  return {
-    logradouro:  endereco?.rua || endereco?.logradouro || null,
-    numero:      endereco?.numero || null,
-    complemento: endereco?.complemento || null,
-    bairro:      endereco?.bairro || null,
-    cidade:      endereco?.cidade || null,
-    estado:      endereco?.estado || null,
-    uf:          endereco?.uf || null,
-    cep:         endereco?.cep ? endereco.cep.replace(/\D/g, '') : null,
-    pais:        endereco?.pais || 'Brasil',
-    latitude:    lat !== undefined ? lat : (endereco?.latitude ?? null),
-    longitude:   lng !== undefined ? lng : (endereco?.longitude ?? null)
-  };
 }
 
 function rotaParaPrisma(rota, ordem, selecionada = false) {
@@ -154,15 +134,6 @@ class CorridasRepository {
     return corridas.map(formatarCorrida);
   }
 
-  async findByVeiculo(veiculoId) {
-    const corridas = await prisma.corrida.findMany({
-      where: { veiculoId },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
-      orderBy: { criadaEm: 'desc' }
-    });
-    return corridas.map(formatarCorrida);
-  }
-
   async create(dados) {
     const rotas = dados.rotasAlternativas || [];
     const rotasCriacao = rotas
@@ -207,38 +178,6 @@ class CorridasRepository {
     });
 
     return formatarCorrida(novaCorrida);
-  }
-
-  /**
-   * Aceita a corrida atomicamente:
-   * - Só atualiza se o status ainda é SOLICITADA (prevenção de duplo aceite)
-   * - Associa motoristaId e veiculoId
-   * - Muda status para CONFIRMADA
-   * @returns {Corrida|null} null se a corrida já foi assumida por outro
-   */
-  async aceitarCorrida(corridaId, motoristaId, veiculoId) {
-    try {
-      // updateMany com filtro de status previne corrida de dados (duplo aceite)
-      const resultado = await prisma.corrida.updateMany({
-        where: { id: corridaId, status: 'SOLICITADA' },
-        data: {
-          motoristaId,
-          veiculoId,
-          status: 'CONFIRMADA',
-          atualizadaEm: new Date(),
-        }
-      });
-
-      if (resultado.count === 0) {
-        // Nenhuma linha atualizada: corrida já foi assumida ou não existe
-        return null;
-      }
-
-      // Buscar corrida atualizada para retornar
-      return this.findById(corridaId);
-    } catch (error) {
-      throw error;
-    }
   }
 
   /**
@@ -342,37 +281,6 @@ class CorridasRepository {
     } catch (error) {
       if (error instanceof RollbackError) return null;
       throw error;
-    }
-  }
-
-  async updateStatus(id, status) {
-    try {
-      const atualizada = await prisma.corrida.update({
-        where: { id },
-        data: {
-          status,
-          atualizadaEm: new Date()
-        },
-        include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true }
-      });
-      return formatarCorrida(atualizada);
-    } catch (error) {
-      if (error.code === 'P2025') return undefined;
-      throw error;
-    }
-  }
-
-  async delete(id) {
-    try {
-      // Prisma handle cascades if configured.
-      // Wait, manual schema might not have cascade delete for rotas. We should delete rotas first!
-      await prisma.$transaction([
-        prisma.corridaRota.deleteMany({ where: { corridaId: id } }),
-        prisma.corrida.delete({ where: { id } })
-      ]);
-      return true;
-    } catch (error) {
-      return false;
     }
   }
 }

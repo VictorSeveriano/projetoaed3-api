@@ -1,6 +1,5 @@
 const Grafo = require('./Grafo');
 const Vertice = require('./Vertice');
-const Aresta = require('./Aresta');
 const { ArvoreBinariaBusca } = require('./ArvoreBinariaBusca');
 
 /**

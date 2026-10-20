@@ -4,13 +4,13 @@
  */
 
 const prisma = require('../database/prisma');
+const { paraNumeroOuNull } = require('../utils/prismaMappers');
 
 function formatarVeiculo(v) {
   if (!v) return null;
   return {
     ...v,
-    // Prisma retorna Decimal object, convertemos para Number nativo
-    quilometragem: v.quilometragem ? v.quilometragem.toNumber() : 0,
+    quilometragem: paraNumeroOuNull(v.quilometragem) ?? 0,
   };
 }
 
@@ -51,14 +51,6 @@ class VeiculosRepository {
         statusAprovacao: 'APROVADO',
         status: 'DISPONIVEL'
       },
-      orderBy: { criadoEm: 'asc' }
-    });
-    return veiculos.map(formatarVeiculo);
-  }
-
-  async findByStatus(status) {
-    const veiculos = await prisma.veiculo.findMany({
-      where: { status },
       orderBy: { criadoEm: 'asc' }
     });
     return veiculos.map(formatarVeiculo);
@@ -114,22 +106,6 @@ class VeiculosRepository {
       const veiculo = await prisma.veiculo.update({
         where: { id },
         data: dataUpdate
-      });
-      return formatarVeiculo(veiculo);
-    } catch (error) {
-      if (error.code === 'P2025') return null;
-      throw error;
-    }
-  }
-
-  async updateStatus(id, status) {
-    try {
-      const veiculo = await prisma.veiculo.update({
-        where: { id },
-        data: {
-          status,
-          atualizadoEm: new Date()
-        }
       });
       return formatarVeiculo(veiculo);
     } catch (error) {

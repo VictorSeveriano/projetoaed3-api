@@ -57,7 +57,11 @@ const solicitar = async (req, res, next) => {
       return next(new AppError('A cnh é obrigatória.', 400));
     }
     const motorista = await motoristasService.solicitar(usuarioId, cnh);
-    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'SOLICITACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO', entidade: 'Motorista', entidadeId: motorista.id }, req);
+    await auditoriaService.registrar(
+      { usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'SOLICITACAO_MOTORISTA', modulo: 'MOTORISTAS', resultado: 'SUCESSO' },
+      req,
+      { entidade: 'Motorista', entidadeId: motorista.id }
+    );
     return res.status(201).json({ success: true, data: motorista, message: 'Solicitação enviada.' });
   } catch (err) {
     await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'SOLICITACAO_MOTORISTA_FALHA', modulo: 'MOTORISTAS', resultado: 'FALHA' }, req, { descricao: err.message, statusHttp: err.statusCode || 500 });

@@ -13,11 +13,10 @@ const veiculosRepository   = require('../veiculos/veiculos.repository');
 const notificacoesService  = require('../notificacoes/notificacoes.service');
 const AppError             = require('../utils/AppError');
 const { ADMIN_ID }         = require('../utils/constants');
+const { validarCNH, normalizarCNH } = require('../utils/validators');
 
 class MotoristasService {
   // ----- Consultas admin -----
-
-
 
   async listarPorStatus(statusCadastro) {
     const lista = statusCadastro
@@ -46,7 +45,6 @@ class MotoristasService {
     if (!cnh) {
       throw new AppError('CNH é obrigatória.', 400);
     }
-    const { validarCNH, normalizarCNH } = require('../utils/validators');
     const cnhNorm = normalizarCNH(cnh);
 
     if (!validarCNH(cnhNorm)) {
@@ -87,16 +85,13 @@ class MotoristasService {
 
   async atualizar(id, dados, usuarioLogado) {
     if (!usuarioLogado) throw new AppError('Acesso negado.', 401);
-    
-    const motorista = await motoristasRepository.findById(id);
-    if (!motorista) throw new AppError('Motorista não encontrado.', 404);
-
-    if (usuarioLogado.perfil !== 'ADMINISTRADOR' && motorista.usuarioId !== usuarioLogado.id) {
-      throw new AppError('Acesso negado. Você só pode alterar seus próprios dados.', 403);
-    }
+    const motorista = await this.obterMotoristaAutorizado(
+      id,
+      usuarioLogado,
+      'Acesso negado. Você só pode alterar seus próprios dados.'
+    );
 
     if (dados.cnh && dados.cnh !== motorista.cnh) {
-      const { validarCNH, normalizarCNH } = require('../utils/validators');
       const cnhNorm = normalizarCNH(dados.cnh);
       if (!validarCNH(cnhNorm)) {
         throw new AppError('CNH inválida.', 400);
@@ -113,6 +108,22 @@ class MotoristasService {
   }
 
   // ----- Consultas do próprio motorista -----
+
+  /**
+   * Busca um motorista por ID e valida que o usuário autenticado é ADMINISTRADOR
+   * ou o próprio dono do registro de motorista.
+   */
+  async obterMotoristaAutorizado(id, usuarioLogado = null, mensagemNegado = 'Voce nao tem permissao para acessar este motorista.') {
+    const m = await motoristasRepository.findById(id);
+    if (!m) throw new AppError('Motorista não encontrado.', 404);
+
+    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      if (m.usuarioId !== usuarioLogado.id) {
+        throw new AppError(mensagemNegado, 403);
+      }
+    }
+    return m;
+  }
 
   async buscarPorUsuarioId(usuarioId, usuarioLogado = null) {
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
@@ -132,39 +143,29 @@ class MotoristasService {
   }
 
   async buscarPorId(id, usuarioLogado = null) {
-    const m = await motoristasRepository.findById(id);
-    if (!m) throw new AppError('Motorista não encontrado.', 404);
-    
-    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
-      if (m.usuarioId !== usuarioLogado.id) {
-        throw new AppError('Voce nao tem permissao para acessar este motorista.', 403);
-      }
-    }
-    
+    const m = await this.obterMotoristaAutorizado(
+      id,
+      usuarioLogado,
+      'Voce nao tem permissao para acessar este motorista.'
+    );
     return this._enriquecer(m);
   }
 
   async listarCorridas(id, usuarioLogado = null) {
-    const m = await motoristasRepository.findById(id);
-    if (!m) throw new AppError('Motorista não encontrado.', 404);
-
-    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
-      if (m.usuarioId !== usuarioLogado.id) {
-        throw new AppError('Voce nao tem permissao para acessar as corridas deste motorista.', 403);
-      }
-    }
+    const m = await this.obterMotoristaAutorizado(
+      id,
+      usuarioLogado,
+      'Voce nao tem permissao para acessar as corridas deste motorista.'
+    );
     return corridasRepository.findByMotoristaId(m.usuarioId);
   }
 
   async buscarVeiculo(id, usuarioLogado = null) {
-    const m = await motoristasRepository.findById(id);
-    if (!m) throw new AppError('Motorista não encontrado.', 404);
-
-    if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
-      if (m.usuarioId !== usuarioLogado.id) {
-        throw new AppError('Voce nao tem permissao para acessar o veiculo deste motorista.', 403);
-      }
-    }
+    const m = await this.obterMotoristaAutorizado(
+      id,
+      usuarioLogado,
+      'Voce nao tem permissao para acessar o veiculo deste motorista.'
+    );
     return veiculosRepository.findByMotoristaId(m.usuarioId);
   }
 

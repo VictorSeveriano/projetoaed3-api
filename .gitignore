@@ -1,7 +1,9 @@
-﻿node_modules/
+node_modules/
 .env
 coverage/
 *.log
 
-# Arquivos de diagnóstico
+# Arquivos de diagnóstico e artefatos temporários de teste
 db_schema.json
+test_output.txt
+jest_result.json

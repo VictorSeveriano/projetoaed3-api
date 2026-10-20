@@ -4,33 +4,12 @@
  */
 
 const prisma = require('../database/prisma');
-
-// O schema.prisma possui @map para que propriedades do banco
-// já retornem em camelCase (ex: criado_em -> criadoEm).
-// Endereco também já tem a mesma estrutura, mas o sistema legado
-// utilizava "rua" ao invés de "logradouro", então ainda precisamos
-// fazer o mapeamento do logradouro para rua.
-
-function paraNumeroOuNull(valor) {
-  if (valor == null) return null;
-  return typeof valor.toNumber === 'function' ? valor.toNumber() : Number(valor);
-}
+const { enderecoParaPrisma, formatarEndereco } = require('../utils/prismaMappers');
 
 function formatarUsuario(usuarioPrisma) {
   if (!usuarioPrisma) return null;
   const { endereco, ...resto } = usuarioPrisma;
-  
-  if (endereco) {
-    resto.endereco = {
-      ...endereco,
-      rua: endereco.logradouro,
-      latitude: paraNumeroOuNull(endereco.latitude),
-      longitude: paraNumeroOuNull(endereco.longitude)
-    };
-  } else {
-    resto.endereco = null;
-  }
-  
+  resto.endereco = formatarEndereco(endereco);
   return resto;
 }
 
@@ -39,23 +18,6 @@ function formatarUsuarioSemSenha(usuarioPrisma) {
   if (!u) return null;
   const { senha, ...resto } = u;
   return resto;
-}
-
-function enderecoParaPrisma(endereco) {
-  if (!endereco) return undefined;
-  return {
-    logradouro:  endereco.rua        || endereco.logradouro || null,
-    numero:      endereco.numero      || null,
-    complemento: endereco.complemento || null,
-    bairro:      endereco.bairro      || null,
-    cidade:      endereco.cidade      || null,
-    estado:      endereco.estado      || null,
-    uf:          endereco.uf          || null,
-    cep:         endereco.cep         ? endereco.cep.replace(/\D/g, '') : null,
-    pais:        endereco.pais        || 'Brasil',
-    latitude:    endereco.latitude    ?? null,
-    longitude:   endereco.longitude   ?? null
-  };
 }
 
 class AuthRepository {

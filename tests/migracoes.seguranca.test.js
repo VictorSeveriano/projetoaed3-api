@@ -7,351 +7,21 @@
  * nem depender dos dados do schema public.
  */
 
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
-const { PrismaClient } = require('@prisma/client');
 const {
   diagnosticarConflitosVeiculoAtivo,
   sanearConflitosVeiculoAtivo,
 } = require('../src/database/saneamentoCorridasAtivas');
+const {
+  MIGRACOES_BASE,
+  MIGRACAO_INDICES_CONSTRAINTS,
+  MIGRACAO_CORRETIVA,
+  INDICES_ESPERADOS,
+  CONSTRAINTS_ESPERADAS,
+  criarAmbienteIsolado,
+  semearBaseDadosValidos,
+} = require('./helpers/isolatedSchema');
 
 jest.setTimeout(180000);
-
-const MIGRATIONS_DIR = path.join(__dirname, '../prisma/migrations');
-
-const MIGRACOES_BASE = [
-  '20240101000000_init',
-  '20240101000001_remove_schema_migrations',
-  '20261001000000_add_auditoria',
-  '20261001133500_padronizar_porte',
-];
-
-const MIGRACAO_INDICES_CONSTRAINTS = '20261020130000_add_indexes_and_constraints';
-const MIGRACAO_CORRETIVA = '20261020190000_corrigir_seguranca_e_auditoria_restricoes';
-
-const INDICES_ESPERADOS = [
-  'idx_veiculos_aprovacao_status_classe',
-  'idx_corridas_motorista_status',
-  'idx_corridas_motorista_data_horario',
-  'idx_corridas_usuario_status',
-  'uq_corridas_veiculo_ativo',
-];
-
-const CONSTRAINTS_ESPERADAS = [
-  'ck_veiculos_porte',
-  'ck_veiculos_classe',
-  'ck_veiculos_porte_classe',
-  'ck_veiculos_status',
-  'ck_veiculos_status_aprovacao',
-  'ck_corridas_status',
-  'ck_corridas_classe',
-  'ck_corridas_forma_pagamento',
-];
-
-function dividirComandosSqlTopLevel(sql) {
-  const comandos = [];
-  let atual = '';
-  let emDollarQuote = false;
-  let emSingleQuote = false;
-  let emComentarioLinha = false;
-
-  for (let i = 0; i < sql.length; i++) {
-    const ch = sql[i];
-    const prox = sql[i + 1];
-
-    if (emComentarioLinha) {
-      atual += ch;
-      if (ch === '\n') emComentarioLinha = false;
-      continue;
-    }
-
-    if (!emSingleQuote && !emDollarQuote && ch === '-' && prox === '-') {
-      emComentarioLinha = true;
-      atual += ch;
-      continue;
-    }
-
-    if (!emDollarQuote && ch === "'") {
-      if (emSingleQuote && prox === "'") {
-        atual += "''";
-        i++;
-        continue;
-      }
-      emSingleQuote = !emSingleQuote;
-      atual += ch;
-      continue;
-    }
-
-    if (!emSingleQuote && ch === '$' && prox === '$') {
-      emDollarQuote = !emDollarQuote;
-      atual += '$$';
-      i++;
-      continue;
-    }
-
-    if (!emSingleQuote && !emDollarQuote && ch === ';') {
-      const limpo = atual.trim();
-      if (limpo.length > 0) comandos.push(limpo);
-      atual = '';
-      continue;
-    }
-
-    atual += ch;
-  }
-
-  const resto = atual.trim();
-  if (resto.length > 0) comandos.push(resto);
-  return comandos;
-}
-
-function lerMigracao(nome) {
-  const filePath = path.join(MIGRATIONS_DIR, nome, 'migration.sql');
-  const sql = fs.readFileSync(filePath, 'utf8');
-  const checksum = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
-  return { nome, sql, checksum };
-}
-
-async function criarAmbienteIsolado(tag) {
-  const sufixo = `${tag}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-  const schemaName = `test_mig_${sufixo}`.toLowerCase();
-  const url = new URL(process.env.DATABASE_URL);
-  url.hostname = url.hostname.replace('-pooler.', '.');
-  url.searchParams.set('schema', schemaName);
-  url.searchParams.set('connection_limit', '1');
-
-  const client = new PrismaClient({
-    datasources: { db: { url: url.toString() } },
-  });
-
-  await client.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-  await client.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "${schemaName}"."_prisma_migrations" (
-      "id" VARCHAR(36) PRIMARY KEY,
-      "checksum" VARCHAR(64) NOT NULL,
-      "finished_at" TIMESTAMPTZ,
-      "migration_name" VARCHAR(250) NOT NULL,
-      "logs" TEXT,
-      "rolled_back_at" TIMESTAMPTZ,
-      "started_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
-      "applied_steps_count" INTEGER NOT NULL DEFAULT 0
-    );
-  `);
-
-  async function aplicarMigracaoNoSchema(nomeMigracao) {
-    const { sql, checksum } = lerMigracao(nomeMigracao);
-    const sqlUnico = /^\s*(--[^\n]*\n|\s)*DO\s+\$\$/i.test(sql)
-      ? sql
-      : `DO $mig$\nBEGIN\n${sql}\nEND $mig$;`;
-    const idReg = crypto.randomUUID();
-    await client.$transaction(
-      async (tx) => {
-        await tx.$executeRawUnsafe(`SET LOCAL search_path TO "${schemaName}"`);
-        await tx.$executeRawUnsafe(sqlUnico);
-        await tx.$executeRawUnsafe(
-          `INSERT INTO "${schemaName}"."_prisma_migrations" ("id", "checksum", "finished_at", "migration_name", "applied_steps_count") VALUES ($1, $2, CURRENT_TIMESTAMP, $3, 1)`,
-          idReg,
-          checksum,
-          nomeMigracao
-        );
-      },
-      { maxWait: 15000, timeout: 60000 }
-    );
-  }
-
-  async function aplicarMigracoesBase() {
-    for (const nome of MIGRACOES_BASE) {
-      await aplicarMigracaoNoSchema(nome);
-    }
-  }
-
-  async function aplicarMigracoesPendentes() {
-    const todas = [...MIGRACOES_BASE, MIGRACAO_INDICES_CONSTRAINTS, MIGRACAO_CORRETIVA];
-    const aplicadas = await client.$queryRawUnsafe(
-      `SELECT "migration_name", "checksum" FROM "${schemaName}"."_prisma_migrations" WHERE "rolled_back_at" IS NULL AND "finished_at" IS NOT NULL`
-    );
-    const mapaAplicadas = new Map(aplicadas.map((m) => [m.migration_name, m.checksum]));
-
-    // Verifica que nenhuma migração já aplicada teve o histórico/checksum adulterado
-    for (const [nome, checksumBanco] of mapaAplicadas.entries()) {
-      const { checksum: checksumArquivo } = lerMigracao(nome);
-      if (checksumBanco !== checksumArquivo) {
-        throw new Error(
-          `Divergência de checksum na migração já aplicada ${nome}: banco=${checksumBanco}, arquivo=${checksumArquivo}`
-        );
-      }
-    }
-
-    const recemAplicadas = [];
-    for (const nome of todas) {
-      if (!mapaAplicadas.has(nome)) {
-        await aplicarMigracaoNoSchema(nome);
-        recemAplicadas.push(nome);
-      }
-    }
-    return recemAplicadas;
-  }
-
-  async function listarIndicesCriados() {
-    const rows = await client.$queryRawUnsafe(
-      `SELECT indexname FROM pg_indexes WHERE schemaname = $1 AND indexname = ANY($2::text[]) ORDER BY indexname`,
-      schemaName,
-      INDICES_ESPERADOS
-    );
-    return rows.map((r) => r.indexname);
-  }
-
-  async function listarConstraintsCriadas() {
-    const rows = await client.$queryRawUnsafe(
-      `
-      SELECT c.conname
-      FROM pg_constraint c
-      INNER JOIN pg_namespace n ON n.oid = c.connamespace
-      WHERE n.nspname = $1
-        AND c.contype = 'c'
-        AND c.conname = ANY($2::text[])
-      ORDER BY c.conname
-      `,
-      schemaName,
-      CONSTRAINTS_ESPERADAS
-    );
-    return rows.map((r) => r.conname);
-  }
-
-  async function destruir() {
-    try {
-      await client.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
-      await client.$executeRawUnsafe(`SET search_path TO "public"`);
-    } finally {
-      await client.$disconnect();
-    }
-  }
-
-  return {
-    schemaName,
-    client,
-    aplicarMigracaoNoSchema,
-    aplicarMigracoesBase,
-    aplicarMigracoesPendentes,
-    listarIndicesCriados,
-    listarConstraintsCriadas,
-    destruir,
-  };
-}
-
-async function semearBaseDadosValidos(client) {
-  const endOrigem = await client.endereco.create({
-    data: {
-      logradouro: 'Av. Fernando Ferrari',
-      numero: '514',
-      bairro: 'Goiabeiras',
-      cidade: 'Vitória',
-      estado: 'Espírito Santo',
-      uf: 'ES',
-      cep: '29075910',
-      latitude: -20.2769,
-      longitude: -40.3061,
-    },
-  });
-  const endDestino = await client.endereco.create({
-    data: {
-      logradouro: 'Praça Costa Pereira',
-      numero: '10',
-      bairro: 'Centro',
-      cidade: 'Vitória',
-      estado: 'Espírito Santo',
-      uf: 'ES',
-      cep: '29010080',
-      latitude: -20.3194,
-      longitude: -40.3378,
-    },
-  });
-
-  const passageiro = await client.usuario.create({
-    data: {
-      nome: 'Passageiro Migração',
-      cpf: '10020030040',
-      celular: '27999990001',
-      email: 'pass.mig@teste.com',
-      usuario: 'pass_mig',
-      senha: 'hash_password',
-      perfil: 'USUARIO',
-      enderecoId: endOrigem.id,
-    },
-  });
-
-  const mot1User = await client.usuario.create({
-    data: {
-      nome: 'Motorista Migração 1',
-      cpf: '10020030041',
-      celular: '27999990002',
-      email: 'mot1.mig@teste.com',
-      usuario: 'mot1_mig',
-      senha: 'hash_password',
-      perfil: 'MOTORISTA',
-      enderecoId: endOrigem.id,
-    },
-  });
-  await client.motorista.create({
-    data: {
-      usuarioId: mot1User.id,
-      cnh: '90010020001',
-      statusCadastro: 'APROVADO',
-      statusPresenca: 'ONLINE',
-    },
-  });
-
-  const mot2User = await client.usuario.create({
-    data: {
-      nome: 'Motorista Migração 2',
-      cpf: '10020030042',
-      celular: '27999990003',
-      email: 'mot2.mig@teste.com',
-      usuario: 'mot2_mig',
-      senha: 'hash_password',
-      perfil: 'MOTORISTA',
-      enderecoId: endOrigem.id,
-    },
-  });
-  await client.motorista.create({
-    data: {
-      usuarioId: mot2User.id,
-      cnh: '90010020002',
-      statusCadastro: 'APROVADO',
-      statusPresenca: 'ONLINE',
-    },
-  });
-
-  const v1 = await client.veiculo.create({
-    data: {
-      marca: 'Toyota',
-      modelo: 'Corolla',
-      ano: 2024,
-      placa: 'MIG1A01',
-      porte: 'Medio',
-      classe: 'NORMAL',
-      statusAprovacao: 'APROVADO',
-      status: 'DISPONIVEL',
-      motoristaId: mot1User.id,
-    },
-  });
-
-  const v2 = await client.veiculo.create({
-    data: {
-      marca: 'Fiat',
-      modelo: 'Mobi',
-      ano: 2023,
-      placa: 'MIG2B02',
-      porte: 'Pequeno',
-      classe: 'BASICO',
-      statusAprovacao: 'APROVADO',
-      status: 'DISPONIVEL',
-      motoristaId: mot2User.id,
-    },
-  });
-
-  return { endOrigem, endDestino, passageiro, mot1User, mot2User, v1, v2 };
-}
 
 describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários A a G)', () => {
   test('Cenário A — Banco vazio: aplica toda a cadeia de migrações e cria todos os índices e restrições sem erros', async () => {
@@ -478,7 +148,6 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
       const { endOrigem, endDestino, passageiro, mot1User, mot2User, v1, v2 } =
         await semearBaseDadosValidos(env.client);
 
-      // Conflito 1 em v1: 1 EM_ANDAMENTO (titular) + 1 CONFIRMADA (excedente)
       const titularV1 = await env.client.corrida.create({
         data: {
           usuarioId: passageiro.id,
@@ -518,7 +187,6 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
         },
       });
 
-      // Conflito 2 em v2: 2 CONFIRMADA com criadaEm estritamente distintos (13:00 titular vs 13:10 excedente)
       const titularV2 = await env.client.corrida.create({
         data: {
           usuarioId: passageiro.id,
@@ -558,7 +226,6 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
         },
       });
 
-      // Corrida não relacionada (FINALIZADA)
       const naoRelacionada = await env.client.corrida.create({
         data: {
           usuarioId: passageiro.id,
@@ -639,7 +306,6 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
       const { endOrigem, endDestino, passageiro, mot1User, mot2User, v1, v2 } =
         await semearBaseDadosValidos(env.client);
 
-      // Conflito determinístico em v1 (CONFIRMADA) junto com conflito ambíguo em v2 (duas EM_ANDAMENTO)
       const titularV1 = await env.client.corrida.create({
         data: {
           usuarioId: passageiro.id,
@@ -722,7 +388,6 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
         /conflito ambíguo.*saneamentoCorridasAtivas\.js/i
       );
 
-      // Confirma que NENHUMA alteração parcial foi persistida (nem mesmo na CONFIRMADA de v1)
       const cConfirmadaV1Banco = await env.client.corrida.findUnique({ where: { id: confirmadaV1.id } });
       const cEmAndamento1Banco = await env.client.corrida.findUnique({ where: { id: emAndamento1.id } });
       const cEmAndamento2Banco = await env.client.corrida.findUnique({ where: { id: emAndamento2.id } });
@@ -734,7 +399,6 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
       expect(await env.listarIndicesCriados()).toHaveLength(0);
       expect(await env.listarConstraintsCriadas()).toHaveLength(0);
 
-      // Também valida empate de timestamp entre duas CONFIRMADA sem EM_ANDAMENTO titular
       await env.client.corrida.deleteMany({ where: { id: { in: [titularV1.id, confirmadaV1.id, emAndamento1.id, emAndamento2.id] } } });
       const instanteEmpate = new Date('2026-10-01T16:00:00.000Z');
       await env.client.corrida.create({
@@ -789,10 +453,9 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
     const env = await criarAmbienteIsolado('cenario_e');
     try {
       await env.aplicarMigracoesBase();
-      const { endOrigem, endDestino, passageiro, mot1User, mot2User, v1, v2 } =
+      const { endOrigem, endDestino, passageiro, mot1User, v1, v2 } =
         await semearBaseDadosValidos(env.client);
 
-      // Conflito CONFIRMADA em v1 + violação de constraint porte/classe em v2 (Pequeno + PREMIUM)
       await env.client.veiculo.update({
         where: { id: v2.id },
         data: { porte: 'Pequeno', classe: 'PREMIUM' },
@@ -856,10 +519,8 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
         },
       });
 
-      // 1ª tentativa falha por conflito EM_ANDAMENTO
       await expect(env.aplicarMigracoesPendentes()).rejects.toThrow(/conflito ambíguo/i);
 
-      // Resolve o conflito EM_ANDAMENTO via serviço de saneamento, mas mantém v2 inválido para testar rollback por violação de constraint
       await sanearConflitosVeiculoAtivo(env.client, {
         perfil: 'ADMINISTRADOR',
         resolucoesExplicitas: {
@@ -870,24 +531,20 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
         },
       });
 
-      // Restaura excedenteConfirmada para CONFIRMADA para comprovar rollback de dados + auditoria quando v2 viola porte/classe
       await env.client.corrida.update({
         where: { id: excedenteConfirmada.id },
         data: { status: 'CONFIRMADA', veiculoId: v1.id, motoristaId: mot1User.id },
       });
       const auditoriasAntesFalhaVeiculo = await env.client.auditoria.count();
 
-      // 2ª tentativa falha na validação prévia de v2 (porte=Pequeno, classe=PREMIUM)
       await expect(env.aplicarMigracoesPendentes()).rejects.toThrow(/veículo\(s\) com dados incompatíveis/i);
 
-      // Confirma rollback integral: excedenteConfirmada permanece CONFIRMADA e nenhuma auditoria extra foi gravada
       const cAposRollback = await env.client.corrida.findUnique({ where: { id: excedenteConfirmada.id } });
       expect(cAposRollback.status).toBe('CONFIRMADA');
       expect(await env.client.auditoria.count()).toBe(auditoriasAntesFalhaVeiculo);
       expect(await env.listarIndicesCriados()).toHaveLength(0);
       expect(await env.listarConstraintsCriadas()).toHaveLength(0);
 
-      // Corrige o dado inválido em v2 e executa a nova tentativa
       await env.client.veiculo.update({
         where: { id: v2.id },
         data: { porte: 'Pequeno', classe: 'BASICO' },
@@ -929,7 +586,6 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
         },
       });
 
-      // Simula registros de auditoria gerados por revisão anterior da migração (dados_novos sem atualizadaEm e pendência já resolvida)
       const audIncompleta = await env.client.auditoria.create({
         data: {
           perfil: 'SISTEMA',
@@ -960,7 +616,6 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
       );
       expect(historicoAntes).toHaveLength(5);
 
-      // Aplica apenas as migrações pendentes (não reexecuta nem reescreve as 5 já aplicadas)
       const aplicadasAgora = await env.aplicarMigracoesPendentes();
       expect(aplicadasAgora).toEqual([MIGRACAO_CORRETIVA]);
 
@@ -1030,11 +685,9 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
       const totalAuditoriaPosMigracao = await env.client.auditoria.count();
       expect(totalAuditoriaPosMigracao).toBe(1);
 
-      // Reexecução de aplicarMigracoesPendentes não reaplica migrações já registradas
       const novasMigracoes = await env.aplicarMigracoesPendentes();
       expect(novasMigracoes).toEqual([]);
 
-      // Reexecução das rotinas de diagnóstico e saneamento é idempotente e não duplica auditoria
       const diag1 = await diagnosticarConflitosVeiculoAtivo(env.client);
       expect(diag1.possuiConflitos).toBe(false);
 
@@ -1051,4 +704,3 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
     }
   });
 });
-

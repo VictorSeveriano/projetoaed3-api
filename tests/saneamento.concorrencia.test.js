@@ -1,0 +1,551 @@
+'use strict';
+/**
+ * tests/saneamento.concorrencia.test.js — Testes de integração do diagnóstico e saneamento
+ * auditável de conflitos de veículo ativo em schema PostgreSQL isolado (pré-migração 20261020130000).
+ *
+ * Nunca remove nem altera índices ou restrições do schema public.
+ */
+
+const fs = require('fs');
+const path = require('path');
+const {
+  diagnosticarConflitosVeiculoAtivo,
+  sanearConflitosVeiculoAtivo,
+} = require('../src/database/saneamentoCorridasAtivas');
+const {
+  criarAmbienteIsolado,
+  semearBaseDadosValidos,
+} = require('./helpers/isolatedSchema');
+
+jest.setTimeout(120000);
+
+const resultados = (settled) => ({
+  ok: settled.filter((r) => r.status === 'fulfilled'),
+  falhas: settled.filter((r) => r.status === 'rejected'),
+});
+
+describe('Saneamento auditável e concorrência de resolução de conflitos em schema isolado', () => {
+  const sufixo = Date.now().toString().slice(-6);
+  let env;
+  let prisma;
+  let passageiro;
+  let mot1User;
+  let mot2User;
+  let mot2Record;
+  let v1;
+  let v2;
+  let origemEnd;
+  let destinoEnd;
+
+  const criarCorridaNoBanco = async (overrides = {}) => {
+    return prisma.corrida.create({
+      data: {
+        usuarioId: passageiro.id,
+        motoristaId: overrides.motoristaId ?? null,
+        veiculoId: overrides.veiculoId ?? null,
+        origemEnderecoId: origemEnd.id,
+        destinoEnderecoId: destinoEnd.id,
+        origemNome: overrides.origemNome || 'Origem Saneamento',
+        destinoNome: overrides.destinoNome || 'Destino Saneamento',
+        origemLat: overrides.origemLat !== undefined ? overrides.origemLat : 0,
+        origemLng: overrides.origemLng !== undefined ? overrides.origemLng : 0,
+        destinoLat: overrides.destinoLat !== undefined ? overrides.destinoLat : -20.3155,
+        destinoLng: overrides.destinoLng !== undefined ? overrides.destinoLng : -40.3128,
+        distanciaKm: overrides.distanciaKm || 10,
+        duracaoMin: overrides.duracaoMin !== undefined ? overrides.duracaoMin : 20,
+        valor: overrides.valor || 25,
+        classe: overrides.classe || 'NORMAL',
+        formaPagamento: overrides.formaPagamento || 'PIX',
+        dataHorario: overrides.dataHorario || new Date('2026-10-01T14:00:00.000Z'),
+        status: overrides.status || 'SOLICITADA',
+      },
+    });
+  };
+
+  beforeAll(async () => {
+    env = await criarAmbienteIsolado('saneamento_conc');
+    prisma = env.client;
+    await env.aplicarMigracoesBase();
+    const seed = await semearBaseDadosValidos(prisma);
+    origemEnd = seed.endOrigem;
+    destinoEnd = seed.endDestino;
+    passageiro = seed.passageiro;
+    mot1User = seed.mot1User;
+    mot2User = seed.mot2User;
+    mot2Record = seed.mot2Record;
+    v1 = seed.v1;
+    v2 = await prisma.veiculo.update({
+      where: { id: seed.v2.id },
+      data: { porte: 'Medio', classe: 'NORMAL', statusAprovacao: 'APROVADO', status: 'DISPONIVEL' },
+    });
+  });
+
+  afterAll(async () => {
+    if (env) {
+      await env.destruir();
+    }
+  });
+
+  test('saneamento auditável de conflitos de veículo ativo nunca converte corrida em FINALIZADA/CANCELADA e registra auditoria', async () => {
+    let idsCriados = [];
+    try {
+      const titular = await criarCorridaNoBanco({
+        motoristaId: mot1User.id,
+        veiculoId: v1.id,
+        origemNome: `Saneamento_Titular_${sufixo}`,
+        status: 'EM_ANDAMENTO',
+      });
+      const excedenteConfirmada = await criarCorridaNoBanco({
+        motoristaId: mot1User.id,
+        veiculoId: v1.id,
+        origemNome: `Saneamento_Excedente_Confirmada_${sufixo}`,
+        status: 'CONFIRMADA',
+      });
+      const excedenteEmAndamento = await criarCorridaNoBanco({
+        motoristaId: mot1User.id,
+        veiculoId: v1.id,
+        origemNome: `Saneamento_Excedente_EmAndamento_${sufixo}`,
+        status: 'EM_ANDAMENTO',
+      });
+      idsCriados = [titular.id, excedenteConfirmada.id, excedenteEmAndamento.id];
+
+      await prisma.corrida.update({
+        where: { id: titular.id },
+        data: { criadaEm: new Date('2026-10-01T13:00:00.000Z') },
+      });
+      await prisma.corrida.update({
+        where: { id: excedenteConfirmada.id },
+        data: { criadaEm: new Date('2026-10-01T13:05:00.000Z') },
+      });
+      await prisma.corrida.update({
+        where: { id: excedenteEmAndamento.id },
+        data: { criadaEm: new Date('2026-10-01T13:10:00.000Z') },
+      });
+
+      const diag = await diagnosticarConflitosVeiculoAtivo(prisma);
+      const conflitoV1 = diag.conflitos.find((c) => c.veiculoId === v1.id);
+      expect(conflitoV1).toBeDefined();
+      expect(conflitoV1.corridaTitular.id).toBe(titular.id);
+      expect(conflitoV1.corridasExcedentes.map((e) => e.id)).toEqual([
+        excedenteEmAndamento.id,
+        excedenteConfirmada.id,
+      ]);
+
+      // 1ª execução sem resolução explícita: CONFIRMADA volta para SOLICITADA; EM_ANDAMENTO ambígua NÃO é alterada
+      const resParcial = await sanearConflitosVeiculoAtivo(prisma, { perfil: 'SISTEMA' });
+      expect(resParcial.prontoParaIndiceUnico).toBe(false);
+      expect(resParcial.naoResolvidos.map((n) => n.corridaId)).toContain(excedenteEmAndamento.id);
+
+      const aposParcialConfirmada = await prisma.corrida.findUnique({ where: { id: excedenteConfirmada.id } });
+      const aposParcialEmAndamento = await prisma.corrida.findUnique({ where: { id: excedenteEmAndamento.id } });
+      expect(aposParcialConfirmada).toMatchObject({
+        status: 'SOLICITADA',
+        veiculoId: null,
+        motoristaId: null,
+      });
+      expect(aposParcialEmAndamento.status).toBe('EM_ANDAMENTO');
+      expect(aposParcialConfirmada.status).not.toBe('FINALIZADA');
+      expect(aposParcialEmAndamento.status).not.toBe('FINALIZADA');
+
+      // 2ª execução com resolução explícita de realocação para v2 (disponível)
+      const resFinal = await sanearConflitosVeiculoAtivo(prisma, {
+        perfil: 'ADMINISTRADOR',
+        resolucoesExplicitas: {
+          [excedenteEmAndamento.id]: {
+            acao: 'REALOCAR_VEICULO',
+            veiculoId: v2.id,
+            motoristaId: mot2User.id,
+            justificativa: 'Realocação auditada de corrida em andamento para veículo v2.',
+          },
+        },
+      });
+      expect(resFinal.prontoParaIndiceUnico).toBe(true);
+
+      const aposRealocacao = await prisma.corrida.findUnique({ where: { id: excedenteEmAndamento.id } });
+      expect(aposRealocacao).toMatchObject({
+        status: 'EM_ANDAMENTO',
+        veiculoId: v2.id,
+        motoristaId: mot2User.id,
+      });
+
+      const logsAuditoria = await prisma.auditoria.findMany({
+        where: { entidadeId: { in: [excedenteConfirmada.id, excedenteEmAndamento.id] } },
+      });
+      expect(logsAuditoria.length).toBeGreaterThanOrEqual(3);
+      const logConflitoAnterior = logsAuditoria.find(
+        (l) => l.acao === 'CONFLITO_VEICULO_ATIVO_NAO_RESOLVIDO' && l.entidadeId === excedenteEmAndamento.id
+      );
+      expect(logConflitoAnterior).toBeDefined();
+      expect(logConflitoAnterior.resultado).toBe('RESOLVIDO');
+
+      // Reexecução idempotente do saneamento sem duplicar efeitos
+      const contagemAuditoriaAntes = await prisma.auditoria.count({
+        where: { entidadeId: { in: [excedenteConfirmada.id, excedenteEmAndamento.id] } },
+      });
+      const resReexecucao = await sanearConflitosVeiculoAtivo(prisma, {
+        perfil: 'ADMINISTRADOR',
+        resolucoesExplicitas: {
+          [excedenteEmAndamento.id]: {
+            acao: 'REALOCAR_VEICULO',
+            veiculoId: v2.id,
+            motoristaId: mot2User.id,
+            justificativa: 'Reexecução idempotente.',
+          },
+        },
+      });
+      expect(resReexecucao.saneadas).toHaveLength(0);
+      expect(resReexecucao.naoResolvidos).toHaveLength(0);
+      expect(resReexecucao.prontoParaIndiceUnico).toBe(true);
+      const contagemAuditoriaDepois = await prisma.auditoria.count({
+        where: { entidadeId: { in: [excedenteConfirmada.id, excedenteEmAndamento.id] } },
+      });
+      expect(contagemAuditoriaDepois).toBe(contagemAuditoriaAntes);
+    } finally {
+      if (idsCriados.length > 0) {
+        await prisma.auditoria.deleteMany({ where: { entidadeId: { in: idsCriados } } });
+        await prisma.corrida.deleteMany({ where: { id: { in: idsCriados } } });
+      }
+      await prisma.veiculo.updateMany({
+        where: { id: { in: [v1.id, v2.id] } },
+        data: { porte: 'Medio', classe: 'NORMAL', statusAprovacao: 'APROVADO', status: 'DISPONIVEL' },
+      });
+    }
+  });
+
+  test('validações de segurança do saneamento (casos 2 a 12 da Seção 4.4) e falha segura da migration (Seção 5)', async () => {
+    const idsCorridas = [];
+    const idsVeiculosExtras = [];
+    const idsMotoristasExtras = [];
+    const idsUsuariosExtras = [];
+
+    try {
+      const titular = await criarCorridaNoBanco({
+        motoristaId: mot1User.id,
+        veiculoId: v1.id,
+        origemNome: `Val_Titular_${sufixo}`,
+        status: 'EM_ANDAMENTO',
+      });
+      const excedente1 = await criarCorridaNoBanco({
+        motoristaId: mot1User.id,
+        veiculoId: v1.id,
+        origemNome: `Val_Excedente1_${sufixo}`,
+        status: 'EM_ANDAMENTO',
+        classe: 'NORMAL',
+      });
+      const corridaFinalizada = await criarCorridaNoBanco({
+        origemNome: `Val_Finalizada_${sufixo}`,
+        status: 'FINALIZADA',
+      });
+      idsCorridas.push(titular.id, excedente1.id, corridaFinalizada.id);
+
+      await prisma.corrida.update({
+        where: { id: titular.id },
+        data: { criadaEm: new Date('2026-10-01T12:00:00.000Z') },
+      });
+      await prisma.corrida.update({
+        where: { id: excedente1.id },
+        data: { criadaEm: new Date('2026-10-01T12:05:00.000Z') },
+      });
+
+      // Caso 9: Ausência de justificativa -> 400
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          resolucoesExplicitas: {
+            [excedente1.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: mot2User.id,
+              justificativa: '   ',
+            },
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 400 });
+
+      // Caso 8: Corrida cujo status não permite a operação (FINALIZADA) -> 409
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          resolucoesExplicitas: {
+            [corridaFinalizada.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: mot2User.id,
+              justificativa: 'Tentativa em corrida já finalizada.',
+            },
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 409 });
+
+      // Caso 2: Veículo inexistente -> 404
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          resolucoesExplicitas: {
+            [excedente1.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: '00000000-0000-0000-0000-000000000099',
+              motoristaId: mot2User.id,
+              justificativa: 'Veículo inexistente.',
+            },
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 404 });
+
+      // Caso 3: Veículo não aprovado (PENDENTE) -> 409
+      await prisma.veiculo.update({
+        where: { id: v2.id },
+        data: { statusAprovacao: 'PENDENTE' },
+      });
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          resolucoesExplicitas: {
+            [excedente1.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: mot2User.id,
+              justificativa: 'Veículo pendente.',
+            },
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 409 });
+      await prisma.veiculo.update({
+        where: { id: v2.id },
+        data: { statusAprovacao: 'APROVADO', status: 'DISPONIVEL' },
+      });
+
+      // Caso 4: Veículo incompatível com a corrida (Pequeno/BASICO vs corrida NORMAL) -> 409
+      await prisma.veiculo.update({
+        where: { id: v2.id },
+        data: { porte: 'Pequeno', classe: 'BASICO' },
+      });
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          resolucoesExplicitas: {
+            [excedente1.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: mot2User.id,
+              justificativa: 'Veículo de classe incompatível.',
+            },
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 409 });
+      await prisma.veiculo.update({
+        where: { id: v2.id },
+        data: { porte: 'Medio', classe: 'NORMAL', status: 'DISPONIVEL' },
+      });
+
+      // Caso 5: Veículo já ocupado -> 409
+      await prisma.veiculo.update({
+        where: { id: v2.id },
+        data: { status: 'EM_CORRIDA' },
+      });
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          resolucoesExplicitas: {
+            [excedente1.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: mot2User.id,
+              justificativa: 'Veículo ocupado.',
+            },
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 409 });
+      await prisma.veiculo.update({
+        where: { id: v2.id },
+        data: { status: 'DISPONIVEL' },
+      });
+
+      // Caso 6: Motorista inexistente (404) ou inativo/não aprovado (409)
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          resolucoesExplicitas: {
+            [excedente1.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: '00000000-0000-0000-0000-000000000088',
+              justificativa: 'Motorista inexistente.',
+            },
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 404 });
+
+      await prisma.motorista.update({
+        where: { id: mot2Record.id },
+        data: { statusCadastro: 'PENDENTE' },
+      });
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          resolucoesExplicitas: {
+            [excedente1.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: mot2User.id,
+              justificativa: 'Motorista pendente.',
+            },
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 409 });
+      await prisma.motorista.update({
+        where: { id: mot2Record.id },
+        data: { statusCadastro: 'APROVADO' },
+      });
+
+      // Caso 7: Motorista não autorizado para o veículo (mot1 tentando operar v2 que pertence a mot2) -> 403
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          resolucoesExplicitas: {
+            [excedente1.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: mot1User.id,
+              justificativa: 'Motorista não vinculado ao veículo de destino.',
+            },
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 403 });
+
+      // Caso 11: Falha na auditoria com rollback das alterações (usuarioId inválido viola FK fk_auditoria_usuario)
+      await expect(
+        sanearConflitosVeiculoAtivo(prisma, {
+          usuarioId: '00000000-0000-0000-0000-000000000077',
+          resolucoesExplicitas: {
+            [excedente1.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: mot2User.id,
+              justificativa: 'Deve sofrer rollback se auditoria falhar.',
+            },
+          },
+        })
+      ).rejects.toThrow();
+
+      const v2PosRollback = await prisma.veiculo.findUnique({ where: { id: v2.id } });
+      const exc1PosRollback = await prisma.corrida.findUnique({ where: { id: excedente1.id } });
+      expect(v2PosRollback.status).toBe('DISPONIVEL');
+      expect(exc1PosRollback.veiculoId).toBe(v1.id);
+
+      // Seção 5: Execução do bloco DO $$ da migration deve falhar de forma segura diante de conflito EM_ANDAMENTO não resolvido
+      const migrationSql = fs.readFileSync(
+        path.join(__dirname, '../prisma/migrations/20261020130000_add_indexes_and_constraints/migration.sql'),
+        'utf8'
+      );
+      const blocoDoMigration = migrationSql.slice(0, migrationSql.indexOf('END $$;') + 7);
+      await expect(
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL search_path TO "${env.schemaName}"`);
+          await tx.$executeRawUnsafe(blocoDoMigration);
+        })
+      ).rejects.toThrow(/conflito ambíguo/i);
+
+      // Caso 12: Duas execuções simultâneas tentando realocar corridas para o mesmo veículo v2
+      const mot3User = await prisma.usuario.create({
+        data: {
+          nome: 'Motorista Conflito 3',
+          cpf: `99988${sufixo}`,
+          celular: '27999990099',
+          email: `mot3.${sufixo}@teste.com`,
+          usuario: `mot3_${sufixo}`,
+          senha: '123',
+          perfil: 'MOTORISTA',
+          enderecoId: origemEnd.id,
+        },
+      });
+      idsUsuariosExtras.push(mot3User.id);
+      const mot3Rec = await prisma.motorista.create({
+        data: {
+          usuarioId: mot3User.id,
+          cnh: `88877${sufixo}`,
+          statusCadastro: 'APROVADO',
+          statusPresenca: 'ONLINE',
+        },
+      });
+      idsMotoristasExtras.push(mot3Rec.id);
+      const v3 = await prisma.veiculo.create({
+        data: {
+          marca: 'Honda',
+          modelo: 'Civic',
+          ano: 2024,
+          placa: ` MC${sufixo.slice(-5)}`.trim().slice(0, 7),
+          porte: 'Medio',
+          classe: 'NORMAL',
+          statusAprovacao: 'APROVADO',
+          status: 'EM_CORRIDA',
+          motoristaId: mot3User.id,
+        },
+      });
+      idsVeiculosExtras.push(v3.id);
+
+      const titularV3 = await criarCorridaNoBanco({
+        motoristaId: mot3User.id,
+        veiculoId: v3.id,
+        origemNome: `Val_TitularV3_${sufixo}`,
+        status: 'EM_ANDAMENTO',
+      });
+      const excedenteV3 = await criarCorridaNoBanco({
+        motoristaId: mot3User.id,
+        veiculoId: v3.id,
+        origemNome: `Val_ExcedenteV3_${sufixo}`,
+        status: 'EM_ANDAMENTO',
+      });
+      idsCorridas.push(titularV3.id, excedenteV3.id);
+
+      await prisma.corrida.update({
+        where: { id: titularV3.id },
+        data: { criadaEm: new Date('2026-10-01T12:00:00.000Z') },
+      });
+      await prisma.corrida.update({
+        where: { id: excedenteV3.id },
+        data: { criadaEm: new Date('2026-10-01T12:05:00.000Z') },
+      });
+
+      const { ok, falhas } = resultados(
+        await Promise.allSettled([
+          sanearConflitosVeiculoAtivo(prisma, {
+            resolucoesExplicitas: {
+              [excedente1.id]: {
+                acao: 'REALOCAR_VEICULO',
+                veiculoId: v2.id,
+                motoristaId: mot2User.id,
+                justificativa: 'Concorrência saneamento A -> v2',
+              },
+            },
+          }),
+          sanearConflitosVeiculoAtivo(prisma, {
+            resolucoesExplicitas: {
+              [excedenteV3.id]: {
+                acao: 'REALOCAR_VEICULO',
+                veiculoId: v2.id,
+                motoristaId: mot2User.id,
+                justificativa: 'Concorrência saneamento B -> v2',
+              },
+            },
+          }),
+        ])
+      );
+
+      expect(ok).toHaveLength(1);
+      expect(falhas).toHaveLength(1);
+      expect(falhas[0].reason).toMatchObject({ statusCode: 409 });
+
+      const ativasEmV2 = await prisma.corrida.count({
+        where: { veiculoId: v2.id, status: { in: ['CONFIRMADA', 'EM_ANDAMENTO'] } },
+      });
+      expect(ativasEmV2).toBe(1);
+    } finally {
+      await prisma.auditoria.deleteMany({ where: { entidadeId: { in: idsCorridas } } });
+      if (idsCorridas.length > 0) {
+        await prisma.corrida.deleteMany({ where: { id: { in: idsCorridas } } });
+      }
+      if (idsVeiculosExtras.length > 0) {
+        await prisma.veiculo.deleteMany({ where: { id: { in: idsVeiculosExtras } } });
+      }
+      if (idsMotoristasExtras.length > 0) {
+        await prisma.motorista.deleteMany({ where: { id: { in: idsMotoristasExtras } } });
+      }
+      if (idsUsuariosExtras.length > 0) {
+        await prisma.usuario.deleteMany({ where: { id: { in: idsUsuariosExtras } } });
+      }
+    }
+  });
+});
+

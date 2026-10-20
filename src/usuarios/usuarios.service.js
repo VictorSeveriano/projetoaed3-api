@@ -4,16 +4,11 @@
  * Todos os métodos são async para suportar o repositório PostgreSQL.
  */
 
-const authRepository       = require('../auth/auth.repository');
-const corridasRepository   = require('../corridas/corridas.repository');
-const motoristasRepository = require('../motoristas/motoristas.repository');
-const authService          = require('../auth/auth.service');
-const motoristasService    = require('../motoristas/motoristas.service');
-const AppError             = require('../utils/AppError');
-const {
-  validarCPF, validarCelular, validarEmail, validarCEP, validarSenha,
-  normalizarCPF, normalizarCelular, normalizarEmail, normalizarCNH, validarCNH
-} = require('../utils/validators');
+const authRepository     = require('../auth/auth.repository');
+const corridasRepository = require('../corridas/corridas.repository');
+const authService        = require('../auth/auth.service');
+const AppError           = require('../utils/AppError');
+
 class UsuariosService {
   async buscarPorId(id, usuarioLogado = null) {
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {

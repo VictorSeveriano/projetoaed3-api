@@ -28,7 +28,6 @@ describe('Testes de Autorização (IDOR)', () => {
         if (id === 2) return corridaSemMotorista;
         return null;
       });
-      corridasRepository.updateStatus.mockResolvedValue(corridaMock);
       corridasRepository.transicionarComLiberacaoDeVeiculo.mockResolvedValue(corridaMock);
       corridasRepository.create.mockResolvedValue({ id: 10 });
       veiculosRepository.findDisponiveis.mockResolvedValue([{ classe: 'BASICO', motoristaId: 'mot-a' }]);

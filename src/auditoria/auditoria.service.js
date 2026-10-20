@@ -18,18 +18,20 @@ class AuditoriaService {
    */
   async registrar(dados, req = null, detalhes = {}) {
     try {
+      const dadosAnterioresOrig = detalhes.dadosAnteriores ?? dados.dadosAnteriores;
+      const dadosNovosOrig = detalhes.dadosNovos ?? dados.dadosNovos;
       const registro = {
         usuarioId: dados.usuarioId || null,
         perfil: dados.perfil || null,
         acao: dados.acao,
         modulo: dados.modulo,
-        resultado: dados.resultado,
-        entidade: detalhes.entidade || null,
-        entidadeId: detalhes.entidadeId || null,
-        descricao: detalhes.descricao || null,
-        dadosAnteriores: detalhes.dadosAnteriores ? JSON.parse(JSON.stringify(detalhes.dadosAnteriores)) : null,
-        dadosNovos: detalhes.dadosNovos ? JSON.parse(JSON.stringify(detalhes.dadosNovos)) : null,
-        statusHttp: detalhes.statusHttp || null,
+        resultado: detalhes.resultado || dados.resultado,
+        entidade: detalhes.entidade || dados.entidade || null,
+        entidadeId: detalhes.entidadeId || dados.entidadeId || null,
+        descricao: detalhes.descricao || dados.descricao || null,
+        dadosAnteriores: dadosAnterioresOrig ? JSON.parse(JSON.stringify(dadosAnterioresOrig)) : null,
+        dadosNovos: dadosNovosOrig ? JSON.parse(JSON.stringify(dadosNovosOrig)) : null,
+        statusHttp: detalhes.statusHttp || dados.statusHttp || null,
         rota: req ? req.originalUrl : null,
         metodoHttp: req ? req.method : null,
         ip: req ? (req.headers['x-forwarded-for'] || req.socket?.remoteAddress) : null,

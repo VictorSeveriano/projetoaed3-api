@@ -9,7 +9,7 @@
  */
 
 const authRepository = require('./auth.repository');
-const notificacoesService = require('../notificacoes/notificacoes.service');
+const motoristasRepository = require('../motoristas/motoristas.repository');
 const AppError = require('../utils/AppError');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -17,7 +17,6 @@ const {
   validarCPF, validarCNH, validarEmail, validarCelular, validarCEP, validarSenha,
   normalizarCPF, normalizarCNH, normalizarEmail, normalizarCelular,
 } = require('../utils/validators');
-const { ADMIN_ID } = require('../utils/constants');
 
 class AuthService {
   async login(usuario, senha) {
@@ -73,7 +72,6 @@ class AuthService {
     if (perfil === 'MOTORISTA') {
       const cnhNorm = normalizarCNH(cnh);
       if (!validarCNH(cnhNorm)) throw new AppError('CNH inválida.', 400);
-      const motoristasRepository = require('../motoristas/motoristas.repository');
       duplicados.cnh = await motoristasRepository.existsByCnh(cnhNorm);
     }
 
@@ -155,7 +153,6 @@ class AuthService {
     if (perfil === 'MOTORISTA') {
       cnhNorm = normalizarCNH(cnh);
       if (!validarCNH(cnhNorm)) throw new AppError('CNH inválida.', 400);
-      const motoristasRepository = require('../motoristas/motoristas.repository');
       if (await motoristasRepository.existsByCnh(cnhNorm)) {
         throw new AppError('CNH já cadastrada no sistema.', 409);
       }

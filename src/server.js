@@ -19,7 +19,6 @@ const server = app.listen(PORT, () => {
   console.log(`========================================`);
   console.log(` Ambiente : ${process.env.NODE_ENV || 'development'}`);
   console.log(` Health   : http://localhost:${PORT}/api/health`);
-  console.log(` Grafo    : http://localhost:${PORT}/api/grafo`);
   console.log(`========================================\n`);
 });
 
