@@ -540,6 +540,11 @@ describe('Concorrência, Transações e Integridade no Banco de Dados (Prisma + 
           where: { entidadeId: { in: [excedenteConfirmada.id, excedenteEmAndamento.id] } },
         });
         expect(logsAuditoria.length).toBeGreaterThanOrEqual(3);
+        const logConflitoAnterior = logsAuditoria.find(
+          (l) => l.acao === 'CONFLITO_VEICULO_ATIVO_NAO_RESOLVIDO' && l.entidadeId === excedenteEmAndamento.id
+        );
+        expect(logConflitoAnterior).toBeDefined();
+        expect(logConflitoAnterior.resultado).toBe('RESOLVIDO');
 
         // 13. Reexecução do saneamento sem duplicar efeitos ou corromper o histórico
         const contagemAuditoriaAntes = await prisma.auditoria.count({
@@ -563,12 +568,11 @@ describe('Concorrência, Transações e Integridade no Banco de Dados (Prisma + 
           where: { entidadeId: { in: [excedenteConfirmada.id, excedenteEmAndamento.id] } },
         });
         expect(contagemAuditoriaDepois).toBe(contagemAuditoriaAntes);
-
-        await prisma.auditoria.deleteMany({
-          where: { entidadeId: { in: [excedenteConfirmada.id, excedenteEmAndamento.id] } },
-        });
       } finally {
         if (idsCriados.length > 0) {
+          await prisma.auditoria.deleteMany({
+            where: { entidadeId: { in: idsCriados } },
+          });
           await prisma.corrida.deleteMany({
             where: { id: { in: idsCriados } },
           });

@@ -308,6 +308,19 @@ async function sanearConflitosVeiculoAtivo(db = prismaDefault, opcoes = {}) {
             atualizadaEm: agora,
           };
 
+          await tx.auditoria.updateMany({
+            where: {
+              entidade: 'Corrida',
+              entidadeId: corridaAtual.id,
+              acao: 'CONFLITO_VEICULO_ATIVO_NAO_RESOLVIDO',
+              resultado: 'PENDENTE',
+            },
+            data: {
+              resultado: 'RESOLVIDO',
+              dadosNovos,
+            },
+          });
+
           await tx.auditoria.create({
             data: {
               usuarioId,
@@ -490,6 +503,19 @@ async function sanearConflitosVeiculoAtivo(db = prismaDefault, opcoes = {}) {
             veiculoId: veiculoDestinoId,
             atualizadaEm: agora,
           };
+
+          await tx.auditoria.updateMany({
+            where: {
+              entidade: 'Corrida',
+              entidadeId: corridaAtual.id,
+              acao: 'CONFLITO_VEICULO_ATIVO_NAO_RESOLVIDO',
+              resultado: 'PENDENTE',
+            },
+            data: {
+              resultado: 'RESOLVIDO',
+              dadosNovos,
+            },
+          });
 
           await tx.auditoria.create({
             data: {
