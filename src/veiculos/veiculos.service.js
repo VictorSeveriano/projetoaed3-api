@@ -22,7 +22,7 @@ class VeiculosService {
    * @returns {string} BASICO, NORMAL ou PREMIUM
    */
   _determinarClasseServico(porte) {
-    const p = (porte || '').toLowerCase();
+    const p = (porte || '').trim().toLowerCase();
     if (p === 'pequeno') return 'BASICO';
     if (p === 'medio')   return 'NORMAL';
     if (p === 'grande')  return 'PREMIUM';
@@ -74,7 +74,7 @@ class VeiculosService {
       throw new AppError('Porte inválido. Use Pequeno, Medio ou Grande.', 400);
     }
 
-    const classe = this._determinarClasseServico(porte);
+    const classe = this._determinarClasseServico(pValido);
 
     const novoVeiculo = await veiculosRepository.create({
       modelo, marca, ano, placa, porte: pValido, classe,
@@ -176,8 +176,9 @@ class VeiculosService {
       }
       
       dadosLimpos.porte = pValido;
-      if (pValido !== veiculo.porte) {
-        dadosLimpos.classe = this._determinarClasseServico(pValido);
+      const classeCalculada = this._determinarClasseServico(pValido);
+      if (pValido !== veiculo.porte || veiculo.classe !== classeCalculada) {
+        dadosLimpos.classe = classeCalculada;
       }
     }
     

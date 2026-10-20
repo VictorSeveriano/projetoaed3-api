@@ -22,6 +22,7 @@ describe('HTTP Authorization Tests', () => {
   const tokenAdmin = jwt.sign({ sub: 'admin-1', perfil: 'ADMINISTRADOR' }, SECRET, { expiresIn: '1h' });
   const tokenMotA = jwt.sign({ sub: 'mot-1', perfil: 'MOTORISTA' }, SECRET, { expiresIn: '1h' });
   const tokenUserA = jwt.sign({ sub: 'user-1', perfil: 'USUARIO' }, SECRET, { expiresIn: '1h' });
+  const tokenExpirado = jwt.sign({ sub: 'user-1', perfil: 'USUARIO' }, SECRET, { expiresIn: '-10s' });
   const tokenInvalido = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.token';
 
   beforeEach(() => {
@@ -32,6 +33,7 @@ describe('HTTP Authorization Tests', () => {
       if (id === 'admin-1') return { id: 'admin-1', perfil: 'ADMINISTRADOR', statusCadastro: 'APROVADO' };
       if (id === 'mot-1') return { id: 'mot-1', perfil: 'MOTORISTA', statusCadastro: 'APROVADO' };
       if (id === 'user-1') return { id: 'user-1', perfil: 'USUARIO', statusCadastro: 'APROVADO' };
+      if (id === 'user-2') return { id: 'user-2', perfil: 'USUARIO', statusCadastro: 'APROVADO' };
       return null;
     });
 
@@ -50,6 +52,11 @@ describe('HTTP Authorization Tests', () => {
       const res = await request(app).get('/api/corridas/minhas').set('x-auth-token', tokenInvalido);
       expect(res.statusCode).toBe(401);
     });
+
+    test('Token expirado -> 401', async () => {
+      const res = await request(app).get('/api/corridas/minhas').set('x-auth-token', tokenExpirado);
+      expect(res.statusCode).toBe(401);
+    });
   });
 
   describe('GET /corridas/minhas', () => {
@@ -60,16 +67,86 @@ describe('HTTP Authorization Tests', () => {
     });
   });
 
+  describe('GET /corridas e GET /corridas/:id (Autorização e acesso a recursos)', () => {
+    test('Perfil sem permissão (USUARIO em rota exclusiva de Admin GET /corridas) -> 403', async () => {
+      const res = await request(app).get('/api/corridas').set('x-auth-token', tokenUserA);
+      expect(res.statusCode).toBe(403);
+    });
+
+    test('Usuário autorizado acessa sua própria corrida -> 200', async () => {
+      corridasRepository.findById.mockResolvedValue({ id: 'corrida-1', usuarioId: 'user-1', status: 'SOLICITADA' });
+      const res = await request(app).get('/api/corridas/corrida-1').set('x-auth-token', tokenUserA);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.data.id).toBe('corrida-1');
+    });
+
+    test('Usuário tenta acessar corrida pertencente a outro usuário -> 403', async () => {
+      corridasRepository.findById.mockResolvedValue({ id: 'corrida-2', usuarioId: 'user-2', status: 'SOLICITADA' });
+      const res = await request(app).get('/api/corridas/corrida-2').set('x-auth-token', tokenUserA);
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe('GET /usuarios/:id (Acesso a dados do próprio usuário vs terceiro)', () => {
+    test('Usuário autorizado acessa o próprio perfil -> 200', async () => {
+      const res = await request(app).get('/api/usuarios/user-1').set('x-auth-token', tokenUserA);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.data.id).toBe('user-1');
+    });
+
+    test('Usuário tenta acessar perfil pertencente a outro usuário -> 403', async () => {
+      const res = await request(app).get('/api/usuarios/user-2').set('x-auth-token', tokenUserA);
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
   describe('POST /corridas', () => {
     test('Criação de corrida (não requer usuarioId, extrai do token) -> 201', async () => {
-      corridasRepository.create.mockResolvedValue({ id: 1, usuarioId: 'user-1' });
+      corridasRepository.create.mockImplementation(async (dados) => ({ id: 'c-1', ...dados }));
       const res = await request(app).post('/api/corridas')
         .set('x-auth-token', tokenUserA)
         .send({
           origemNome: 'A', destinoNome: 'B', distanciaKm: 5, classe: 'BASICO', dataHorario: new Date().toISOString()
         });
       expect(res.statusCode).toBe(201);
+      expect(corridasRepository.create).toHaveBeenCalledWith(expect.objectContaining({ usuarioId: 'user-1' }));
       expect(res.body.data.usuarioId).toBe('user-1');
+    });
+
+    test('Envio de usuarioId de terceiro no payload não permite falsificar o proprietário -> 201 com identidade do token', async () => {
+      corridasRepository.create.mockImplementation(async (dados) => ({ id: 'c-2', ...dados }));
+      const res = await request(app).post('/api/corridas')
+        .set('x-auth-token', tokenUserA)
+        .send({
+          usuarioId: 'user-2',
+          origemNome: 'A',
+          destinoNome: 'B',
+          distanciaKm: 5,
+          classe: 'BASICO',
+          dataHorario: new Date().toISOString()
+        });
+      expect(res.statusCode).toBe(201);
+      expect(corridasRepository.create).toHaveBeenCalledWith(expect.objectContaining({ usuarioId: 'user-1' }));
+      expect(res.body.data.usuarioId).toBe('user-1');
+    });
+
+    test('Tentativa de criar corrida sem autenticação -> 401 e não persiste', async () => {
+      const res = await request(app).post('/api/corridas')
+        .send({
+          origemNome: 'A', destinoNome: 'B', distanciaKm: 5, classe: 'BASICO', dataHorario: new Date().toISOString()
+        });
+      expect(res.statusCode).toBe(401);
+      expect(corridasRepository.create).not.toHaveBeenCalled();
+    });
+
+    test('Tentativa de criar corrida com campos obrigatórios inválidos -> 400 e não persiste', async () => {
+      const res = await request(app).post('/api/corridas')
+        .set('x-auth-token', tokenUserA)
+        .send({
+          origemNome: 'A', distanciaKm: 5 // falta destinoNome
+        });
+      expect(res.statusCode).toBe(400);
+      expect(corridasRepository.create).not.toHaveBeenCalled();
     });
   });
 

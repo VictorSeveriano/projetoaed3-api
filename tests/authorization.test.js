@@ -69,9 +69,12 @@ describe('Testes de Autorização (IDOR)', () => {
         expect(dados.usuarioId).toBe('user-a');
         return { id: 11, usuarioId: dados.usuarioId };
       });
-      await expect(corridasService.criar({
+      const res = await corridasService.criar({
         origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
-      }, { id: 'user-a', perfil: 'USUARIO' })).resolves.toBeDefined();
+      }, { id: 'user-a', perfil: 'USUARIO' });
+      expect(res).toBeDefined();
+      expect(res.usuarioId).toBe('user-a');
+      expect(corridasRepository.create).toHaveBeenCalledWith(expect.objectContaining({ usuarioId: 'user-a' }));
     });
 
     test('Segurança/Compatibilidade: tentativa de enviar usuarioId arbitrário (ex: user-b) é ignorada, prevalecendo a identidade autenticada', async () => {
@@ -79,15 +82,20 @@ describe('Testes de Autorização (IDOR)', () => {
         expect(dados.usuarioId).toBe('user-a');
         return { id: 10, usuarioId: dados.usuarioId };
       });
-      await expect(corridasService.criar({
+      const res = await corridasService.criar({
         usuarioId: 'user-b', origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
-      }, { id: 'user-a', perfil: 'USUARIO' })).resolves.toBeDefined();
+      }, { id: 'user-a', perfil: 'USUARIO' });
+      expect(res).toBeDefined();
+      expect(res.usuarioId).toBe('user-a');
+      expect(corridasRepository.create).toHaveBeenCalledWith(expect.objectContaining({ usuarioId: 'user-a' }));
     });
 
-    test('Criação de corrida: sem usuario autenticado -> negado', async () => {
+    test('Criação de corrida: sem usuario autenticado -> negado e não persiste', async () => {
+      corridasRepository.create.mockClear();
       await expect(corridasService.criar({
         origemNome: 'A', destinoNome: 'B', distanciaKm: 1, classe: 'BASICO', dataHorario: '2026-10-01T10:00:00.000Z'
-      }, null)).rejects.toThrow(AppError);
+      }, null)).rejects.toMatchObject({ statusCode: 401 });
+      expect(corridasRepository.create).not.toHaveBeenCalled();
     });
 
     test('USUARIO A cancela corrida de A -> permitido', async () => {
