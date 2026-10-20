@@ -1,19 +1,24 @@
--- 1. Saneamento de corridas ativas duplicadas por veículo antes de aplicar o índice único parcial
-WITH corridas_ativas_ordenadas AS (
-  SELECT
-    id,
-    veiculo_id,
-    ROW_NUMBER() OVER (PARTITION BY veiculo_id ORDER BY criada_em DESC, id DESC) AS rn
-  FROM "corridas"
-  WHERE "status" IN ('CONFIRMADA', 'EM_ANDAMENTO')
-    AND "veiculo_id" IS NOT NULL
-)
-UPDATE "corridas"
-SET "status" = 'FINALIZADA',
-    "atualizada_em" = CURRENT_TIMESTAMP
-WHERE "id" IN (
-  SELECT id FROM corridas_ativas_ordenadas WHERE rn > 1
-);
+-- 1. Verificação de integridade antes de criar o índice único parcial de corridas ativas por veículo
+-- Nenhuma corrida ativa (CONFIRMADA / EM_ANDAMENTO) é alterada para FINALIZADA ou CANCELADA na migração.
+-- Caso existam alocações duplicadas, execute o saneamento auditável em src/database/saneamentoCorridasAtivas.js antes de aplicar a migração.
+DO $$
+DECLARE
+  v_conflitos INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_conflitos
+  FROM (
+    SELECT "veiculo_id"
+    FROM "corridas"
+    WHERE "status" IN ('CONFIRMADA', 'EM_ANDAMENTO')
+      AND "veiculo_id" IS NOT NULL
+    GROUP BY "veiculo_id"
+    HAVING COUNT(*) > 1
+  ) duplicados;
+
+  IF v_conflitos > 0 THEN
+    RAISE EXCEPTION 'Encontrados % veículo(s) com múltiplas corridas ativas (CONFIRMADA/EM_ANDAMENTO). Execute o saneamento auditável (src/database/saneamentoCorridasAtivas.js) antes de criar uq_corridas_veiculo_ativo — corridas ativas nunca devem ser convertidas em FINALIZADA/CANCELADA sem comprovação.', v_conflitos;
+  END IF;
+END $$;
 
 -- Sincronizar status dos veículos que possuem corrida ativa
 UPDATE "veiculos" v

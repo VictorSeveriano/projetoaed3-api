@@ -138,22 +138,6 @@ class VeiculosRepository {
     }
   }
 
-  async updateClasse(id, classe) {
-    try {
-      const veiculo = await prisma.veiculo.update({
-        where: { id },
-        data: {
-          classe,
-          atualizadoEm: new Date()
-        }
-      });
-      return formatarVeiculo(veiculo);
-    } catch (error) {
-      if (error.code === 'P2025') return null;
-      throw error;
-    }
-  }
-
   async create(dados) {
     const veiculo = await prisma.veiculo.create({
       data: {

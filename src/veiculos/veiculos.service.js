@@ -10,10 +10,10 @@
  * Regras de porte/classe:
  *  - O porte é OBRIGATÓRIO no cadastro e deve ser Pequeno, Medio ou Grande (sem valor padrão).
  *  - Somente o ADMINISTRADOR pode alterar o porte de um veículo já cadastrado.
- *  - A classe é derivada do porte (Pequeno→BASICO, Medio→NORMAL, Grande→PREMIUM); porte desconhecido
- *    é rejeitado (400) — não existe fallback para NORMAL.
+ *  - A classe é derivada exclusivamente do porte (Pequeno→BASICO, Medio→NORMAL, Grande→PREMIUM);
+ *    porte desconhecido é rejeitado (400) — não existe fallback para NORMAL.
  *  - Ao alterar o porte, porte e classe são persistidos no MESMO UPDATE (operação atômica).
- *  - A classe só pode ser alterada manualmente pela rota administrativa /veiculos/:id/classe.
+ *  - Não é permitida alteração direta de classe sem alteração correspondente do porte.
  */
 
 const veiculosRepository   = require('./veiculos.repository');
@@ -128,7 +128,11 @@ class VeiculosService {
     const v = await veiculosRepository.findById(id);
     if (!v) throw new AppError('Veículo não encontrado.', 404);
     this._garantirNaoExcluido(v);
-    return this._enriquecer(await veiculosRepository.updateClasse(id, classe));
+
+    throw new AppError(
+      'A classe de serviço é derivada exclusivamente do porte do veículo. Altere o porte como administrador para recalcular a classe.',
+      400
+    );
   }
 
   async rejeitar(id) {
@@ -174,7 +178,7 @@ class VeiculosService {
       throw new AppError('Corpo da requisição inválido.', 400);
     }
 
-    // `classe` NÃO é permitida aqui: só é alterada via porte (recalculada) ou pela rota administrativa /classe.
+    // `classe` NÃO é permitida no payload: é derivada exclusivamente de `porte` e recalculada de forma atômica.
     const camposPermitidos = ['marca', 'modelo', 'ano', 'placa', 'cor', 'porte', 'quilometragem', 'quantidadePassageiros', 'possuiArCondicionado', 'possuiExtintor', 'possuiCintoSeguranca', 'documentacaoRegularizada'];
     const dadosLimpos = Object.keys(dados)
       .filter(key => camposPermitidos.includes(key))

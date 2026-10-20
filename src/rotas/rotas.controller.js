@@ -2,6 +2,7 @@ const rotasService = require('./rotas.service');
 const AppError = require('../utils/AppError');
 const { success } = require('../utils/responseHelper');
 const { isValidCoord } = require('../utils/geoUtils');
+const { lerNumero } = require('../utils/inputValidators');
 
 /**
  * RotasController — Controlador para endpoints de rotas.
@@ -35,12 +36,19 @@ const calcularCorrida = async (req, res, next) => {
       return next(new AppError('Os nomes da origem e destino não podem ser vazios.', 400));
     }
 
-    const oLat = Number(origem.lat);
-    const oLng = Number(origem.lng);
-    const dLat = Number(destino.lat);
-    const dLng = Number(destino.lng);
+    const oLat = lerNumero(origem.lat);
+    const oLng = lerNumero(origem.lng);
+    const dLat = lerNumero(destino.lat);
+    const dLng = lerNumero(destino.lng);
 
-    if (!isValidCoord(oLat, oLng) || !isValidCoord(dLat, dLng)) {
+    if (
+      oLat === undefined ||
+      oLng === undefined ||
+      dLat === undefined ||
+      dLng === undefined ||
+      !isValidCoord(oLat, oLng) ||
+      !isValidCoord(dLat, dLng)
+    ) {
       return next(new AppError('Origem e destino devem conter latitude e longitude numéricas e válidas.', 400));
     }
 

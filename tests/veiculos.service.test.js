@@ -195,11 +195,10 @@ describe('VeiculosService aprovação, classe e restrição de alteração de po
     expect(vCorr.classe).toBe('PREMIUM');
   });
 
-  test('Classe: PATCH classe com BASICO/NORMAL/PREMIUM -> permitido', async () => {
-    veiculosRepository.findById.mockResolvedValue({ id: 'v1', statusAprovacao: 'APROVADO' });
-    veiculosRepository.updateClasse.mockImplementation(async (id, classe) => ({ id, classe }));
-    const v = await veiculosService.editarClasse('v1', 'PREMIUM');
-    expect(v.classe).toBe('PREMIUM');
+  test('Classe: tentativa de alterar classe diretamente via editarClasse sem alterar porte -> rejeitado (400)', async () => {
+    veiculosRepository.findById.mockResolvedValue({ id: 'v1', statusAprovacao: 'APROVADO', porte: 'Pequeno', classe: 'BASICO' });
+    await expect(veiculosService.editarClasse('v1', 'PREMIUM')).rejects.toMatchObject({ statusCode: 400 });
+    expect(veiculosRepository.update).not.toHaveBeenCalled();
   });
 
   test('Classe: classe inválida -> 400', async () => {

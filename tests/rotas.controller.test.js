@@ -48,6 +48,33 @@ describe('RotasController - calcularCorrida Validations', () => {
     expect(next.mock.calls[0][0].message).toMatch(/válidas/);
   });
 
+  test('deve rejeitar se coordenadas forem null, string vazia, boolean ou array (sem converter para 0)', async () => {
+    for (const valorInvalido of [null, undefined, '', '   ', false, true, [], {}]) {
+      next.mockClear();
+      req.body = {
+        origem: { nome: 'A', lat: valorInvalido, lng: -40 },
+        destino: { nome: 'B', lat: -20, lng: -40 },
+      };
+      await calcularCorrida(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(AppError));
+      expect(next.mock.calls[0][0].statusCode).toBe(400);
+    }
+    expect(rotasService.calcularCorrida).not.toHaveBeenCalled();
+  });
+
+  test('deve preservar coordenadas iguais a 0 (Equador / Greenwich) quando válidas', async () => {
+    req.body = {
+      origem: { nome: 'Marco Zero Equador', lat: 0, lng: 0 },
+      destino: { nome: 'Destino Sul', lat: -20.3197, lng: -40.3376 },
+    };
+    await calcularCorrida(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(rotasService.calcularCorrida).toHaveBeenCalledWith(
+      { nome: 'Marco Zero Equador', lat: 0, lng: 0 },
+      { nome: 'Destino Sul', lat: -20.3197, lng: -40.3376 }
+    );
+  });
+
   test('deve rejeitar se origem e destino forem o mesmo local (mesmo com nomes diferentes)', async () => {
     req.body = {
       origem: { nome: 'Rua A', lat: -20.31970, lng: -40.33760 },

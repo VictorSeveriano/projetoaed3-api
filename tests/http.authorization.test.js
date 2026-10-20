@@ -183,10 +183,9 @@ describe('HTTP Authorization Tests', () => {
       expect(res.statusCode).toBe(403);
     });
 
-    test('Admin edita classe diretamente -> 200', async () => {
-      veiculosRepository.updateClasse.mockResolvedValue({ id: 'v1', classe: 'PREMIUM' });
+    test('Admin tenta editar classe diretamente sem alterar porte -> 400 (classe derivada exclusivamente do porte)', async () => {
       const res = await request(app).patch('/api/veiculos/v1/classe').set('x-auth-token', tokenAdmin).send({ classe: 'PREMIUM' });
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(400);
     });
   });
 
@@ -195,6 +194,13 @@ describe('HTTP Authorization Tests', () => {
       veiculosRepository.update.mockResolvedValue({ id: 'v1', marca: 'Ford' });
       const res = await request(app).patch('/api/veiculos/v1').set('x-auth-token', tokenMotA).send({ marca: 'Ford' });
       expect(res.statusCode).toBe(200);
+    });
+
+    test('Admin altera porte do veículo e recalcula classe atomicamente -> 200', async () => {
+      veiculosRepository.update.mockImplementation(async (id, dados) => ({ id, ...dados }));
+      const res = await request(app).patch('/api/veiculos/v1').set('x-auth-token', tokenAdmin).send({ porte: 'Grande' });
+      expect(res.statusCode).toBe(200);
+      expect(veiculosRepository.update).toHaveBeenCalledWith('v1', { porte: 'Grande', classe: 'PREMIUM' });
     });
 
     test('Usuário tenta atualizar veículo de outro (simulado pelo ID mockado) -> 403', async () => {

@@ -443,5 +443,114 @@ describe('Concorrência, Transações e Integridade no Banco de Dados (Prisma + 
       expect(lida.origemLat).toBe(0);
       expect(lida.origemLng).toBe(0);
     });
+
+    test('saneamento auditável de conflitos de veículo ativo nunca converte corrida em FINALIZADA/CANCELADA e registra auditoria', async () => {
+      const {
+        diagnosticarConflitosVeiculoAtivo,
+        sanearConflitosVeiculoAtivo,
+      } = require('../src/database/saneamentoCorridasAtivas');
+
+      // Simula cenário pré-migração (sem o índice parcial) com duas corridas ativas no mesmo veículo
+      await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS "uq_corridas_veiculo_ativo"');
+      let idsCriados = [];
+      try {
+        const titular = await criarCorridaNoBanco({
+          motoristaId: mot1User.id,
+          veiculoId: v1.id,
+          origemNome: `Saneamento_Titular_${sufixo}`,
+          status: 'EM_ANDAMENTO',
+        });
+        const excedenteConfirmada = await criarCorridaNoBanco({
+          motoristaId: mot1User.id,
+          veiculoId: v1.id,
+          origemNome: `Saneamento_Excedente_Confirmada_${sufixo}`,
+          status: 'CONFIRMADA',
+        });
+        const excedenteEmAndamento = await criarCorridaNoBanco({
+          motoristaId: mot1User.id,
+          veiculoId: v1.id,
+          origemNome: `Saneamento_Excedente_EmAndamento_${sufixo}`,
+          status: 'EM_ANDAMENTO',
+        });
+        idsCriados = [titular.id, excedenteConfirmada.id, excedenteEmAndamento.id];
+
+        await prisma.corrida.update({
+          where: { id: titular.id },
+          data: { criadaEm: new Date('2026-10-01T13:00:00.000Z') },
+        });
+        await prisma.corrida.update({
+          where: { id: excedenteConfirmada.id },
+          data: { criadaEm: new Date('2026-10-01T13:05:00.000Z') },
+        });
+        await prisma.corrida.update({
+          where: { id: excedenteEmAndamento.id },
+          data: { criadaEm: new Date('2026-10-01T13:10:00.000Z') },
+        });
+
+        const diag = await diagnosticarConflitosVeiculoAtivo(prisma);
+        const conflitoV1 = diag.conflitos.find((c) => c.veiculoId === v1.id);
+        expect(conflitoV1).toBeDefined();
+        expect(conflitoV1.corridaTitular.id).toBe(titular.id);
+        expect(conflitoV1.corridasExcedentes.map((e) => e.id)).toEqual([
+          excedenteEmAndamento.id,
+          excedenteConfirmada.id,
+        ]);
+
+        // 1ª execução sem resolução explícita: CONFIRMADA volta para SOLICITADA; EM_ANDAMENTO ambígua NÃO é alterada
+        const resParcial = await sanearConflitosVeiculoAtivo(prisma, { perfil: 'SISTEMA' });
+        expect(resParcial.prontoParaIndiceUnico).toBe(false);
+        expect(resParcial.naoResolvidos.map((n) => n.corridaId)).toContain(excedenteEmAndamento.id);
+
+        const aposParcialConfirmada = await prisma.corrida.findUnique({ where: { id: excedenteConfirmada.id } });
+        const aposParcialEmAndamento = await prisma.corrida.findUnique({ where: { id: excedenteEmAndamento.id } });
+        expect(aposParcialConfirmada).toMatchObject({
+          status: 'SOLICITADA',
+          veiculoId: null,
+          motoristaId: null,
+        });
+        expect(aposParcialEmAndamento.status).toBe('EM_ANDAMENTO');
+        expect(aposParcialConfirmada.status).not.toBe('FINALIZADA');
+        expect(aposParcialEmAndamento.status).not.toBe('FINALIZADA');
+
+        // 2ª execução com resolução explícita de realocação para v2 (disponível)
+        const resFinal = await sanearConflitosVeiculoAtivo(prisma, {
+          perfil: 'ADMINISTRADOR',
+          resolucoesExplicitas: {
+            [excedenteEmAndamento.id]: {
+              acao: 'REALOCAR_VEICULO',
+              veiculoId: v2.id,
+              motoristaId: mot2User.id,
+              justificativa: 'Realocação auditada de corrida em andamento para veículo v2.',
+            },
+          },
+        });
+        expect(resFinal.prontoParaIndiceUnico).toBe(true);
+
+        const aposRealocacao = await prisma.corrida.findUnique({ where: { id: excedenteEmAndamento.id } });
+        expect(aposRealocacao).toMatchObject({
+          status: 'EM_ANDAMENTO',
+          veiculoId: v2.id,
+          motoristaId: mot2User.id,
+        });
+
+        const logsAuditoria = await prisma.auditoria.findMany({
+          where: { entidadeId: { in: [excedenteConfirmada.id, excedenteEmAndamento.id] } },
+        });
+        expect(logsAuditoria.length).toBeGreaterThanOrEqual(3);
+
+        await prisma.auditoria.deleteMany({
+          where: { entidadeId: { in: [excedenteConfirmada.id, excedenteEmAndamento.id] } },
+        });
+      } finally {
+        if (idsCriados.length > 0) {
+          await prisma.corrida.deleteMany({
+            where: { id: { in: idsCriados } },
+          });
+        }
+        await prisma.$executeRawUnsafe(
+          'CREATE UNIQUE INDEX IF NOT EXISTS "uq_corridas_veiculo_ativo" ON "corridas"("veiculo_id") WHERE "status" IN (\'CONFIRMADA\', \'EM_ANDAMENTO\') AND "veiculo_id" IS NOT NULL'
+        );
+      }
+    });
   });
 });

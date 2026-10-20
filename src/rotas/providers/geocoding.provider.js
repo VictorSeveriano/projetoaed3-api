@@ -34,27 +34,39 @@ class GeocodingProvider {
             const data = JSON.parse(raw);
             if (!Array.isArray(data)) return resolve([]);
 
-            const sugestoes = data.filter((item) => item.lat && item.lon).map((item) => {
-              const addr = item.address || {};
-              const logradouro = [addr.road || addr.pedestrian || addr.footway || '', addr.house_number || ''].filter(Boolean).join(', ');
-              const bairro = addr.suburb || addr.neighbourhood || addr.quarter || addr.city_district || '';
-              const cidade = addr.city || addr.town || addr.village || addr.municipality || '';
-              const estado = addr.state || '';
-              const cep = (addr.postcode || '').replace(/\D/g, '');
+            const sugestoes = data
+              .filter(
+                (item) =>
+                  item.lat !== undefined &&
+                  item.lat !== null &&
+                  item.lat !== '' &&
+                  item.lon !== undefined &&
+                  item.lon !== null &&
+                  item.lon !== '' &&
+                  Number.isFinite(Number(item.lat)) &&
+                  Number.isFinite(Number(item.lon))
+              )
+              .map((item) => {
+                const addr = item.address || {};
+                const logradouro = [addr.road || addr.pedestrian || addr.footway || '', addr.house_number || ''].filter(Boolean).join(', ');
+                const bairro = addr.suburb || addr.neighbourhood || addr.quarter || addr.city_district || '';
+                const cidade = addr.city || addr.town || addr.village || addr.municipality || '';
+                const estado = addr.state || '';
+                const cep = (addr.postcode || '').replace(/\D/g, '');
 
-              const partes = [];
-              if (logradouro) partes.push(logradouro);
-              if (bairro) partes.push(bairro);
-              if (cidade) partes.push(cidade);
-              if (estado) partes.push(estado);
-              const descricao = partes.join(', ') || item.display_name || texto;
+                const partes = [];
+                if (logradouro) partes.push(logradouro);
+                if (bairro) partes.push(bairro);
+                if (cidade) partes.push(cidade);
+                if (estado) partes.push(estado);
+                const descricao = partes.join(', ') || item.display_name || texto;
 
-              return {
-                descricao, logradouro, numero: addr.house_number || '', complemento: '', bairro, cidade, estado,
-                cep: cep.length === 8 ? cep.substring(0, 5) + '-' + cep.substring(5) : cep,
-                latitude: Number(item.lat), longitude: Number(item.lon),
-              };
-            });
+                return {
+                  descricao, logradouro, numero: addr.house_number || '', complemento: '', bairro, cidade, estado,
+                  cep: cep.length === 8 ? cep.substring(0, 5) + '-' + cep.substring(5) : cep,
+                  latitude: Number(item.lat), longitude: Number(item.lon),
+                };
+              });
 
             this._geocodingCache.set(cacheKey, { resultado: sugestoes, expiresAt: Date.now() + this._CACHE_TTL_MS });
             resolve(sugestoes);
