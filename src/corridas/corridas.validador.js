@@ -145,6 +145,20 @@ function validarDadosCriacaoCorrida(dados) {
   const destinoLat = latitudeOpcional(dados.destinoLat, 'destinoLat');
   const destinoLng = longitudeOpcional(dados.destinoLng, 'destinoLng');
 
+  // Validação pareada: lat e lng de origem/destino devem ser fornecidos juntos
+  if (origemLat !== null && origemLng === null) {
+    throw new AppError('origemLat e origemLng devem ser informados juntos.', 400);
+  }
+  if (origemLng !== null && origemLat === null) {
+    throw new AppError('origemLat e origemLng devem ser informados juntos.', 400);
+  }
+  if (destinoLat !== null && destinoLng === null) {
+    throw new AppError('destinoLat e destinoLng devem ser informados juntos.', 400);
+  }
+  if (destinoLng !== null && destinoLat === null) {
+    throw new AppError('destinoLat e destinoLng devem ser informados juntos.', 400);
+  }
+
   let polyline = null;
   if (!ausente(dados.polyline)) {
     if (typeof dados.polyline !== 'string') throw new AppError('polyline invalida: deve ser um texto.', 400);
