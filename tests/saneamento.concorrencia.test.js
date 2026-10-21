@@ -36,6 +36,14 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
   let v2;
   let origemEnd;
   let destinoEnd;
+  let indicePublicoExistiaAntes;
+
+  const indicePublicoExiste = async () => {
+    const linhas = await prisma.$queryRawUnsafe(
+      "SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uq_corridas_veiculo_ativo'"
+    );
+    return linhas.length > 0;
+  };
 
   const criarCorridaNoBanco = async (overrides = {}) => {
     return prisma.corrida.create({
@@ -65,6 +73,7 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
   beforeAll(async () => {
     env = await criarAmbienteIsolado('saneamento_conc');
     prisma = env.client;
+    indicePublicoExistiaAntes = await indicePublicoExiste();
     await env.aplicarMigracoesBase();
     const seed = await semearBaseDadosValidos(prisma);
     origemEnd = seed.endOrigem;
@@ -547,5 +556,8 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
       }
     }
   });
-});
 
+  test('o saneamento em schema isolado não altera o índice único parcial do schema public', async () => {
+    expect(await indicePublicoExiste()).toBe(indicePublicoExistiaAntes);
+  });
+});

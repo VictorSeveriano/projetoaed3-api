@@ -50,8 +50,13 @@ function lerMigracao(nome) {
 }
 
 async function criarAmbienteIsolado(tag) {
-  const sufixo = `${tag}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-  const schemaName = `test_mig_${sufixo}`.toLowerCase();
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL não definida: os testes de schema isolado exigem um PostgreSQL acessível.');
+  }
+  // Identificador PostgreSQL: apenas [a-z0-9_] e no máximo 63 caracteres.
+  const tagSegura = String(tag).replace(/[^a-z0-9_]/gi, '_');
+  const sufixo = `${tagSegura}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+  const schemaName = `test_mig_${sufixo}`.toLowerCase().slice(0, 63);
   const url = new URL(process.env.DATABASE_URL);
   url.hostname = url.hostname.replace('-pooler.', '.');
   url.searchParams.set('schema', schemaName);
@@ -61,19 +66,26 @@ async function criarAmbienteIsolado(tag) {
     datasources: { db: { url: url.toString() } },
   });
 
-  await client.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-  await client.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "${schemaName}"."_prisma_migrations" (
-      "id" VARCHAR(36) PRIMARY KEY,
-      "checksum" VARCHAR(64) NOT NULL,
-      "finished_at" TIMESTAMPTZ,
-      "migration_name" VARCHAR(250) NOT NULL,
-      "logs" TEXT,
-      "rolled_back_at" TIMESTAMPTZ,
-      "started_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
-      "applied_steps_count" INTEGER NOT NULL DEFAULT 0
-    );
-  `);
+  try {
+    await client.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+    await client.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}"."_prisma_migrations" (
+        "id" VARCHAR(36) PRIMARY KEY,
+        "checksum" VARCHAR(64) NOT NULL,
+        "finished_at" TIMESTAMPTZ,
+        "migration_name" VARCHAR(250) NOT NULL,
+        "logs" TEXT,
+        "rolled_back_at" TIMESTAMPTZ,
+        "started_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "applied_steps_count" INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+  } catch (erro) {
+    // Falha parcial na preparação: não deixa schema órfão nem conexão aberta.
+    await client.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`).catch(() => {});
+    await client.$disconnect();
+    throw erro;
+  }
 
   async function aplicarMigracaoNoSchema(nomeMigracao) {
     const { sql, checksum } = lerMigracao(nomeMigracao);
