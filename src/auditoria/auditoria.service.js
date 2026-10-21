@@ -60,6 +60,31 @@ class AuditoriaService {
     const where = {};
 
     if (filtros.usuarioId) where.usuarioId = filtros.usuarioId;
+    if (filtros.perfil) where.perfil = filtros.perfil;
+    if (filtros.resultado) where.resultado = filtros.resultado;
+
+    if (filtros.search) {
+      where.usuario = {
+        nome: {
+          contains: filtros.search.trim(),
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    if (filtros.dataInicio || filtros.dataFim) {
+      where.criadoEm = {};
+
+      if (filtros.dataInicio) {
+        const inicio = new Date(`${filtros.dataInicio}T00:00:00.000Z`);
+        where.criadoEm.gte = inicio;
+      }
+
+      if (filtros.dataFim) {
+        const fim = new Date(`${filtros.dataFim}T23:59:59.999Z`);
+        where.criadoEm.lte = fim;
+      }
+    }
 
     const result = await auditoriaRepository.findAll({ skip, take, orderBy, where });
     return {
