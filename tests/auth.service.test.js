@@ -60,19 +60,19 @@ describe('AuthService cadastro availability', () => {
     motoristasRepository.existsByCnh.mockResolvedValue(true);
 
     await expect(authService.verificarDisponibilidadeCadastro({
-      cpf: '123.456.789-01',
+      cpf: '529.982.247-25',
       email: 'ANA@example.com',
       perfil: 'MOTORISTA',
-      cnh: '123.456.789-01',
+      cnh: '529.982.247-25',
     })).resolves.toEqual({ duplicados: { cpf: true, email: false, cnh: true } });
-    expect(authRepository.existsByCpf).toHaveBeenCalledWith('12345678901');
+    expect(authRepository.existsByCpf).toHaveBeenCalledWith('52998224725');
     expect(authRepository.existsByEmail).toHaveBeenCalledWith('ana@example.com');
-    expect(motoristasRepository.existsByCnh).toHaveBeenCalledWith('12345678901');
+    expect(motoristasRepository.existsByCnh).toHaveBeenCalledWith('52998224725');
   });
 
   test('checks CPF and email for passengers without querying CNH', async () => {
     await expect(authService.verificarDisponibilidadeCadastro({
-      cpf: '12345678901',
+      cpf: '52998224725',
       email: 'ana@example.com',
       perfil: 'USUARIO',
     })).resolves.toEqual({ duplicados: { cpf: false, email: false } });
@@ -81,7 +81,7 @@ describe('AuthService cadastro availability', () => {
 
   test('rejects malformed CNH without querying its repository', async () => {
     await expect(authService.verificarDisponibilidadeCadastro({
-      cpf: '12345678901',
+      cpf: '52998224725',
       email: 'ana@example.com',
       perfil: 'MOTORISTA',
       cnh: '11111111111',
@@ -94,12 +94,12 @@ describe('AuthService cadastro availability', () => {
 
     await expect(authService.cadastrar({
       nome: 'Ana Silva',
-      cpf: '12345678901',
+      cpf: '52998224725',
       celular: '11999999999',
       email: 'ana@example.com',
       senha: 'Senha@1234',
       perfil: 'MOTORISTA',
-      cnh: '12345678901',
+      cnh: '52998224725',
       endereco: {
         rua: 'Rua A',
         numero: '1',
@@ -117,12 +117,12 @@ describe('AuthService cadastro availability', () => {
 
     await expect(authService.cadastrar({
       nome: 'Ana Silva',
-      cpf: '12345678901',
+      cpf: '52998224725',
       celular: '11999999999',
       email: 'ana@example.com',
       senha: 'Senha@1234',
       perfil: 'MOTORISTA',
-      cnh: '12345678901',
+      cnh: '52998224725',
       endereco: {
         rua: 'Rua A',
         numero: '1',
@@ -136,7 +136,7 @@ describe('AuthService cadastro availability', () => {
     expect(authRepository.create).toHaveBeenCalledWith(expect.objectContaining({
       perfil: 'MOTORISTA',
     }));
-    expect(motoristasService.solicitar).toHaveBeenCalledWith('usuario-id', '12345678901');
+    expect(motoristasService.solicitar).toHaveBeenCalledWith('usuario-id', '52998224725');
   });
 
   test('maps a concurrent CNH unique-constraint conflict to a clear 409 without partial success', async () => {
@@ -147,12 +147,12 @@ describe('AuthService cadastro availability', () => {
 
     await expect(authService.cadastrar({
       nome: 'Ana Silva',
-      cpf: '12345678901',
+      cpf: '52998224725',
       celular: '11999999999',
       email: 'ana@example.com',
       senha: 'Senha@1234',
       perfil: 'MOTORISTA',
-      cnh: '12345678901',
+      cnh: '52998224725',
       endereco: {
         rua: 'Rua A',
         numero: '1',
@@ -173,18 +173,18 @@ describe('AuthService cadastro availability', () => {
 
     await authRepositoryReal.create({
       nome: 'Ana Silva',
-      cpf: '12345678901',
+      cpf: '52998224725',
       celular: '11999999999',
       email: 'ana@example.com',
       usuario: 'anasilva',
       senha: 'Senha@1234',
       perfil: 'MOTORISTA',
-      cnh: '12345678901',
+      cnh: '52998224725',
     });
 
     expect(prisma.usuario.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        cpf: '12345678901',
+        cpf: '52998224725',
       }),
       include: { endereco: true, motorista: true },
     }));
