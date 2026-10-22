@@ -17,20 +17,48 @@ function formatarVeiculo(v) {
 class VeiculosRepository {
   async findAll(filtros = {}) {
     const where = { statusAprovacao: { not: 'EXCLUIDO' } };
+    const andFilters = [];
+
     if (filtros.status) {
       const s = filtros.status.toUpperCase();
-      where.OR = [{ status: s }, { statusAprovacao: s }];
+      andFilters.push({ OR: [{ status: s }, { statusAprovacao: s }] });
     }
+
     if (filtros.motoristaId) {
-      where.motoristaId = filtros.motoristaId;
+      andFilters.push({ motoristaId: filtros.motoristaId });
     }
+
     if (filtros.porte) {
       const p = filtros.porte.toLowerCase();
-      if (p === 'pequeno') where.porte = 'Pequeno';
-      else if (p === 'medio') where.porte = 'Medio';
-      else if (p === 'grande') where.porte = 'Grande';
-      else where.porte = filtros.porte;
+      let porteNormalizado = filtros.porte;
+      if (p === 'pequeno') porteNormalizado = 'Pequeno';
+      else if (p === 'medio') porteNormalizado = 'Medio';
+      else if (p === 'grande') porteNormalizado = 'Grande';
+      andFilters.push({ porte: porteNormalizado });
     }
+
+    if (filtros.classe) {
+      andFilters.push({ classe: filtros.classe.toUpperCase() });
+    }
+
+    if (filtros.search) {
+      const termo = filtros.search.trim();
+      if (termo) {
+        andFilters.push({
+          OR: [
+            { marca: { contains: termo, mode: 'insensitive' } },
+            { modelo: { contains: termo, mode: 'insensitive' } },
+            { placa: { contains: termo, mode: 'insensitive' } },
+            { motorista: { is: { nome: { contains: termo, mode: 'insensitive' } } } },
+          ]
+        });
+      }
+    }
+
+    if (andFilters.length > 0) {
+      where.AND = andFilters;
+    }
+
     const veiculos = await prisma.veiculo.findMany({
       where,
       orderBy: { criadoEm: 'asc' }
