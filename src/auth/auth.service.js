@@ -28,6 +28,10 @@ class AuthService {
       throw new AppError('Credenciais invalidas.', 401);
     }
 
+    if (user.perfil === 'INATIVO') {
+      throw new AppError('Esta conta foi inativada e não pode mais acessar o sistema.', 403);
+    }
+
     const senhaEmHash = /^\$2[aby]\$\d{2}\$/.test(user.senha);
     const senhaValida = senhaEmHash
       ? await bcrypt.compare(senha, user.senha)

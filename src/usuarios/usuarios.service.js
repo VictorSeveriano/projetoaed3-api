@@ -4,10 +4,12 @@
  * Todos os métodos são async para suportar o repositório PostgreSQL.
  */
 
+const prisma             = require('../database/prisma');
 const authRepository     = require('../auth/auth.repository');
 const corridasRepository = require('../corridas/corridas.repository');
 const authService        = require('../auth/auth.service');
 const AppError           = require('../utils/AppError');
+const { STATUS_CORRIDA } = require('../utils/constants');
 
 class UsuariosService {
   async buscarPorId(id, usuarioLogado = null) {
@@ -26,6 +28,8 @@ class UsuariosService {
   async listarTodos(filtros = {}) {
     let lista = await authRepository.findAll();
 
+    lista = lista.filter((u) => u.perfil !== 'INATIVO');
+
     if (filtros.perfil) {
       lista = lista.filter((u) => u.perfil === filtros.perfil.toUpperCase());
     }
@@ -40,6 +44,64 @@ class UsuariosService {
 
     // Senha já foi removida pelo findAll (retorna sem senha)
     return lista;
+  }
+
+  async removerComSeguranca(id, usuarioLogado = null) {
+    if (!usuarioLogado || usuarioLogado.perfil !== 'ADMINISTRADOR') {
+      throw new AppError('Acesso negado. Apenas administradores podem remover usuários.', 403);
+    }
+
+    const usuario = await authRepository.encontrarPorId(id);
+    if (!usuario) {
+      throw new AppError('Usuário não encontrado.', 404);
+    }
+
+    if (usuario.perfil === 'INATIVO') {
+      throw new AppError('Este usuário já foi removido do sistema e mantido apenas no histórico.', 409);
+    }
+
+    const motorista = await prisma.motorista.findUnique({ where: { usuarioId: id } });
+    const veiculo = await prisma.veiculo.findFirst({ where: { motoristaId: id } });
+    const corridasAtivas = await prisma.corrida.count({
+      where: {
+        OR: [
+          { usuarioId: id },
+          { motoristaId: id },
+        ],
+        status: {
+          in: [
+            STATUS_CORRIDA.SOLICITADA,
+            STATUS_CORRIDA.CONFIRMADA,
+            STATUS_CORRIDA.EM_ANDAMENTO,
+          ],
+        },
+      },
+    });
+
+    if (motorista || veiculo || corridasAtivas > 0) {
+      throw new AppError(
+        'Não foi possível excluir este usuário porque existem dependências ativas: motorista, veículo ou corrida em andamento.',
+        409,
+      );
+    }
+
+    const usuarioInativo = `${usuario.usuario}-inativo-${id.slice(0, 8)}`;
+    const emailInativo = `historico+${id}@inativo.local`;
+
+    const atualizado = await prisma.usuario.update({
+      where: { id },
+      data: {
+        perfil: 'INATIVO',
+        usuario: usuarioInativo,
+        email: emailInativo,
+        atualizadoEm: new Date(),
+      },
+    });
+
+    return {
+      id: atualizado.id,
+      status: atualizado.perfil,
+    };
   }
 
   async atualizar(id, dados, usuarioLogado) {
