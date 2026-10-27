@@ -10,6 +10,7 @@ try {
 }
 
 const app = require('./app');
+const prisma = require('./database/prisma');
 
 const PORT = process.env.PORT || 3001;
 
@@ -21,12 +22,20 @@ const server = app.listen(PORT, () => {
   console.log(` Health   : http://localhost:${PORT}/api/health`);
   console.log(` Grafo    : http://localhost:${PORT}/api/grafo`);
   console.log(`========================================\n`);
+
+  if (typeof prisma.iniciarKeepAlive === 'function') {
+    prisma.iniciarKeepAlive();
+  }
 });
 
 // Solução para o EADDRINUSE com nodemon no Windows
 const gracefulShutdown = (signal) => {
   console.log(`\n[${signal}] Desligando o servidor graciosamente...`);
-  server.close(() => {
+  if (typeof prisma.pararKeepAlive === 'function') {
+    prisma.pararKeepAlive();
+  }
+  server.close(async () => {
+    await prisma.$disconnect().catch(() => {});
     console.log('Servidor encerrado. Processo finalizado.');
     process.exit(0);
   });

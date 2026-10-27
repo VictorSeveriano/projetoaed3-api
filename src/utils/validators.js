@@ -2,21 +2,6 @@
  * validators.js — Funções de validação centralizadas
  */
 
-/**
- * Calcula um dígito verificador do CPF usando o algoritmo da Receita Federal.
- * @param {string} parcial - Primeiros N dígitos do CPF (sem formatação)
- * @param {number} pesoInicial - Peso inicial (N+1)
- * @returns {number} Dígito verificador esperado (0-9)
- */
-function calcularDigitoCPF(parcial, pesoInicial) {
-  let soma = 0;
-  for (let i = 0; i < parcial.length; i++) {
-    soma += parseInt(parcial[i], 10) * (pesoInicial - i);
-  }
-  const resto = soma % 11;
-  return resto < 2 ? 0 : 11 - resto;
-}
-
 const validarCPF = (cpf) => {
   if (!cpf) return false;
   const limpo = cpf.replace(/\D/g, '');
@@ -25,14 +10,7 @@ const validarCPF = (cpf) => {
   // Rejeita CPFs com todos os dígitos iguais (ex.: 111.111.111-11)
   if (/^(\d)\1+$/.test(limpo)) return false;
 
-  // Valida o primeiro dígito verificador (posição 9)
-  const primeiroDigito = calcularDigitoCPF(limpo.slice(0, 9), 10);
-  if (primeiroDigito !== parseInt(limpo[9], 10)) return false;
-
-  // Valida o segundo dígito verificador (posição 10)
-  const segundoDigito = calcularDigitoCPF(limpo.slice(0, 10), 11);
-  if (segundoDigito !== parseInt(limpo[10], 10)) return false;
-
+  // Os dígitos verificadores do CPF não são validados (decisão de projeto).
   return true;
 };
 
