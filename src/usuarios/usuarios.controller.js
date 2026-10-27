@@ -39,6 +39,26 @@ const atualizar = async (req, res, next) => {
   }
 };
 
+/** DELETE /api/usuarios/:id — Admin */
+const remover = async (req, res, next) => {
+  try {
+    const dados = await usuariosService.removerComSeguranca(req.params.id, req.usuario);
+    await auditoriaService.registrar(
+      { usuarioId: req.usuario.id, perfil: req.usuario.perfil, acao: 'EXCLUSAO_USUARIO', modulo: 'USUARIOS', resultado: 'SUCESSO' },
+      req,
+      { entidade: 'Usuario', entidadeId: req.params.id, descricao: 'Usuário removido com segurança e preservado no histórico.', dadosNovos: dados }
+    );
+    return success(res, dados, 'Usuário removido com sucesso.');
+  } catch (err) {
+    await auditoriaService.registrar(
+      { usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'EXCLUSAO_USUARIO_FALHA', modulo: 'USUARIOS', resultado: 'FALHA' },
+      req,
+      { entidade: 'Usuario', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 }
+    );
+    next(err);
+  }
+};
+
 /** POST /api/usuarios — Admin */
 const criar = async (req, res, next) => {
   try {
@@ -67,4 +87,4 @@ const listarCorridas = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { buscarPorId, listarCorridas, listarTodos, atualizar, criar };
+module.exports = { buscarPorId, listarCorridas, listarTodos, atualizar, remover, criar };

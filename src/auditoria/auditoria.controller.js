@@ -5,9 +5,26 @@ const { success } = require('../utils/responseHelper');
 
 const listar = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, usuarioId } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      usuarioId,
+      perfil,
+      resultado,
+      search,
+      dataInicio,
+      dataFim,
+    } = req.query;
+
     const paginacao = { page: parseInt(page, 10), limit: parseInt(limit, 10) };
-    const filtros = { usuarioId };
+    const filtros = {
+      usuarioId,
+      perfil,
+      resultado,
+      search,
+      dataInicio,
+      dataFim,
+    };
 
     const result = await auditoriaService.listar(filtros, paginacao);
     return success(res, result.data, 'Registros de auditoria listados.', 200, result.meta);
