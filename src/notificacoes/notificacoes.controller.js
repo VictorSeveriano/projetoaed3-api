@@ -1,10 +1,14 @@
 'use strict';
 const notificacoesService = require('./notificacoes.service');
+const corridasService     = require('../corridas/corridas.service');
 const { success }         = require('../utils/responseHelper');
 
 /** GET /api/notificacoes?destinatarioId= */
 const listar = async (req, res, next) => {
   try {
+    if (typeof corridasService.cancelarCorridasExpiradas === 'function') {
+      await corridasService.cancelarCorridasExpiradas();
+    }
     const destinatarioId = req.usuario.id;
     const dados    = await notificacoesService.listar(destinatarioId);
     const naoLidas = await notificacoesService.contarNaoLidas(destinatarioId);

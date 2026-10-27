@@ -32,6 +32,10 @@ const {
 } = require('./corridas.validador');
 
 class CorridasService {
+  constructor() {
+    this._expiracaoTimer = null;
+  }
+
   static get TARIFAS_KM() {
     return TARIFAS_KM;
   }
@@ -40,11 +44,63 @@ class CorridasService {
     return determinarFaixaHorario(dataHorario);
   }
 
+  /**
+   * Cancela automaticamente corridas SOLICITADAS (sem motorista) cujo dataHorario já chegou/passou.
+   * Notifica o passageiro de cada corrida expirada sem propagar falhas de notificação.
+   */
+  async cancelarCorridasExpiradas(agora = new Date()) {
+    if (typeof corridasRepository.cancelarSolicitadasVencidas !== 'function') {
+      return [];
+    }
+
+    let vencidas = [];
+    try {
+      vencidas = (await corridasRepository.cancelarSolicitadasVencidas(agora)) || [];
+    } catch (e) {
+      console.error('[CorridasService] Falha ao cancelar corridas expiradas:', e.message);
+      return [];
+    }
+
+    for (const c of vencidas) {
+      if (c.usuarioId && typeof notificacoesService.notificarPassageiroExpiracao === 'function') {
+        await this._notificarSemFalhar(`expiracao ${c.id}: notificar passageiro`, () =>
+          notificacoesService.notificarPassageiroExpiracao(c.usuarioId, {
+            corridaId:   c.id,
+            origemNome:  c.origemNome,
+            destinoNome: c.destinoNome,
+          })
+        );
+      }
+    }
+
+    return vencidas;
+  }
+
+  iniciarMonitoramentoExpiracao(intervaloMs = 30 * 1000) {
+    if (this._expiracaoTimer || process.env.NODE_ENV === 'test') return;
+    this.cancelarCorridasExpiradas().catch(() => {});
+    this._expiracaoTimer = setInterval(() => {
+      this.cancelarCorridasExpiradas().catch(() => {});
+    }, intervaloMs);
+    if (typeof this._expiracaoTimer.unref === 'function') {
+      this._expiracaoTimer.unref();
+    }
+  }
+
+  pararMonitoramentoExpiracao() {
+    if (this._expiracaoTimer) {
+      clearInterval(this._expiracaoTimer);
+      this._expiracaoTimer = null;
+    }
+  }
+
   async listarTodas() {
+    await this.cancelarCorridasExpiradas();
     return corridasRepository.findAll();
   }
 
   async listarPorPerfil(usuarioId, perfil, status) {
+    await this.cancelarCorridasExpiradas();
     if (perfil === 'ADMINISTRADOR') {
       const todas = await corridasRepository.findAll();
       return status ? todas.filter((c) => c.status === status) : todas;
@@ -216,6 +272,22 @@ class CorridasService {
     if (corrida.status !== STATUS_CORRIDA.SOLICITADA) {
       throw new AppError(
         'Esta corrida ja foi assumida ou nao esta disponivel para aceite.',
+        409
+      );
+    }
+
+    const agora = new Date();
+    const dataAgendada = corrida.dataHorario ? new Date(corrida.dataHorario) : null;
+    const dataCriacao = corrida.criadaEm ? new Date(corrida.criadaEm) : null;
+    if (
+      dataAgendada &&
+      !Number.isNaN(dataAgendada.getTime()) &&
+      dataAgendada <= agora &&
+      (!dataCriacao || dataCriacao <= dataAgendada)
+    ) {
+      await this.cancelarCorridasExpiradas(agora);
+      throw new AppError(
+        'Esta corrida expirou e foi cancelada automaticamente pois passou do horario agendado.',
         409
       );
     }

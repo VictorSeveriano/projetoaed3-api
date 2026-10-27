@@ -95,6 +95,21 @@ class NotificacoesService {
     });
   }
 
+  /**
+   * Notifica o passageiro que sua corrida foi cancelada automaticamente por atingir
+   * a data/horário agendado sem aceite de motorista.
+   */
+  async notificarPassageiroExpiracao(passageiroId, dados) {
+    const { corridaId, origemNome, destinoNome } = dados;
+    return notificacoesRepository.create({
+      destinatarioId: passageiroId,
+      tipo:           'ATUALIZACAO_CORRIDA',
+      titulo:         'Corrida cancelada automaticamente',
+      mensagem:       `Sua corrida de ${origemNome} para ${destinoNome} foi cancelada automaticamente pois nenhum motorista a aceitou até o horário agendado.`,
+      referenciaId:   corridaId,
+    });
+  }
+
   async marcarLida(id, usuarioLogado = null) {
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
       const n = await notificacoesRepository.findById(id);

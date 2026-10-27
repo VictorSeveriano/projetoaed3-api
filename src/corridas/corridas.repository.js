@@ -134,6 +134,62 @@ class CorridasRepository {
     return corridas.map(formatarCorrida);
   }
 
+  /**
+   * Cancela automaticamente todas as corridas ainda em status SOLICITADA (sem motorista)
+   * cujo dataHorario já foi atingido ou ultrapassado, atualizando também as notificações
+   * NOVA_CORRIDA pendentes associadas.
+   *
+   * @param {Date} [agora=new Date()]
+   * @returns {Promise<Array<{ id: string, usuarioId: string, origemNome: string, destinoNome: string, dataHorario: Date }>>}
+   */
+  async cancelarSolicitadasVencidas(agora = new Date()) {
+    const vencidas = await prisma.corrida.findMany({
+      where: {
+        status: 'SOLICITADA',
+        motoristaId: null,
+        dataHorario: { lte: agora },
+      },
+      select: {
+        id: true,
+        usuarioId: true,
+        origemNome: true,
+        destinoNome: true,
+        dataHorario: true,
+      },
+    });
+
+    if (vencidas.length === 0) return [];
+
+    const ids = vencidas.map((c) => c.id);
+
+    await prisma.$transaction([
+      prisma.corrida.updateMany({
+        where: {
+          id: { in: ids },
+          status: 'SOLICITADA',
+          motoristaId: null,
+        },
+        data: {
+          status: 'CANCELADA',
+          atualizadaEm: agora,
+        },
+      }),
+      prisma.notificacao.updateMany({
+        where: {
+          tipo: 'NOVA_CORRIDA',
+          referenciaId: { in: ids },
+          acaoMotorista: 'PENDENTE',
+        },
+        data: {
+          acaoMotorista: 'CANCELADA',
+          lida: true,
+        },
+      }),
+    ]);
+
+    return vencidas;
+  }
+
   async create(dados) {
     const rotas = dados.rotasAlternativas || [];
     const rotasCriacao = rotas

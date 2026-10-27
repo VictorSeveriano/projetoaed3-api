@@ -70,17 +70,17 @@ class MotoristasService {
   }
 
   async aprovar(id) {
-    const m = await motoristasRepository.findById(id);
+    const m = (await motoristasRepository.findById(id)) || (await motoristasRepository.findByUsuarioId(id));
     if (!m) throw new AppError('Motorista não encontrado.', 404);
     if (m.statusCadastro === 'APROVADO') throw new AppError('Motorista já está aprovado.', 409);
-    return this._enriquecer(await motoristasRepository.updateStatusCadastro(id, 'APROVADO'));
+    return this._enriquecer(await motoristasRepository.updateStatusCadastro(m.id, 'APROVADO'));
   }
 
   async rejeitar(id) {
-    const m = await motoristasRepository.findById(id);
+    const m = (await motoristasRepository.findById(id)) || (await motoristasRepository.findByUsuarioId(id));
     if (!m) throw new AppError('Motorista não encontrado.', 404);
     if (m.statusCadastro === 'REJEITADO') throw new AppError('Motorista já está rejeitado.', 409);
-    return this._enriquecer(await motoristasRepository.updateStatusCadastro(id, 'REJEITADO'));
+    return this._enriquecer(await motoristasRepository.updateStatusCadastro(m.id, 'REJEITADO'));
   }
 
   async atualizar(id, dados, usuarioLogado) {
@@ -100,7 +100,7 @@ class MotoristasService {
       if (existente) {
         throw new AppError('CNH já cadastrada no sistema.', 409);
       }
-      await motoristasRepository.updateCnh(id, cnhNorm);
+      await motoristasRepository.updateCnh(motorista.id, cnhNorm);
       motorista.cnh = cnhNorm;
     }
 
@@ -110,11 +110,11 @@ class MotoristasService {
   // ----- Consultas do próprio motorista -----
 
   /**
-   * Busca um motorista por ID e valida que o usuário autenticado é ADMINISTRADOR
-   * ou o próprio dono do registro de motorista.
+   * Busca um motorista por ID (do registro de motorista ou do usuário) e valida que o usuário
+   * autenticado é ADMINISTRADOR ou o próprio dono do registro de motorista.
    */
   async obterMotoristaAutorizado(id, usuarioLogado = null, mensagemNegado = 'Voce nao tem permissao para acessar este motorista.') {
-    const m = await motoristasRepository.findById(id);
+    const m = (await motoristasRepository.findById(id)) || (await motoristasRepository.findByUsuarioId(id));
     if (!m) throw new AppError('Motorista não encontrado.', 404);
 
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {

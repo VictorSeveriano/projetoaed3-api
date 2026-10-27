@@ -273,4 +273,35 @@ describe('Corridas — Validações de criação, duração, coordenadas e segur
     expect(next.mock.calls[0][0].statusCode).toBe(400);
     expect(corridasRepository.create).not.toHaveBeenCalled();
   });
+
+  test('cancela automaticamente corridas SOLICITADAS cujo dataHorario já passou e notifica o passageiro', async () => {
+    corridasRepository.cancelarSolicitadasVencidas.mockResolvedValueOnce([
+      {
+        id: 'corrida-expirada-1',
+        usuarioId: 'user-autenticado-1',
+        origemNome: 'Terminal Laranjeiras',
+        destinoNome: 'UFES Goiabeiras',
+      },
+    ]);
+    corridasRepository.findByUsuarioId.mockResolvedValueOnce([
+      {
+        id: 'corrida-expirada-1',
+        usuarioId: 'user-autenticado-1',
+        status: 'CANCELADA',
+      },
+    ]);
+
+    const lista = await CorridasService.listarPorPerfil('user-autenticado-1', 'USUARIO', '');
+    expect(corridasRepository.cancelarSolicitadasVencidas).toHaveBeenCalledTimes(1);
+    expect(notificacoesService.notificarPassageiroExpiracao).toHaveBeenCalledWith(
+      'user-autenticado-1',
+      expect.objectContaining({
+        corridaId: 'corrida-expirada-1',
+        origemNome: 'Terminal Laranjeiras',
+        destinoNome: 'UFES Goiabeiras',
+      })
+    );
+    expect(lista).toHaveLength(1);
+    expect(lista[0].status).toBe('CANCELADA');
+  });
 });

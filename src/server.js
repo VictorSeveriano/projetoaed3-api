@@ -11,6 +11,7 @@ try {
 
 const app = require('./app');
 const prisma = require('./database/prisma');
+const corridasService = require('./corridas/corridas.service');
 
 const PORT = process.env.PORT || 3001;
 
@@ -26,11 +27,17 @@ const server = app.listen(PORT, () => {
   if (typeof prisma.iniciarKeepAlive === 'function') {
     prisma.iniciarKeepAlive();
   }
+  if (typeof corridasService.iniciarMonitoramentoExpiracao === 'function') {
+    corridasService.iniciarMonitoramentoExpiracao();
+  }
 });
 
 // Solução para o EADDRINUSE com nodemon no Windows
 const gracefulShutdown = (signal) => {
   console.log(`\n[${signal}] Desligando o servidor graciosamente...`);
+  if (typeof corridasService.pararMonitoramentoExpiracao === 'function') {
+    corridasService.pararMonitoramentoExpiracao();
+  }
   if (typeof prisma.pararKeepAlive === 'function') {
     prisma.pararKeepAlive();
   }

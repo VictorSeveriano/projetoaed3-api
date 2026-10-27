@@ -251,5 +251,12 @@ describe('Testes de Autorização (IDOR)', () => {
       await expect(relatorioService.gerarRelatorioMensal('motorista-record-b', 10, 2026, { id: 'admin', perfil: 'ADMINISTRADOR' }))
         .resolves.toBeDefined();
     });
+
+    test('Motorista A consulta veículo e relatório usando seu usuarioId -> permitido', async () => {
+      await expect(motoristasService.buscarVeiculo('user-mot-a', { id: 'user-mot-a', perfil: 'MOTORISTA' }))
+        .resolves.toBeDefined();
+      await expect(relatorioService.gerarRelatorioMensal('user-mot-a', 10, 2026, { id: 'user-mot-a', perfil: 'MOTORISTA' }))
+        .resolves.toBeDefined();
+    });
   });
 });

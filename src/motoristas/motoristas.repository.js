@@ -65,6 +65,7 @@ class MotoristasRepository {
         where: { id },
         data: {
           statusCadastro,
+          statusPresenca: statusCadastro === 'APROVADO' ? 'ONLINE' : 'OFFLINE',
           atualizadoEm: new Date()
         }
       });

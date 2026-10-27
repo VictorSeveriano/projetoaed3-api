@@ -4,8 +4,33 @@
  */
 
 const prisma = require('../database/prisma');
+const { ADMIN_ID } = require('../utils/constants');
 
 class NotificacoesRepository {
+  /**
+   * Resolve o ID real do destinatário quando a notificação é endereçada ao ADMIN_ID simbólico.
+   * No PostgreSQL, o administrador possui UUID gerado pelo banco (perfil = 'ADMINISTRADOR').
+   */
+  async _resolverDestinatarioId(destinatarioId) {
+    if (!destinatarioId || destinatarioId === ADMIN_ID) {
+      if (destinatarioId) {
+        const existeFixo = await prisma.usuario.findUnique({
+          where: { id: destinatarioId },
+          select: { id: true },
+        });
+        if (existeFixo) return existeFixo.id;
+      }
+
+      const admin = await prisma.usuario.findFirst({
+        where: { perfil: 'ADMINISTRADOR' },
+        orderBy: { criadoEm: 'asc' },
+        select: { id: true },
+      });
+      return admin ? admin.id : null;
+    }
+    return destinatarioId;
+  }
+
   async findByDestinatario(destinatarioId) {
     return prisma.notificacao.findMany({
       where: { destinatarioId },
@@ -30,9 +55,14 @@ class NotificacoesRepository {
   }
 
   async create(dados) {
+    const destinatarioId = await this._resolverDestinatarioId(dados.destinatarioId);
+    if (!destinatarioId) {
+      return null;
+    }
+
     return prisma.notificacao.create({
       data: {
-        destinatarioId: dados.destinatarioId,
+        destinatarioId,
         tipo:           dados.tipo,
         titulo:         dados.titulo,
         mensagem:       dados.mensagem,
