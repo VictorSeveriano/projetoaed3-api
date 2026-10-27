@@ -10,8 +10,8 @@ const listar = async (req, res, next) => {
       await corridasService.cancelarCorridasExpiradas();
     }
     const destinatarioId = req.usuario.id;
-    const dados    = await notificacoesService.listar(destinatarioId);
-    const naoLidas = await notificacoesService.contarNaoLidas(destinatarioId);
+    const dados    = (await notificacoesService.listar(destinatarioId)) || [];
+    const naoLidas = dados.filter((n) => !n.lida).length;
     return success(res, { notificacoes: dados, naoLidas }, 'Notificações listadas.');
   } catch (err) { next(err); }
 };

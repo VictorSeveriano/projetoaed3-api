@@ -4,24 +4,72 @@
  */
 
 const prisma = require('../database/prisma');
+const { paraNumeroOuNull, formatarEndereco } = require('../utils/prismaMappers');
+
+const INCLUDE_USUARIO_E_VEICULO = {
+  usuario: {
+    include: {
+      endereco: true,
+      veiculos: {
+        where: { statusAprovacao: { not: 'EXCLUIDO' } },
+        orderBy: { criadoEm: 'desc' },
+        take: 1,
+      },
+    },
+  },
+};
+
+function formatarMotorista(m) {
+  if (!m) return null;
+  const { usuario, ...resto } = m;
+  if (usuario !== undefined) {
+    let usuarioLimpo = null;
+    let veiculoLimpo = null;
+    if (usuario) {
+      const { senha, endereco, veiculos, ...dadosUsuario } = usuario;
+      usuarioLimpo = {
+        ...dadosUsuario,
+        endereco: formatarEndereco(endereco),
+      };
+      if (Array.isArray(veiculos) && veiculos[0]) {
+        veiculoLimpo = {
+          ...veiculos[0],
+          quilometragem: paraNumeroOuNull(veiculos[0].quilometragem) ?? 0,
+        };
+      }
+    }
+    Object.defineProperty(resto, '_enriquecidoPreCarregado', {
+      value: { usuario: usuarioLimpo, veiculo: veiculoLimpo },
+      enumerable: false,
+      configurable: true,
+    });
+  }
+  return resto;
+}
 
 class MotoristasRepository {
   async findAll() {
-    return prisma.motorista.findMany({
+    const lista = await prisma.motorista.findMany({
+      include: INCLUDE_USUARIO_E_VEICULO,
       orderBy: { criadoEm: 'asc' }
     });
+    return lista.map(formatarMotorista);
   }
 
   async findById(id) {
-    return prisma.motorista.findUnique({
-      where: { id }
+    const m = await prisma.motorista.findUnique({
+      where: { id },
+      include: INCLUDE_USUARIO_E_VEICULO,
     });
+    return formatarMotorista(m);
   }
 
   async findByUsuarioId(usuarioId) {
-    return prisma.motorista.findUnique({
-      where: { usuarioId }
+    const m = await prisma.motorista.findUnique({
+      where: { usuarioId },
+      include: INCLUDE_USUARIO_E_VEICULO,
     });
+    return formatarMotorista(m);
   }
 
   async existsByCnh(cnh) {
@@ -32,20 +80,24 @@ class MotoristasRepository {
   }
 
   async findByStatusCadastro(statusCadastro) {
-    return prisma.motorista.findMany({
+    const lista = await prisma.motorista.findMany({
       where: { statusCadastro },
+      include: INCLUDE_USUARIO_E_VEICULO,
       orderBy: { criadoEm: 'asc' }
     });
+    return lista.map(formatarMotorista);
   }
 
   async findByStatusPresenca(statusPresenca) {
-    return prisma.motorista.findMany({
+    const lista = await prisma.motorista.findMany({
       where: {
         statusCadastro: 'APROVADO',
         statusPresenca
       },
+      include: INCLUDE_USUARIO_E_VEICULO,
       orderBy: { criadoEm: 'asc' }
     });
+    return lista.map(formatarMotorista);
   }
 
   async create(dados) {

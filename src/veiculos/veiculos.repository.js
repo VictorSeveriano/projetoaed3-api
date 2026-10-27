@@ -4,14 +4,34 @@
  */
 
 const prisma = require('../database/prisma');
-const { paraNumeroOuNull } = require('../utils/prismaMappers');
+const { paraNumeroOuNull, formatarEndereco } = require('../utils/prismaMappers');
 
 function formatarVeiculo(v) {
   if (!v) return null;
-  return {
-    ...v,
+  const { motorista, ...resto } = v;
+  const formatado = {
+    ...resto,
     quilometragem: paraNumeroOuNull(v.quilometragem) ?? 0,
   };
+
+  if (motorista !== undefined) {
+    let motoristaEnriquecido = null;
+    if (motorista) {
+      const { senha, endereco, motorista: motRecord, ...dadosUsuario } = motorista;
+      motoristaEnriquecido = {
+        ...dadosUsuario,
+        endereco: formatarEndereco(endereco),
+        cnh: motRecord?.cnh,
+      };
+    }
+    Object.defineProperty(formatado, '_motoristaPreCarregado', {
+      value: motoristaEnriquecido,
+      enumerable: false,
+      configurable: true,
+    });
+  }
+
+  return formatado;
 }
 
 class VeiculosRepository {
@@ -61,6 +81,11 @@ class VeiculosRepository {
 
     const veiculos = await prisma.veiculo.findMany({
       where,
+      include: {
+        motorista: {
+          include: { endereco: true, motorista: true },
+        },
+      },
       orderBy: { criadoEm: 'asc' }
     });
     return veiculos.map(formatarVeiculo);
@@ -112,6 +137,11 @@ class VeiculosRepository {
   async findByStatusAprovacao(statusAprovacao) {
     const veiculos = await prisma.veiculo.findMany({
       where: { statusAprovacao },
+      include: {
+        motorista: {
+          include: { endereco: true, motorista: true },
+        },
+      },
       orderBy: { criadoEm: 'asc' }
     });
     return veiculos.map(formatarVeiculo);

@@ -7,10 +7,69 @@
 const corridasRepository = require('../corridas/corridas.repository');
 const veiculosRepository = require('../veiculos/veiculos.repository');
 
+const CACHE_TTL_MS = 3000;
+
 class DashboardService {
+  constructor() {
+    this._corridasCache = { valor: null, expiraEm: 0, promise: null };
+    this._veiculosCache = { valor: null, expiraEm: 0, promise: null };
+  }
+
+  async _obterCorridas() {
+    if (process.env.NODE_ENV === 'test') {
+      return corridasRepository.findAll();
+    }
+    const agora = Date.now();
+    if (this._corridasCache.valor && agora < this._corridasCache.expiraEm) {
+      return this._corridasCache.valor;
+    }
+    if (this._corridasCache.promise) {
+      return this._corridasCache.promise;
+    }
+    this._corridasCache.promise = corridasRepository.findAll()
+      .then((dados) => {
+        this._corridasCache.valor = dados;
+        this._corridasCache.expiraEm = Date.now() + CACHE_TTL_MS;
+        this._corridasCache.promise = null;
+        return dados;
+      })
+      .catch((err) => {
+        this._corridasCache.promise = null;
+        throw err;
+      });
+    return this._corridasCache.promise;
+  }
+
+  async _obterVeiculos() {
+    if (process.env.NODE_ENV === 'test') {
+      return veiculosRepository.findAll();
+    }
+    const agora = Date.now();
+    if (this._veiculosCache.valor && agora < this._veiculosCache.expiraEm) {
+      return this._veiculosCache.valor;
+    }
+    if (this._veiculosCache.promise) {
+      return this._veiculosCache.promise;
+    }
+    this._veiculosCache.promise = veiculosRepository.findAll()
+      .then((dados) => {
+        this._veiculosCache.valor = dados;
+        this._veiculosCache.expiraEm = Date.now() + CACHE_TTL_MS;
+        this._veiculosCache.promise = null;
+        return dados;
+      })
+      .catch((err) => {
+        this._veiculosCache.promise = null;
+        throw err;
+      });
+    return this._veiculosCache.promise;
+  }
+
   async getResumo() {
-    const corridas = await corridasRepository.findAll();
-    const carros   = await veiculosRepository.findAll();
+    const [corridas, carros] = await Promise.all([
+      this._obterCorridas(),
+      this._obterVeiculos(),
+    ]);
 
     let corridasAtivas   = 0;
     let faturamentoTotal = 0;
@@ -32,7 +91,7 @@ class DashboardService {
   }
 
   async getCorridasPorMes() {
-    const corridas = await corridasRepository.findAll();
+    const corridas = await this._obterCorridas();
     const meses    = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     const contagem = Array(12).fill(0);
 
@@ -47,7 +106,7 @@ class DashboardService {
   }
 
   async getOrigensMaisSolicitadas() {
-    const corridas = await corridasRepository.findAll();
+    const corridas = await this._obterCorridas();
     const contagem = {};
     corridas.forEach((c) => {
       if (c.origemNome) contagem[c.origemNome] = (contagem[c.origemNome] || 0) + 1;
@@ -59,7 +118,7 @@ class DashboardService {
   }
 
   async getDestinosMaisSolicitados() {
-    const corridas = await corridasRepository.findAll();
+    const corridas = await this._obterCorridas();
     const contagem = {};
     corridas.forEach((c) => {
       if (c.destinoNome) contagem[c.destinoNome] = (contagem[c.destinoNome] || 0) + 1;
@@ -71,7 +130,7 @@ class DashboardService {
   }
 
   async getRotasMaisUtilizadas() {
-    const corridas = await corridasRepository.findAll();
+    const corridas = await this._obterCorridas();
     const contagem = {};
     corridas.forEach((c) => {
       if (c.origemNome && c.destinoNome && c.status !== 'CANCELADA') {
@@ -86,12 +145,14 @@ class DashboardService {
   }
 
   async getVeiculosMaisUtilizados() {
-    const corridas = await corridasRepository.findAll();
-    const carros   = await veiculosRepository.findAll();
+    const [corridas, carros] = await Promise.all([
+      this._obterCorridas(),
+      this._obterVeiculos(),
+    ]);
     const contagem = {};
 
     corridas.forEach((c) => {
-      if (c.veiculoId) contagem[c.veiculoId] = (contagem[c.veiculoId] || 0) + 1;
+      if (c.veiculoId) contagem[c.veiculoId] = (contagem[c.veiculoId] || 1) - (contagem[c.veiculoId] ? 0 : 1) + 1;
     });
 
     return Object.entries(contagem)
@@ -105,7 +166,7 @@ class DashboardService {
   }
 
   async getFaturamentoMensal() {
-    const corridas = await corridasRepository.findAll();
+    const corridas = await this._obterCorridas();
     const meses    = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     const receitas = Array(12).fill(0);
 

@@ -114,6 +114,23 @@ class NotificacoesRepository {
       data: { lida: true }
     });
   }
+
+  async marcarLidaPorReferencia(tipo, referenciaIds) {
+    const ids = (Array.isArray(referenciaIds) ? referenciaIds : [referenciaIds]).filter(Boolean);
+    if (ids.length === 0) return;
+    try {
+      await prisma.notificacao.updateMany({
+        where: {
+          tipo,
+          referenciaId: { in: ids },
+          lida: false,
+        },
+        data: { lida: true },
+      });
+    } catch (error) {
+      console.error('[NotificacoesRepository] marcarLidaPorReferencia:', error.message);
+    }
+  }
 }
 
 module.exports = new NotificacoesRepository();

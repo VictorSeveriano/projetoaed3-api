@@ -34,6 +34,7 @@ const {
 class CorridasService {
   constructor() {
     this._expiracaoTimer = null;
+    this._ultimaVerificacaoExpiracaoMs = 0;
   }
 
   static get TARIFAS_KM() {
@@ -48,9 +49,17 @@ class CorridasService {
    * Cancela automaticamente corridas SOLICITADAS (sem motorista) cujo dataHorario já chegou/passou.
    * Notifica o passageiro de cada corrida expirada sem propagar falhas de notificação.
    */
-  async cancelarCorridasExpiradas(agora = new Date()) {
+  async cancelarCorridasExpiradas(agora = new Date(), { forcar = false } = {}) {
     if (typeof corridasRepository.cancelarSolicitadasVencidas !== 'function') {
       return [];
+    }
+
+    if (!forcar && process.env.NODE_ENV !== 'test') {
+      const ts = Date.now();
+      if (ts - this._ultimaVerificacaoExpiracaoMs < 10000) {
+        return [];
+      }
+      this._ultimaVerificacaoExpiracaoMs = ts;
     }
 
     let vencidas = [];
@@ -285,7 +294,7 @@ class CorridasService {
       dataAgendada <= agora &&
       (!dataCriacao || dataCriacao <= dataAgendada)
     ) {
-      await this.cancelarCorridasExpiradas(agora);
+      await this.cancelarCorridasExpiradas(agora, { forcar: true });
       throw new AppError(
         'Esta corrida expirou e foi cancelada automaticamente pois passou do horario agendado.',
         409

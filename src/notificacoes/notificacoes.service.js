@@ -127,6 +127,18 @@ class NotificacoesService {
   async marcarTodasLidas(destinatarioId) {
     return notificacoesRepository.marcarTodasLidas(destinatarioId);
   }
+
+  async marcarSolicitacaoMotoristaLida(referenciaIds) {
+    if (typeof notificacoesRepository.marcarLidaPorReferencia === 'function') {
+      await notificacoesRepository.marcarLidaPorReferencia('SOLICITACAO_MOTORISTA', referenciaIds);
+    }
+  }
+
+  async marcarSolicitacaoVeiculoLida(referenciaIds) {
+    if (typeof notificacoesRepository.marcarLidaPorReferencia === 'function') {
+      await notificacoesRepository.marcarLidaPorReferencia('SOLICITACAO_VEICULO', referenciaIds);
+    }
+  }
 }
 
 module.exports = new NotificacoesService();

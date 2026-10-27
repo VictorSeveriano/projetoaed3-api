@@ -117,7 +117,11 @@ class VeiculosService {
     if (v.statusAprovacao === STATUS_APROVACAO_VEICULO.APROVADO) throw new AppError('Veículo já está aprovado.', 409);
 
     const classe = this._determinarClasseServico(v.porte);
-    return this._enriquecer(await veiculosRepository.updateStatusAprovacao(id, STATUS_APROVACAO_VEICULO.APROVADO, classe));
+    const atualizado = await veiculosRepository.updateStatusAprovacao(id, STATUS_APROVACAO_VEICULO.APROVADO, classe);
+    if (typeof notificacoesService.marcarSolicitacaoVeiculoLida === 'function') {
+      await notificacoesService.marcarSolicitacaoVeiculoLida([v.id]);
+    }
+    return this._enriquecer(atualizado);
   }
 
   async rejeitar(id) {
@@ -125,7 +129,11 @@ class VeiculosService {
     if (!v) throw new AppError('Veículo não encontrado.', 404);
     this._garantirNaoExcluido(v);
     if (v.statusAprovacao === STATUS_APROVACAO_VEICULO.REJEITADO) throw new AppError('Veículo já está rejeitado.', 409);
-    return this._enriquecer(await veiculosRepository.updateStatusAprovacao(id, STATUS_APROVACAO_VEICULO.REJEITADO));
+    const atualizado = await veiculosRepository.updateStatusAprovacao(id, STATUS_APROVACAO_VEICULO.REJEITADO);
+    if (typeof notificacoesService.marcarSolicitacaoVeiculoLida === 'function') {
+      await notificacoesService.marcarSolicitacaoVeiculoLida([v.id]);
+    }
+    return this._enriquecer(atualizado);
   }
 
   async excluir(id, usuarioLogado) {
@@ -207,6 +215,9 @@ class VeiculosService {
   async _enriquecer(veiculo) {
     if (!veiculo) return null;
     if (!veiculo.motoristaId) return { ...veiculo, motorista: null };
+    if (veiculo._motoristaPreCarregado !== undefined) {
+      return { ...veiculo, motorista: veiculo._motoristaPreCarregado };
+    }
     const usuario = await authRepository.encontrarPorId(veiculo.motoristaId);
     const { senha, ...dadosUsuario } = usuario || {};
     const motoristaRecord = await motoristasRepository.findByUsuarioId(veiculo.motoristaId);

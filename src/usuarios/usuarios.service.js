@@ -10,6 +10,7 @@ const corridasRepository = require('../corridas/corridas.repository');
 const authService        = require('../auth/auth.service');
 const AppError           = require('../utils/AppError');
 const { STATUS_CORRIDA } = require('../utils/constants');
+const { invalidarCacheUsuario } = require('../middlewares/auth.middleware');
 
 class UsuariosService {
   async buscarPorId(id, usuarioLogado = null) {
@@ -97,6 +98,7 @@ class UsuariosService {
         atualizadoEm: new Date(),
       },
     });
+    invalidarCacheUsuario(id);
 
     return {
       id: atualizado.id,
@@ -133,6 +135,7 @@ class UsuariosService {
     }
 
     const updated = await authRepository.update(id, dados);
+    invalidarCacheUsuario(id);
     const { senha, ...dadosSeguros } = updated;
     return dadosSeguros;
   }

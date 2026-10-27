@@ -73,14 +73,22 @@ class MotoristasService {
     const m = (await motoristasRepository.findById(id)) || (await motoristasRepository.findByUsuarioId(id));
     if (!m) throw new AppError('Motorista não encontrado.', 404);
     if (m.statusCadastro === 'APROVADO') throw new AppError('Motorista já está aprovado.', 409);
-    return this._enriquecer(await motoristasRepository.updateStatusCadastro(m.id, 'APROVADO'));
+    const atualizado = await motoristasRepository.updateStatusCadastro(m.id, 'APROVADO');
+    if (typeof notificacoesService.marcarSolicitacaoMotoristaLida === 'function') {
+      await notificacoesService.marcarSolicitacaoMotoristaLida([m.id, m.usuarioId]);
+    }
+    return this._enriquecer(atualizado);
   }
 
   async rejeitar(id) {
     const m = (await motoristasRepository.findById(id)) || (await motoristasRepository.findByUsuarioId(id));
     if (!m) throw new AppError('Motorista não encontrado.', 404);
     if (m.statusCadastro === 'REJEITADO') throw new AppError('Motorista já está rejeitado.', 409);
-    return this._enriquecer(await motoristasRepository.updateStatusCadastro(m.id, 'REJEITADO'));
+    const atualizado = await motoristasRepository.updateStatusCadastro(m.id, 'REJEITADO');
+    if (typeof notificacoesService.marcarSolicitacaoMotoristaLida === 'function') {
+      await notificacoesService.marcarSolicitacaoMotoristaLida([m.id, m.usuarioId]);
+    }
+    return this._enriquecer(atualizado);
   }
 
   async atualizar(id, dados, usuarioLogado) {
@@ -177,6 +185,13 @@ class MotoristasService {
    */
   async _enriquecer(motorista) {
     if (!motorista) return null;
+    if (motorista._enriquecidoPreCarregado !== undefined) {
+      return {
+        ...motorista,
+        usuario: motorista._enriquecidoPreCarregado.usuario || null,
+        veiculo: motorista._enriquecidoPreCarregado.veiculo || null,
+      };
+    }
     const usuario = await authRepository.encontrarPorId(motorista.usuarioId);
     const { senha, ...dadosUsuario } = usuario || {};
     const veiculo = await veiculosRepository.findByMotoristaId(motorista.usuarioId);

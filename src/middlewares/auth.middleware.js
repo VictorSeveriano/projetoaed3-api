@@ -12,6 +12,53 @@ const ehIndisponibilidadeDeBanco = (err) =>
     err.name === 'PrismaClientInitializationError'
   );
 
+// Cache curto em memória para evitar N consultas repetidas ao banco remoto em requisições paralelas
+const AUTH_USER_CACHE_TTL_MS = 10000;
+const authUserCache = new Map();
+
+async function obterUsuarioAutenticado(id) {
+  if (process.env.NODE_ENV === 'test') {
+    return authRepository.encontrarPorId(id);
+  }
+
+  const agora = Date.now();
+  const entrada = authUserCache.get(id);
+  if (entrada) {
+    if (entrada.usuario && agora < entrada.expiraEm) {
+      return entrada.usuario;
+    }
+    if (entrada.promise) {
+      return entrada.promise;
+    }
+  }
+
+  const promise = authRepository.encontrarPorId(id)
+    .then((user) => {
+      if (user) {
+        authUserCache.set(id, {
+          usuario: user,
+          expiraEm: Date.now() + AUTH_USER_CACHE_TTL_MS,
+          promise: null,
+        });
+      } else {
+        authUserCache.delete(id);
+      }
+      return user;
+    })
+    .catch((err) => {
+      authUserCache.delete(id);
+      throw err;
+    });
+
+  authUserCache.set(id, { usuario: null, expiraEm: 0, promise });
+  return promise;
+}
+
+function invalidarCacheUsuario(id) {
+  if (id) authUserCache.delete(id);
+  else authUserCache.clear();
+}
+
 /**
  * Middleware de autenticacao.
  * Verifica se existe um token de sessao no header e se o usuario existe.
@@ -53,7 +100,7 @@ const authMiddleware = async (req, res, next) => {
   // 2) Consulta do usuário — falhas aqui são de infraestrutura, não de autenticação
   let user;
   try {
-    user = await authRepository.encontrarPorId(id);
+    user = await obterUsuarioAutenticado(id);
   } catch (err) {
     // Loga apenas o necessário para diagnóstico (sem token, segredo ou connection string)
     console.error('[AuthMiddleware] Falha ao consultar usuario:', err && err.code ? err.code : '', err && err.message ? String(err.message).split('\n')[0] : '');
@@ -85,4 +132,4 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-module.exports = { authMiddleware, requireAdmin };
+module.exports = { authMiddleware, requireAdmin, invalidarCacheUsuario };
