@@ -18,7 +18,7 @@ const app = express();
 
 // --- Configuracao CORS ---
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || '*',
+  origin: process.env.NODE_ENV === 'production' ? (process.env.FRONTEND_URL || '*') : true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 };
 app.use(cors(corsOptions));

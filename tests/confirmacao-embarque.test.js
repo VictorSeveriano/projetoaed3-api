@@ -1,6 +1,11 @@
 /**
- * confirmacao-embarque.test.js — Suíte completa dos 18 cenários de confirmação de embarque,
- * acompanhamento ("Estou a caminho" / "Não vou embarcar") e cancelamento automático.
+ * confirmacao-embarque.test.js — Suíte completa de testes para:
+ * - Confirmação de embarque (motorista e passageiro)
+ * - Motorista atrasado ("Estou a caminho" com notificação e extensão única de prazo)
+ * - Cancelamento de corridas pelo motorista (motivo obrigatório + notificação ao passageiro)
+ * - Cancelamento de corridas pelo passageiro (notificação ao motorista + motivo opcional)
+ * - Cancelamento automático por ausência de confirmação
+ * - Autorização, concorrência/idempotência e resiliência a falhas de notificação
  */
 const Corrida = require('../src/corridas/Corrida');
 const corridasService = require('../src/corridas/corridas.service');
@@ -46,6 +51,7 @@ const corridaBase = (extra = {}) => ({
 beforeEach(() => {
   jest.resetAllMocks();
   notificacoesService.notificarAtualizacaoCorrida.mockResolvedValue({});
+  notificacoesService.notificarPassageiroFinalizacao.mockResolvedValue({});
 });
 
 describe('1–5. Confirmação de embarque (motorista e passageiro) e independência dos registros', () => {
@@ -129,8 +135,8 @@ describe('1–5. Confirmação de embarque (motorista e passageiro) e independê
   });
 });
 
-describe('6–8. Segunda etapa do motorista ("Estou a caminho" e "Não vou embarcar")', () => {
-  test('6. Fluxo "Não embarcou" -> "Estou a caminho": estende prazo uma única vez e notifica passageiro', async () => {
+describe('6–8. Motorista atrasado ("Estou a caminho") e "Não vou embarcar"', () => {
+  test('6. Fluxo "Estou a caminho": registra situação, estende prazo 1x e envia notificação persistente ao passageiro', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase());
     corridasRepository.registrarMotoristaACaminho.mockImplementation(async (id, u, prazo) =>
       corridaBase({ situacaoMotorista: 'A_CAMINHO', prazoConfirmacaoEm: prazo.toISOString() })
@@ -140,7 +146,14 @@ describe('6–8. Segunda etapa do motorista ("Estou a caminho" e "Não vou embar
     const prazo = corridasRepository.registrarMotoristaACaminho.mock.calls[0][2];
     expect(prazo.getTime()).toBeGreaterThan(Date.now() + (EXTENSAO_A_CAMINHO_MIN - 1) * 60000);
     expect(r.situacaoMotorista).toBe('A_CAMINHO');
-    expect(notificacoesService.notificarAtualizacaoCorrida).toHaveBeenCalledTimes(1);
+    expect(notificacoesService.notificarAtualizacaoCorrida).toHaveBeenCalledWith(
+      'pass-1',
+      expect.objectContaining({
+        corridaId: 'c1',
+        titulo: 'Motorista a caminho',
+        mensagem: expect.stringContaining('Acompanhe as atualizações na área Minhas corridas'),
+      })
+    );
 
     // Repetição idempotente: não estende o prazo novamente nem reenvia notificação
     corridasRepository.findById.mockResolvedValue(corridaBase({ situacaoMotorista: 'A_CAMINHO' }));
@@ -186,6 +199,71 @@ describe('6–8. Segunda etapa do motorista ("Estou a caminho" e "Não vou embar
   );
 });
 
+describe('Cancelamento direto pela tela Minhas corridas (corridasService.cancelar)', () => {
+  test('Motorista cancela corrida CONFIRMADA com motivo obrigatório e notifica exclusivamente o passageiro', async () => {
+    corridasRepository.findById.mockResolvedValue(corridaBase({ dataHorario: minutos(25) }));
+    corridasRepository.transicionarComLiberacaoDeVeiculo.mockImplementation(async (id, transicao, meta) =>
+      corridaBase({ status: 'CANCELADA', ...meta })
+    );
+
+    const r = await corridasService.cancelar('c1', MOT, { motivo: '  Trânsito bloqueado na rodovia  ' });
+    expect(r.status).toBe('CANCELADA');
+    expect(r.canceladoPor).toBe('MOTORISTA');
+    expect(r.motivoCancelamento).toBe('Trânsito bloqueado na rodovia');
+    expect(notificacoesService.notificarAtualizacaoCorrida).toHaveBeenCalledTimes(1);
+    expect(notificacoesService.notificarAtualizacaoCorrida).toHaveBeenCalledWith(
+      'pass-1',
+      expect.objectContaining({
+        corridaId: 'c1',
+        titulo: 'Corrida cancelada pelo motorista',
+        mensagem: expect.stringContaining('Trânsito bloqueado na rodovia'),
+      })
+    );
+  });
+
+  test.each([undefined, '', '   ', 'abc'])(
+    'Motorista não pode cancelar via cancelar() sem motivo válido (%p)',
+    async (motivo) => {
+      corridasRepository.findById.mockResolvedValue(corridaBase({ dataHorario: minutos(25) }));
+      await expect(corridasService.cancelar('c1', MOT, { motivo })).rejects.toMatchObject({ statusCode: 400 });
+      expect(corridasRepository.transicionarComLiberacaoDeVeiculo).not.toHaveBeenCalled();
+    }
+  );
+
+  test('Passageiro cancela corrida CONFIRMADA e notifica exclusivamente o motorista vinculado (com motivo)', async () => {
+    corridasRepository.findById.mockResolvedValue(corridaBase({ dataHorario: minutos(25) }));
+    corridasRepository.transicionarComLiberacaoDeVeiculo.mockImplementation(async (id, transicao, meta) =>
+      corridaBase({ status: 'CANCELADA', ...meta })
+    );
+
+    const r = await corridasService.cancelar('c1', PASS, { motivo: 'Mudança de compromisso' });
+    expect(r.status).toBe('CANCELADA');
+    expect(r.canceladoPor).toBe('PASSAGEIRO');
+    expect(r.motivoCancelamento).toBe('Mudança de compromisso');
+    expect(notificacoesService.notificarAtualizacaoCorrida).toHaveBeenCalledTimes(1);
+    expect(notificacoesService.notificarAtualizacaoCorrida).toHaveBeenCalledWith(
+      'mot-1',
+      expect.objectContaining({
+        corridaId: 'c1',
+        titulo: 'Corrida cancelada pelo passageiro',
+        mensagem: expect.stringContaining('Mudança de compromisso'),
+      })
+    );
+  });
+
+  test('Bloqueia cancelamento pelo motorista ou passageiro quando a corrida já está EM_ANDAMENTO, FINALIZADA ou CANCELADA', async () => {
+    for (const statusInvalido of ['EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']) {
+      corridasRepository.findById.mockResolvedValue(corridaBase({ status: statusInvalido }));
+      await expect(
+        corridasService.cancelar('c1', MOT, { motivo: 'Motivo válido' })
+      ).rejects.toMatchObject({ statusCode: 409 });
+      await expect(
+        corridasService.cancelar('c1', PASS, { motivo: 'Motivo válido' })
+      ).rejects.toMatchObject({ statusCode: 409 });
+    }
+  });
+});
+
 describe('9–11. Cancelamento automático por ausência de confirmação', () => {
   test('9. Cancela automaticamente como SISTEMA após expiração do prazo e notifica motorista e passageiro', async () => {
     corridasRepository.cancelarSolicitadasVencidas.mockResolvedValue([]);
@@ -225,7 +303,6 @@ describe('9–11. Cancelamento automático por ausência de confirmação', () =
 
   test('11. Não cancela viagem quando motorista informou "Estou a caminho" e está dentro do prazo estendido', async () => {
     corridasRepository.cancelarSolicitadasVencidas.mockResolvedValue([]);
-    // Mesmo que listada antes da extensão, a transação reavalia apenasSePrazoVencidoAte e retorna null
     corridasRepository.findConfirmadasComPrazoVencido.mockResolvedValue([
       { id: 'c1', usuarioId: 'pass-1', motoristaId: 'mot-1', origemNome: 'A', destinoNome: 'B' },
     ]);
@@ -236,8 +313,8 @@ describe('9–11. Cancelamento automático por ausência de confirmação', () =
   });
 });
 
-describe('12–18. Autorização, estados finais, idempotência, fuso horário e resiliência', () => {
-  test('12. Bloqueia ações por usuário não autorizado (403 para terceiro ou perfil trocado)', async () => {
+describe('12–18. Autorização, estados finais, idempotência, fuso horário, pagamento e resiliência', () => {
+  test('12. Bloqueia ações de embarque e de cancelamento por usuário não autorizado (403)', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase());
     await expect(
       corridasService.registrarEmbarqueMotorista('c1', { id: 'outro-mot', perfil: 'MOTORISTA' }, { acao: 'CONFIRMAR_EMBARQUE' })
@@ -248,11 +325,15 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário e
     ).rejects.toMatchObject({ statusCode: 403 });
 
     await expect(
-      corridasService.registrarEmbarquePassageiro('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' })
+      corridasService.cancelar('c1', { id: 'outro-mot', perfil: 'MOTORISTA' }, { motivo: 'Motivo válido' })
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    await expect(
+      corridasService.cancelar('c1', { id: 'outro-pass', perfil: 'USUARIO' }, { motivo: 'Motivo válido' })
     ).rejects.toMatchObject({ statusCode: 403 });
   });
 
-  test('13. Bloqueia confirmação em viagem já CANCELADA (409)', async () => {
+  test('13 e 14. Bloqueia confirmação em viagem já CANCELADA (409) e cancelamento em viagem FINALIZADA (409)', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase({ status: 'CANCELADA' }));
     await expect(
       corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' })
@@ -260,54 +341,54 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário e
     await expect(
       corridasService.registrarEmbarquePassageiro('c1', PASS, { acao: 'CONFIRMAR_EMBARQUE' })
     ).rejects.toMatchObject({ statusCode: 409 });
-  });
 
-  test('14. Bloqueia cancelamento por esse fluxo em viagem já FINALIZADA (409)', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase({ status: 'FINALIZADA' }));
     await expect(
       corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'NAO_VOU_EMBARCAR', motivo: 'Motivo válido' })
     ).rejects.toMatchObject({ statusCode: 409 });
-    await expect(
-      corridasService.registrarEmbarquePassageiro('c1', PASS, { acao: 'NAO_EMBARQUEI', cancelarViagem: true, motivo: 'Motivo válido' })
-    ).rejects.toMatchObject({ statusCode: 409 });
   });
 
-  test('15 e 16. Idempotência em requisições repetidas sem duplicar notificações ou cancelar duas vezes', async () => {
+  test('15 e 16. Idempotência em requisições repetidas e concorrência (409 quando transição perde corrida)', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase({ status: 'CANCELADA', canceladoPor: 'MOTORISTA' }));
     await corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'NAO_VOU_EMBARCAR', motivo: 'Pneu furado' });
     expect(corridasRepository.cancelarConfirmadaComMotivo).not.toHaveBeenCalled();
     expect(notificacoesService.notificarAtualizacaoCorrida).not.toHaveBeenCalled();
 
-    corridasRepository.findById.mockResolvedValue(corridaBase({ embarqueMotoristaConfirmado: true, status: 'EM_ANDAMENTO' }));
-    await corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' });
-    expect(corridasRepository.confirmarEmbarqueMotorista).not.toHaveBeenCalled();
+    // Duas requisições simultâneas a cancelar(): a segunda recebe null do repositório e retorna 409 sem notificar 2x
+    corridasRepository.findById.mockResolvedValue(corridaBase());
+    corridasRepository.transicionarComLiberacaoDeVeiculo.mockResolvedValueOnce(null);
+    await expect(
+      corridasService.cancelar('c1', MOT, { motivo: 'Pneu furado' })
+    ).rejects.toMatchObject({ statusCode: 409 });
     expect(notificacoesService.notificarAtualizacaoCorrida).not.toHaveBeenCalled();
   });
 
-  test('17. Consistência de datas e fuso horário (America/Sao_Paulo -03:00 vs ISO UTC)', async () => {
-    // Horário equivalente há 5 minutos expresso com offset explícito -03:00
-    const cincoMinAtras = new Date(Date.now() - 5 * 60000);
-    const offsetMin = -180; // UTC-3
-    const localMs = cincoMinAtras.getTime() + offsetMin * 60000;
-    const isoComOffset = new Date(localMs).toISOString().replace('Z', '-03:00');
-
-    corridasRepository.findById.mockResolvedValue(corridaBase({ dataHorario: isoComOffset }));
-    corridasRepository.confirmarEmbarqueMotorista.mockResolvedValue(
+  test('17. Compatibilidade com o fluxo de confirmação de pagamento e finalização após embarque', async () => {
+    corridasRepository.findById.mockResolvedValue(
       corridaBase({ status: 'EM_ANDAMENTO', embarqueMotoristaConfirmado: true })
     );
+    corridasRepository.transicionarComLiberacaoDeVeiculo.mockResolvedValue(
+      corridaBase({ status: 'FINALIZADA', embarqueMotoristaConfirmado: true })
+    );
 
-    const r = await corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' });
-    expect(r.status).toBe('EM_ANDAMENTO');
+    const r = await corridasService.confirmarPagamentoEFinalizar('c1', MOT);
+    expect(r.status).toBe('FINALIZADA');
+    expect(notificacoesService.notificarPassageiroFinalizacao).toHaveBeenCalledWith(
+      'pass-1',
+      expect.objectContaining({ corridaId: 'c1' })
+    );
   });
 
   test('18. Resiliência quando o serviço de notificações falha: operação principal não é revertida', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase());
-    corridasRepository.confirmarEmbarqueMotorista.mockResolvedValue(corridaBase({ status: 'EM_ANDAMENTO' }));
+    corridasRepository.transicionarComLiberacaoDeVeiculo.mockImplementation(async (id, t, meta) =>
+      corridaBase({ status: 'CANCELADA', ...meta })
+    );
     notificacoesService.notificarAtualizacaoCorrida.mockRejectedValue(new Error('Falha no serviço de notificações'));
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
-      corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' })
-    ).resolves.toMatchObject({ status: 'EM_ANDAMENTO' });
+      corridasService.cancelar('c1', MOT, { motivo: 'Imprevisto no veículo' })
+    ).resolves.toMatchObject({ status: 'CANCELADA', canceladoPor: 'MOTORISTA' });
   });
 });

@@ -222,7 +222,7 @@ class CorridasService {
           throw conflito();
         }
         await notificarPassageiro('Motorista a caminho',
-          `O motorista informou que está a caminho para a corrida de ${origem}.`, 'a caminho');
+          `O motorista informou que está a caminho para realizar sua corrida (${origem}). Acompanhe as atualizações na área Minhas corridas.`, 'a caminho');
         return atualizada;
       }
 
@@ -615,8 +615,10 @@ class CorridasService {
 
   /**
    * Cancela a corrida e libera o veículo (se houver) na mesma transação.
+   * - Motorista: exige motivo obrigatório, apenas corridas CONFIRMADA vinculadas a ele, e notifica o passageiro.
+   * - Passageiro: apenas corridas próprias (SOLICITADA ou CONFIRMADA), aceita motivo e notifica o motorista se vinculado.
    */
-  async cancelar(id, usuarioLogado = null) {
+  async cancelar(id, usuarioLogado = null, dados = {}) {
     const corrida = await this.buscarPorId(id, usuarioLogado);
 
     if (corrida.status === STATUS_CORRIDA.CANCELADA) {
@@ -626,17 +628,57 @@ class CorridasService {
       throw new AppError('Nao e possivel cancelar uma corrida finalizada.', 409);
     }
 
-    const canceladoPor = usuarioLogado && usuarioLogado.perfil === 'MOTORISTA'
+    const perfil = usuarioLogado?.perfil;
+    if (perfil === 'MOTORISTA' || perfil === 'USUARIO') {
+      if (corrida.status === STATUS_CORRIDA.EM_ANDAMENTO || corrida.embarqueMotoristaConfirmado === true) {
+        throw new AppError('Nao e possivel cancelar uma corrida cujo embarque ja foi confirmado e esta em andamento.', 409);
+      }
+    }
+
+    let motivoLimpo = null;
+    if (perfil === 'MOTORISTA') {
+      motivoLimpo = this._validarMotivo(dados?.motivo);
+    } else if (dados && dados.motivo !== undefined && dados.motivo !== null && String(dados.motivo) !== '') {
+      motivoLimpo = this._validarMotivo(dados.motivo);
+    }
+
+    const canceladoPor = perfil === 'MOTORISTA'
       ? ORIGEM_CANCELAMENTO.MOTORISTA
-      : usuarioLogado && usuarioLogado.perfil === 'USUARIO'
+      : perfil === 'USUARIO'
         ? ORIGEM_CANCELAMENTO.PASSAGEIRO
         : ORIGEM_CANCELAMENTO.SISTEMA;
-    const corridaAtualizada = await corridasRepository.transicionarComLiberacaoDeVeiculo(id, 'cancelar', {
+
+    const agora = new Date();
+    const metadados = {
       canceladoPor,
-      canceladaEm: new Date(),
-    });
+      canceladaEm: agora,
+      ...(motivoLimpo ? { motivoCancelamento: motivoLimpo } : {}),
+      ...(perfil === 'MOTORISTA' ? { situacaoMotorista: SITUACAO_MOTORISTA.NAO_EMBARCAR, embarqueMotoristaConfirmado: false, embarqueMotoristaEm: agora } : {}),
+    };
+
+    const corridaAtualizada = await corridasRepository.transicionarComLiberacaoDeVeiculo(id, 'cancelar', metadados);
     if (!corridaAtualizada) {
       throw new AppError('O estado da corrida foi alterado por outra operacao. Atualize e tente novamente.', 409);
+    }
+
+    const trajeto = `${corrida.origemNome} para ${corrida.destinoNome}`;
+
+    if (canceladoPor === ORIGEM_CANCELAMENTO.MOTORISTA && corrida.usuarioId) {
+      await this._notificarSemFalhar(`cancelamento motorista ${id}: notificar passageiro`, () =>
+        notificacoesService.notificarAtualizacaoCorrida(corrida.usuarioId, {
+          corridaId: id,
+          titulo: 'Corrida cancelada pelo motorista',
+          mensagem: `O motorista cancelou a corrida de ${trajeto}. Motivo: ${motivoLimpo}`,
+        })
+      );
+    } else if (canceladoPor === ORIGEM_CANCELAMENTO.PASSAGEIRO && corrida.motoristaId) {
+      await this._notificarSemFalhar(`cancelamento passageiro ${id}: notificar motorista`, () =>
+        notificacoesService.notificarAtualizacaoCorrida(corrida.motoristaId, {
+          corridaId: id,
+          titulo: 'Corrida cancelada pelo passageiro',
+          mensagem: `O passageiro cancelou a corrida de ${trajeto}.${motivoLimpo ? ` Motivo: ${motivoLimpo}.` : ''} Consulte os detalhes e a situação atual na área Minhas corridas.`,
+        })
+      );
     }
 
     return corridaAtualizada;

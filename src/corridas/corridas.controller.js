@@ -119,7 +119,7 @@ const recusar = async (req, res, next) => {
 /** PATCH /api/corridas/:id/cancelar */
 const cancelar = async (req, res, next) => {
   try {
-    const corridaCancelada = await corridasService.cancelar(req.params.id, req.usuario);
+    const corridaCancelada = await corridasService.cancelar(req.params.id, req.usuario, req.body || {});
     await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'CANCELAMENTO_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: req.params.id });
     return success(res, corridaCancelada, 'Corrida cancelada com sucesso.');
   } catch (err) {
