@@ -4,6 +4,8 @@ const { success } = require('../utils/responseHelper');
 const { isValidCoord } = require('../utils/geoUtils');
 const { lerNumero } = require('../utils/inputValidators');
 
+const REGEX_ENDERECO_GENERICO_GPS = /^localiza[cç][aã]o\s+atual\s*\(gps\)$/i;
+
 /**
  * RotasController — Controlador para endpoints de rotas.
  *
@@ -34,6 +36,10 @@ const calcularCorrida = async (req, res, next) => {
 
     if (!origemNomeTrim || !destinoNomeTrim) {
       return next(new AppError('Os nomes da origem e destino não podem ser vazios.', 400));
+    }
+
+    if (REGEX_ENDERECO_GENERICO_GPS.test(origemNomeTrim) || REGEX_ENDERECO_GENERICO_GPS.test(destinoNomeTrim)) {
+      return next(new AppError('O endereço obtido pelo GPS deve ser convertido em um endereço legível antes de calcular a rota.', 400));
     }
 
     const oLat = lerNumero(origem.lat);
@@ -111,4 +117,28 @@ const buscarSugestoes = async (req, res, next) => {
   }
 };
 
-module.exports = { calcularCorrida, geocodificar, buscarSugestoes };
+/**
+ * GET /api/rotas/reverso?lat=...&lng=...
+ * Converte coordenadas geográficas (latitude e longitude) em endereço legível.
+ */
+const geocodificarReverso = async (req, res, next) => {
+  try {
+    const latRaw = req.query?.lat ?? req.body?.lat;
+    const lngRaw = req.query?.lng ?? req.body?.lng;
+
+    const lat = lerNumero(latRaw);
+    const lng = lerNumero(lngRaw);
+
+    if (lat === undefined || lng === undefined || !isValidCoord(lat, lng)) {
+      return next(new AppError('Latitude e longitude numéricas e válidas são obrigatórias para geocodificação reversa.', 400));
+    }
+
+    const resultado = await rotasService.geocodificarReverso(lat, lng);
+    return success(res, resultado, 'Endereço obtido com sucesso.');
+  } catch (err) {
+    if (err.statusCode) return next(new AppError(err.message, err.statusCode));
+    next(err);
+  }
+};
+
+module.exports = { calcularCorrida, geocodificar, buscarSugestoes, geocodificarReverso };

@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { calcularCorrida, geocodificar, buscarSugestoes } = require('./rotas.controller');
+const { calcularCorrida, geocodificar, buscarSugestoes, geocodificarReverso } = require('./rotas.controller');
 
 const { authMiddleware } = require('../middlewares/auth.middleware');
 
@@ -14,6 +14,9 @@ router.use(authMiddleware);
 
 // GET  /api/rotas/sugestoes?q=... — Autocomplete: texto → sugestoes de localizacao (Nominatim)
 router.get('/sugestoes', buscarSugestoes);
+
+// GET  /api/rotas/reverso?lat=...&lng=... — Geocodificação reversa: coordenadas → endereço legível
+router.get('/reverso', geocodificarReverso);
 
 // POST /api/rotas/calcular-corrida — Calcula rotas reais (Routes API) + organiza via ABB
 router.post('/calcular-corrida', calcularCorrida);

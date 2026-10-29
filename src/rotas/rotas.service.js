@@ -83,6 +83,10 @@ class RotasService {
   geocodificar(entrada) {
     return geocodingProvider.geocodificar(entrada);
   }
+
+  geocodificarReverso(lat, lng) {
+    return geocodingProvider.geocodificarReverso(lat, lng);
+  }
 }
 
 module.exports = new RotasService();

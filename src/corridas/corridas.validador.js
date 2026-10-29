@@ -132,6 +132,19 @@ function validarDadosCriacaoCorrida(dados) {
   const origemNome  = exigirTexto(dados.origemNome, 'origemNome', { max: NOME_LOCAL_MAX });
   const destinoNome = exigirTexto(dados.destinoNome, 'destinoNome', { max: NOME_LOCAL_MAX });
 
+  if (/^localiza[cç][aã]o\s+atual\s*\(gps\)$/i.test(origemNome)) {
+    throw new AppError(
+      'O endereço de origem obtido pelo GPS deve ser convertido em um endereço legível antes de solicitar a corrida.',
+      400
+    );
+  }
+  if (/^localiza[cç][aã]o\s+atual\s*\(gps\)$/i.test(destinoNome)) {
+    throw new AppError(
+      'O endereço de destino obtido pelo GPS deve ser convertido em um endereço legível antes de solicitar a corrida.',
+      400
+    );
+  }
+
   const distanciaKm = exigirNumeroPositivo(dados.distanciaKm, 'distanciaKm');
   const duracaoMin  = numeroPositivoOpcional(dados.duracaoMin, 'duracaoMin', { inteiro: true });
 
