@@ -159,7 +159,34 @@ const finalizar = async (req, res, next) => {
   }
 };
 
+/** PATCH /api/corridas/:id/embarque/motorista — decisões do motorista vinculado */
+const embarqueMotorista = async (req, res, next) => {
+  try {
+    const { acao, motivo } = req.body || {};
+    const corrida = await corridasService.registrarEmbarqueMotorista(req.params.id, req.usuario, { acao, motivo });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'EMBARQUE_MOTORISTA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: req.params.id });
+    return success(res, corrida, 'Decisão registrada com sucesso.');
+  } catch (err) {
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'EMBARQUE_MOTORISTA_FALHA', modulo: 'CORRIDAS', resultado: 'FALHA' }, req, { entidade: 'Corrida', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
+    next(err);
+  }
+};
+
+/** PATCH /api/corridas/:id/embarque/passageiro — confirmação do passageiro vinculado */
+const embarquePassageiro = async (req, res, next) => {
+  try {
+    const { acao, cancelarViagem, motivo } = req.body || {};
+    const corrida = await corridasService.registrarEmbarquePassageiro(req.params.id, req.usuario, { acao, cancelarViagem, motivo });
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'EMBARQUE_PASSAGEIRO', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: req.params.id });
+    return success(res, corrida, 'Confirmação registrada com sucesso.');
+  } catch (err) {
+    await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'EMBARQUE_PASSAGEIRO_FALHA', modulo: 'CORRIDAS', resultado: 'FALHA' }, req, { entidade: 'Corrida', entidadeId: req.params.id, descricao: err.message, statusHttp: err.statusCode || 500 });
+    next(err);
+  }
+};
+
 module.exports = {
+  embarqueMotorista, embarquePassageiro,
   listarTodas, listarMinhas, buscarPorId, criar, calcularValorPrevia,
   aceitar, recusar, cancelar, confirmarPagamento, finalizar,
 };

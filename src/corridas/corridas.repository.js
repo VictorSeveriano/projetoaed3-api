@@ -10,6 +10,7 @@ const {
   STATUS_VEICULO,
   STATUS_APROVACAO_VEICULO,
   TRANSICOES_CORRIDA,
+  MOTIVO_CANCELAMENTO_SEM_MOTORISTA,
 } = require('../utils/constants');
 const { paraNumeroOuNull, enderecoParaPrisma } = require('../utils/prismaMappers');
 
@@ -172,6 +173,9 @@ class CorridasRepository {
         data: {
           status: 'CANCELADA',
           atualizadaEm: agora,
+          canceladoPor: 'SISTEMA',
+          canceladaEm: agora,
+          motivoCancelamento: MOTIVO_CANCELAMENTO_SEM_MOTORISTA,
         },
       }),
       prisma.notificacao.updateMany({
@@ -188,6 +192,186 @@ class CorridasRepository {
     ]);
 
     return vencidas;
+  }
+
+  // ---------- Confirmação de embarque ----------
+
+  /**
+   * Motorista confirma o embarque: CONFIRMADA → EM_ANDAMENTO (idempotente por UPDATE condicional).
+   * @returns {Promise<Corrida|null>} null quando a corrida não está mais em estado elegível
+   */
+  async confirmarEmbarqueMotorista(id, motoristaUsuarioId, agora = new Date()) {
+    const r = await prisma.corrida.updateMany({
+      where: {
+        id,
+        motoristaId: motoristaUsuarioId,
+        status: 'CONFIRMADA',
+        OR: [{ embarqueMotoristaConfirmado: null }, { embarqueMotoristaConfirmado: false }],
+      },
+      data: {
+        status: 'EM_ANDAMENTO',
+        embarqueMotoristaConfirmado: true,
+        embarqueMotoristaEm: agora,
+        situacaoMotorista: 'EMBARCADO',
+        atualizadaEm: agora,
+      },
+    });
+    if (r.count === 0) return null;
+    return this.findById(id);
+  }
+
+  /**
+   * Motorista informa "Estou a caminho": registra a situação e estende o prazo UMA única vez.
+   * @returns {Promise<Corrida|null>} null quando já informado ou estado inelegível
+   */
+  async registrarMotoristaACaminho(id, motoristaUsuarioId, novoPrazo, agora = new Date()) {
+    const r = await prisma.corrida.updateMany({
+      where: {
+        id,
+        motoristaId: motoristaUsuarioId,
+        status: 'CONFIRMADA',
+        motoristaACaminhoEm: null,
+        OR: [{ embarqueMotoristaConfirmado: null }, { embarqueMotoristaConfirmado: false }],
+      },
+      data: {
+        situacaoMotorista: 'A_CAMINHO',
+        motoristaACaminhoEm: agora,
+        prazoConfirmacaoEm: novoPrazo,
+        atualizadaEm: agora,
+      },
+    });
+    if (r.count === 0) return null;
+    return this.findById(id);
+  }
+
+  /**
+   * Registra a resposta do passageiro (somente a coluna do passageiro; não toca na do motorista).
+   * @returns {Promise<Corrida|null>} null quando já respondeu (confirmação definitiva) ou estado inelegível
+   */
+  async registrarEmbarquePassageiro(id, passageiroId, embarcou, agora = new Date()) {
+    const r = await prisma.corrida.updateMany({
+      where: {
+        id,
+        usuarioId: passageiroId,
+        status: { in: ['CONFIRMADA', 'EM_ANDAMENTO'] },
+        // "Não embarcou" pode ser corrigido para "embarcou", mas "embarcou" é definitivo
+        OR: [{ embarquePassageiroConfirmado: null }, { embarquePassageiroConfirmado: false }],
+      },
+      data: {
+        embarquePassageiroConfirmado: embarcou,
+        embarquePassageiroEm: agora,
+        atualizadaEm: agora,
+      },
+    });
+    if (r.count === 0) return null;
+    return this.findById(id);
+  }
+
+  /**
+   * Cancela uma corrida CONFIRMADA (ainda sem embarque confirmado) registrando autor, motivo e data,
+   * e libera o veículo na mesma transação. Idempotente: só a primeira chamada tem efeito.
+   *
+   * @param {string} id
+   * @param {{ canceladoPor: string, motivo: string, motoristaUsuarioId?: string, passageiroId?: string,
+   *           situacaoMotorista?: string, apenasSePrazoVencidoAte?: Date }} opcoes
+   * @returns {Promise<Corrida|null>} null quando não havia o que cancelar
+   */
+  async cancelarConfirmadaComMotivo(id, opcoes, agora = new Date()) {
+    const where = {
+      id,
+      status: 'CONFIRMADA',
+      OR: [{ embarqueMotoristaConfirmado: null }, { embarqueMotoristaConfirmado: false }],
+    };
+    if (opcoes.motoristaUsuarioId) where.motoristaId = opcoes.motoristaUsuarioId;
+    if (opcoes.passageiroId) where.usuarioId = opcoes.passageiroId;
+
+    const data = {
+      status: 'CANCELADA',
+      canceladoPor: opcoes.canceladoPor,
+      canceladaEm: agora,
+      motivoCancelamento: opcoes.motivo,
+      atualizadaEm: agora,
+    };
+    if (opcoes.situacaoMotorista) data.situacaoMotorista = opcoes.situacaoMotorista;
+    if (opcoes.canceladoPor === 'MOTORISTA') {
+      data.embarqueMotoristaConfirmado = false;
+      data.embarqueMotoristaEm = agora;
+    }
+
+    try {
+      const corrida = await prisma.$transaction(async (tx) => {
+        if (opcoes.apenasSePrazoVencidoAte) {
+          // Reavalia o prazo dentro da transação (pode ter sido estendido por "a caminho")
+          const limite = opcoes.apenasSePrazoVencidoAte;
+          const atual = await tx.corrida.findFirst({
+            where: {
+              id,
+              AND: [{
+                OR: [
+                  { prazoConfirmacaoEm: { lte: limite } },
+                  { prazoConfirmacaoEm: null, dataHorario: { lte: new Date(limite.getTime() - opcoes.toleranciaMs) } },
+                ],
+              }, {
+                OR: [{ embarquePassageiroConfirmado: null }, { embarquePassageiroConfirmado: false }],
+              }],
+            },
+            select: { id: true },
+          });
+          if (!atual) throw new RollbackError('NAO_VENCIDA');
+        }
+
+        const r = await tx.corrida.updateMany({ where, data });
+        if (r.count === 0) throw new RollbackError('TRANSICAO_INVALIDA');
+
+        const atual = await tx.corrida.findUnique({
+          where: { id },
+          include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
+        });
+        if (atual && atual.veiculoId) {
+          const outrasAtivas = await tx.corrida.count({
+            where: { veiculoId: atual.veiculoId, id: { not: id }, status: { in: [...STATUS_CORRIDA_ATIVOS] } },
+          });
+          if (outrasAtivas === 0) {
+            await tx.veiculo.updateMany({
+              where: { id: atual.veiculoId, status: STATUS_VEICULO.EM_CORRIDA },
+              data: { status: STATUS_VEICULO.DISPONIVEL, atualizadoEm: agora },
+            });
+          }
+        }
+        return atual;
+      });
+      return formatarCorrida(corrida);
+    } catch (error) {
+      if (error instanceof RollbackError) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * Lista candidatas ao cancelamento automático por ausência de confirmação:
+   * CONFIRMADA, sem embarque confirmado por ninguém e com prazo vencido
+   * (prazoConfirmacaoEm, ou dataHorario + tolerância quando ainda não definido).
+   */
+  async findConfirmadasComPrazoVencido(agora, toleranciaMs) {
+    const corridas = await prisma.corrida.findMany({
+      where: {
+        status: 'CONFIRMADA',
+        AND: [
+          { OR: [{ embarqueMotoristaConfirmado: null }, { embarqueMotoristaConfirmado: false }] },
+          { OR: [{ embarquePassageiroConfirmado: null }, { embarquePassageiroConfirmado: false }] },
+          {
+            OR: [
+              { prazoConfirmacaoEm: { lte: agora } },
+              { prazoConfirmacaoEm: null, dataHorario: { lte: new Date(agora.getTime() - toleranciaMs) } },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true, usuarioId: true, motoristaId: true, origemNome: true, destinoNome: true,
+      },
+    });
+    return corridas;
   }
 
   async create(dados) {
@@ -302,7 +486,7 @@ class CorridasRepository {
    * @param {'cancelar'|'finalizar'} transicao chave de TRANSICOES_CORRIDA
    * @returns {Promise<Corrida|null>} null quando a corrida não está em estado de origem permitido
    */
-  async transicionarComLiberacaoDeVeiculo(id, transicao) {
+  async transicionarComLiberacaoDeVeiculo(id, transicao, metadados = {}) {
     const regra = TRANSICOES_CORRIDA[transicao];
     if (!regra || transicao === 'aceitar') throw new Error('Transicao de corrida desconhecida: ' + transicao);
 
@@ -311,7 +495,7 @@ class CorridasRepository {
         const agora = new Date();
         const r = await tx.corrida.updateMany({
           where: { id, status: { in: [...regra.de] } },
-          data: { status: regra.para, atualizadaEm: agora },
+          data: { status: regra.para, atualizadaEm: agora, ...metadados },
         });
         if (r.count === 0) throw new RollbackError('TRANSICAO_INVALIDA');
 

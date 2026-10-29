@@ -17,7 +17,7 @@ class GeocodingProvider {
         reject(err);
       };
 
-      const agent = new https.Agent({ rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0' });
+      const agent = new https.Agent({ rejectUnauthorized: process.env.ALLOW_INSECURE_TLS !== 'true' && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0' });
       const cacheKey = ('sugestoes:' + texto).toLowerCase();
       const cached = this._geocodingCache.get(cacheKey);
       
@@ -91,7 +91,7 @@ class GeocodingProvider {
         reject(err);
       };
 
-      const agent = new https.Agent({ rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0' });
+      const agent = new https.Agent({ rejectUnauthorized: process.env.ALLOW_INSECURE_TLS !== 'true' && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0' });
 
       const consultarNominatim = (q) =>
         new Promise((res, rej) => {

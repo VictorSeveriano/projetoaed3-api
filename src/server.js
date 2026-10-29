@@ -1,4 +1,8 @@
 require('dotenv').config();
+if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
+  process.env.ALLOW_INSECURE_TLS = 'true';
+  delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+}
 const { validarVariaveisDeAmbiente } = require('./config/env');
 
 // Falha rapido (sem expor valores) se JWT_SECRET ou DATABASE_URL estiverem ausentes

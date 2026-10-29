@@ -110,6 +110,20 @@ class NotificacoesService {
     });
   }
 
+  /**
+   * Notificação genérica de atualização de corrida (embarque, a caminho, cancelamentos).
+   * Reutiliza o mesmo tipo/infra de ATUALIZACAO_CORRIDA.
+   */
+  async notificarAtualizacaoCorrida(destinatarioId, { corridaId, titulo, mensagem }) {
+    return notificacoesRepository.create({
+      destinatarioId,
+      tipo:         'ATUALIZACAO_CORRIDA',
+      titulo,
+      mensagem,
+      referenciaId: corridaId,
+    });
+  }
+
   async marcarLida(id, usuarioLogado = null) {
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
       const n = await notificacoesRepository.findById(id);

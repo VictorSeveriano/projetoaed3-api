@@ -22,10 +22,12 @@ class RoutingProvider {
         computeAlternativeRoutes: true,
       });
 
+      const agent = new https.Agent({ rejectUnauthorized: process.env.ALLOW_INSECURE_TLS !== 'true' && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0' });
       const options = {
         hostname: 'routes.googleapis.com',
         path: '/directions/v2:computeRoutes',
         method: 'POST',
+        agent,
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(requestBody),

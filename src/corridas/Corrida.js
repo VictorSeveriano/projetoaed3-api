@@ -86,6 +86,20 @@ class Corrida {
     this.dataHorario = dados.dataHorario || new Date().toISOString();
     this.status = dados.status || 'SOLICITADA';
     this.criadaEm = dados.criadaEm || new Date().toISOString();
+
+    // Confirmação de embarque
+    this.embarqueMotoristaConfirmado = dados.embarqueMotoristaConfirmado ?? null;
+    this.embarqueMotoristaEm = dados.embarqueMotoristaEm ?? null;
+    this.embarquePassageiroConfirmado = dados.embarquePassageiroConfirmado ?? null;
+    this.embarquePassageiroEm = dados.embarquePassageiroEm ?? null;
+    this.situacaoMotorista = dados.situacaoMotorista ?? null;
+    this.motoristaACaminhoEm = dados.motoristaACaminhoEm ?? null;
+    this.prazoConfirmacaoEm = dados.prazoConfirmacaoEm ?? null;
+
+    // Cancelamento
+    this.motivoCancelamento = dados.motivoCancelamento ?? null;
+    this.canceladoPor = dados.canceladoPor ?? null;
+    this.canceladaEm = dados.canceladaEm ?? null;
   }
 
   /**
@@ -109,6 +123,16 @@ class Corrida {
       status: this.status,
       dataHorario: this.dataHorario,
       criadaEm: this.criadaEm,
+      embarqueMotoristaConfirmado: this.embarqueMotoristaConfirmado,
+      embarqueMotoristaEm: this.embarqueMotoristaEm,
+      embarquePassageiroConfirmado: this.embarquePassageiroConfirmado,
+      embarquePassageiroEm: this.embarquePassageiroEm,
+      situacaoMotorista: this.situacaoMotorista,
+      motoristaACaminhoEm: this.motoristaACaminhoEm,
+      prazoConfirmacaoEm: this.prazoConfirmacaoEm,
+      motivoCancelamento: this.motivoCancelamento,
+      canceladoPor: this.canceladoPor,
+      canceladaEm: this.canceladaEm,
     };
   }
 }

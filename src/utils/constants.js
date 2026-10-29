@@ -82,7 +82,39 @@ const TRANSICOES_CORRIDA = Object.freeze({
  */
 const BUSINESS_TIMEZONE = 'America/Sao_Paulo';
 
+// ---------- Confirmação de embarque ----------
+
+/** Tolerância (min) após o horário agendado para a confirmação de embarque antes do cancelamento automático. */
+const TOLERANCIA_CONFIRMACAO_EMBARQUE_MIN = 15;
+/** Extensão única (min) concedida quando o motorista informa "Estou a caminho". */
+const EXTENSAO_A_CAMINHO_MIN = 15;
+const LIMITES_MOTIVO_CANCELAMENTO = Object.freeze({ MIN: 5, MAX: 500 });
+
+const ORIGEM_CANCELAMENTO = Object.freeze({
+  MOTORISTA:  'MOTORISTA',
+  PASSAGEIRO: 'PASSAGEIRO',
+  SISTEMA:    'SISTEMA',
+});
+
+const SITUACAO_MOTORISTA = Object.freeze({
+  A_CAMINHO:    'A_CAMINHO',
+  EMBARCADO:    'EMBARCADO',
+  NAO_EMBARCAR: 'NAO_EMBARCAR',
+});
+
+const MOTIVO_CANCELAMENTO_AUSENCIA_CONFIRMACAO =
+  'Cancelada automaticamente pelo sistema: o prazo de confirmação de embarque expirou sem a confirmação necessária.';
+const MOTIVO_CANCELAMENTO_SEM_MOTORISTA =
+  'Cancelada automaticamente pelo sistema: nenhum motorista aceitou a corrida até o horário agendado.';
+
 module.exports = {
+  TOLERANCIA_CONFIRMACAO_EMBARQUE_MIN,
+  EXTENSAO_A_CAMINHO_MIN,
+  LIMITES_MOTIVO_CANCELAMENTO,
+  ORIGEM_CANCELAMENTO,
+  SITUACAO_MOTORISTA,
+  MOTIVO_CANCELAMENTO_AUSENCIA_CONFIRMACAO,
+  MOTIVO_CANCELAMENTO_SEM_MOTORISTA,
   ADMIN_ID,
   PORTES_VALIDOS,
   CLASSES_VALIDAS,

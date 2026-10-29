@@ -139,6 +139,18 @@ model Corrida {
   classe            String   @default("NORMAL") @db.VarChar(50)
   formaPagamento    String   @default("DINHEIRO") @map("forma_pagamento") @db.VarChar(50)
 
+  // Confirmação de embarque e cancelamento
+  embarqueMotoristaConfirmado  Boolean?  @map("embarque_motorista_confirmado")
+  embarqueMotoristaEm          DateTime? @map("embarque_motorista_em") @db.Timestamptz(6)
+  embarquePassageiroConfirmado Boolean?  @map("embarque_passageiro_confirmado")
+  embarquePassageiroEm         DateTime? @map("embarque_passageiro_em") @db.Timestamptz(6)
+  situacaoMotorista            String?   @map("situacao_motorista") @db.VarChar(30)
+  motoristaACaminhoEm          DateTime? @map("motorista_a_caminho_em") @db.Timestamptz(6)
+  prazoConfirmacaoEm           DateTime? @map("prazo_confirmacao_em") @db.Timestamptz(6)
+  motivoCancelamento           String?   @map("motivo_cancelamento") @db.VarChar(500)
+  canceladoPor                 String?   @map("cancelado_por") @db.VarChar(20)
+  canceladaEm                  DateTime? @map("cancelada_em") @db.Timestamptz(6)
+
   // Relações
   usuario           Usuario       @relation("CorridaUsuario", fields: [usuarioId], references: [id], onDelete: Restrict, map: "fk_corridas_usuario")
   motorista         Usuario?      @relation("CorridaMotoristaUsuario", fields: [motoristaId], references: [id], onDelete: Restrict, map: "fk_corridas_motorista")
