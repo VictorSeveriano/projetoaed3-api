@@ -53,6 +53,17 @@ describe('GrafoController', () => {
     expect(next).toHaveBeenCalledWith(expect.any(AppError));
   });
 
+  test('deve rejeitar coordenadas ou distancia como string vazia sem converter para zero', () => {
+    req.query = {
+      origemNome: 'A', destinoNome: 'B',
+      origemLat: '', origemLng: '   ',
+      destinoLat: '-20.1', destinoLng: '-40.1',
+      distanciaMetros: '1000',
+    };
+    obterGrafo(req, res, next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+  });
+
   test('deve rejeitar coordenadas invalidas (nao numericas)', () => {
     req.query = {
       origemNome: 'A', destinoNome: 'B',

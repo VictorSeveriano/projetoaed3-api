@@ -11,6 +11,7 @@ const authService        = require('../auth/auth.service');
 const AppError           = require('../utils/AppError');
 const { STATUS_CORRIDA } = require('../utils/constants');
 const { invalidarCacheUsuario } = require('../middlewares/auth.middleware');
+const { validarCoordenadasEnderecoOpcional } = require('../utils/inputValidators');
 
 class UsuariosService {
   async buscarPorId(id, usuarioLogado = null) {
@@ -134,7 +135,18 @@ class UsuariosService {
       }
     }
 
-    const updated = await authRepository.update(id, dados);
+    let dadosAtualizar = dados;
+    if (dados.endereco !== undefined && dados.endereco !== null) {
+      if (typeof dados.endereco !== 'object' || Array.isArray(dados.endereco)) {
+        throw new AppError('Endereço inválido: deve ser um objeto.', 400);
+      }
+      const { latitude, longitude } = validarCoordenadasEnderecoOpcional(dados.endereco, 'endereco');
+      if (latitude !== null) {
+        dadosAtualizar = { ...dados, endereco: { ...dados.endereco, latitude, longitude } };
+      }
+    }
+
+    const updated = await authRepository.update(id, dadosAtualizar);
     invalidarCacheUsuario(id);
     const { senha, ...dadosSeguros } = updated;
     return dadosSeguros;

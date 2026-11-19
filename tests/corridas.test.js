@@ -164,14 +164,13 @@ describe('Corridas — Validações de criação, duração, coordenadas e segur
     expect(corridasRepository.create).not.toHaveBeenCalled();
   });
 
-  test('validação numérica completa de duracaoMin: ausente/null -> null; inteiro positivo/string numérica -> convertido; inválidos -> 400', async () => {
-    // Ausente ou null -> persiste null
+  test('validação numérica completa de duracaoMin: ausente -> null; inteiro positivo/string numérica -> convertido; null e inválidos -> 400', async () => {
+    // Campo omitido (undefined) -> persiste null; explicitamente null -> rejeitado abaixo
     const { duracaoMin: _omit, ...semDuracao } = payloadValido;
     const rSem = await CorridasService.criar(semDuracao, usuarioAutenticado);
     expect(rSem.duracaoMin).toBeNull();
 
-    const rNull = await CorridasService.criar({ ...payloadValido, duracaoMin: null }, usuarioAutenticado);
-    expect(rNull.duracaoMin).toBeNull();
+
 
     // String numérica inteira -> convertida para número
     const rStr = await CorridasService.criar({ ...payloadValido, duracaoMin: '25' }, usuarioAutenticado);
@@ -181,7 +180,7 @@ describe('Corridas — Validações de criação, duração, coordenadas e segur
     corridasRepository.create.mockClear();
 
     // Inválidos -> 400 e não persiste
-    const duracoesInvalidas = [0, -1, -10, '0', '-5', 'abc', '', '   ', NaN, Infinity, -Infinity, true, false, [], [10], {}, 12.5, '12.5'];
+    const duracoesInvalidas = [null, 0, -1, -10, '0', '-5', 'abc', '', '   ', NaN, Infinity, -Infinity, true, false, [], [10], {}, 12.5, '12.5'];
     for (const durInvalida of duracoesInvalidas) {
       await expect(
         CorridasService.criar({ ...payloadValido, duracaoMin: durInvalida }, usuarioAutenticado)

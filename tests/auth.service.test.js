@@ -249,4 +249,25 @@ describe('AuthService cadastro availability', () => {
     });
     expect(authRepository.atualizarSenha).not.toHaveBeenCalled();
   });
+
+  test('rejects registration when endereco provides only one coordinate (latitude without longitude)', async () => {
+    await expect(authService.cadastrar({
+      nome: 'Ana Silva',
+      cpf: '52998224725',
+      celular: '11999999999',
+      email: 'ana@example.com',
+      senha: 'Senha@1234',
+      perfil: 'USUARIO',
+      endereco: {
+        rua: 'Rua A',
+        numero: '1',
+        bairro: 'Centro',
+        cidade: 'Vitoria',
+        estado: 'ES',
+        cep: '29000000',
+        latitude: -20.3155,
+      },
+    })).rejects.toMatchObject({ statusCode: 400 });
+    expect(authRepository.create).not.toHaveBeenCalled();
+  });
 });

@@ -23,6 +23,8 @@ const {
 
 jest.setTimeout(180000);
 
+const SELECT_CORRIDA_BASE = { id: true, status: true, veiculoId: true, motoristaId: true };
+
 describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários A a G)', () => {
   test('Cenário A — Banco vazio: aplica toda a cadeia de migrações e cria todos os índices e restrições sem erros', async () => {
     const env = await criarAmbienteIsolado('cenario_a');
@@ -74,6 +76,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       const corridaConfirmada = await env.client.corrida.create({
@@ -93,6 +96,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'BASICO',
           formaPagamento: 'CARTAO_CREDITO',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       const corridaFinalizada = await env.client.corrida.create({
@@ -112,14 +116,15 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'DINHEIRO',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       await env.aplicarMigracaoNoSchema(MIGRACAO_INDICES_CONSTRAINTS);
       await env.aplicarMigracaoNoSchema(MIGRACAO_CORRETIVA);
 
-      const c1Depois = await env.client.corrida.findUnique({ where: { id: corridaEmAndamento.id } });
-      const c2Depois = await env.client.corrida.findUnique({ where: { id: corridaConfirmada.id } });
-      const c3Depois = await env.client.corrida.findUnique({ where: { id: corridaFinalizada.id } });
+      const c1Depois = await env.client.corrida.findUnique({ where: { id: corridaEmAndamento.id } , select: SELECT_CORRIDA_BASE });
+      const c2Depois = await env.client.corrida.findUnique({ where: { id: corridaConfirmada.id } , select: SELECT_CORRIDA_BASE });
+      const c3Depois = await env.client.corrida.findUnique({ where: { id: corridaFinalizada.id } , select: SELECT_CORRIDA_BASE });
       expect(c1Depois).toMatchObject({ status: 'EM_ANDAMENTO', veiculoId: v1.id, motoristaId: mot1User.id });
       expect(c2Depois).toMatchObject({ status: 'CONFIRMADA', veiculoId: v2.id, motoristaId: mot2User.id });
       expect(c3Depois).toMatchObject({ status: 'FINALIZADA', veiculoId: v1.id, motoristaId: mot1User.id });
@@ -166,6 +171,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
       const excedenteV1 = await env.client.corrida.create({
         data: {
@@ -185,6 +191,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       const titularV2 = await env.client.corrida.create({
@@ -205,6 +212,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'BASICO',
           formaPagamento: 'DINHEIRO',
         },
+        select: SELECT_CORRIDA_BASE,
       });
       const excedenteV2 = await env.client.corrida.create({
         data: {
@@ -224,6 +232,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'BASICO',
           formaPagamento: 'DINHEIRO',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       const naoRelacionada = await env.client.corrida.create({
@@ -244,16 +253,17 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'CARTAO_DEBITO',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       await env.aplicarMigracaoNoSchema(MIGRACAO_INDICES_CONSTRAINTS);
       await env.aplicarMigracaoNoSchema(MIGRACAO_CORRETIVA);
 
-      const t1 = await env.client.corrida.findUnique({ where: { id: titularV1.id } });
-      const e1 = await env.client.corrida.findUnique({ where: { id: excedenteV1.id } });
-      const t2 = await env.client.corrida.findUnique({ where: { id: titularV2.id } });
-      const e2 = await env.client.corrida.findUnique({ where: { id: excedenteV2.id } });
-      const nr = await env.client.corrida.findUnique({ where: { id: naoRelacionada.id } });
+      const t1 = await env.client.corrida.findUnique({ where: { id: titularV1.id } , select: SELECT_CORRIDA_BASE });
+      const e1 = await env.client.corrida.findUnique({ where: { id: excedenteV1.id } , select: SELECT_CORRIDA_BASE });
+      const t2 = await env.client.corrida.findUnique({ where: { id: titularV2.id } , select: SELECT_CORRIDA_BASE });
+      const e2 = await env.client.corrida.findUnique({ where: { id: excedenteV2.id } , select: SELECT_CORRIDA_BASE });
+      const nr = await env.client.corrida.findUnique({ where: { id: naoRelacionada.id } , select: SELECT_CORRIDA_BASE });
 
       expect(t1).toMatchObject({ status: 'EM_ANDAMENTO', veiculoId: v1.id, motoristaId: mot1User.id });
       expect(e1).toMatchObject({ status: 'SOLICITADA', veiculoId: null, motoristaId: null });
@@ -324,6 +334,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
       const confirmadaV1 = await env.client.corrida.create({
         data: {
@@ -343,6 +354,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       const emAndamento1 = await env.client.corrida.create({
@@ -363,6 +375,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'BASICO',
           formaPagamento: 'DINHEIRO',
         },
+        select: SELECT_CORRIDA_BASE,
       });
       const emAndamento2 = await env.client.corrida.create({
         data: {
@@ -382,15 +395,16 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'BASICO',
           formaPagamento: 'DINHEIRO',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       await expect(env.aplicarMigracaoNoSchema(MIGRACAO_INDICES_CONSTRAINTS)).rejects.toThrow(
         /conflito ambíguo.*saneamentoCorridasAtivas\.js/i
       );
 
-      const cConfirmadaV1Banco = await env.client.corrida.findUnique({ where: { id: confirmadaV1.id } });
-      const cEmAndamento1Banco = await env.client.corrida.findUnique({ where: { id: emAndamento1.id } });
-      const cEmAndamento2Banco = await env.client.corrida.findUnique({ where: { id: emAndamento2.id } });
+      const cConfirmadaV1Banco = await env.client.corrida.findUnique({ where: { id: confirmadaV1.id } , select: SELECT_CORRIDA_BASE });
+      const cEmAndamento1Banco = await env.client.corrida.findUnique({ where: { id: emAndamento1.id } , select: SELECT_CORRIDA_BASE });
+      const cEmAndamento2Banco = await env.client.corrida.findUnique({ where: { id: emAndamento2.id } , select: SELECT_CORRIDA_BASE });
       expect(cConfirmadaV1Banco.status).toBe('CONFIRMADA');
       expect(cConfirmadaV1Banco.veiculoId).toBe(v1.id);
       expect(cEmAndamento1Banco.status).toBe('EM_ANDAMENTO');
@@ -419,6 +433,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
       await env.client.corrida.create({
         data: {
@@ -438,6 +453,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       await expect(env.aplicarMigracaoNoSchema(MIGRACAO_INDICES_CONSTRAINTS)).rejects.toThrow(
@@ -479,6 +495,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
       const excedenteConfirmada = await env.client.corrida.create({
         data: {
@@ -498,6 +515,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
       const excedenteEmAndamento = await env.client.corrida.create({
         data: {
@@ -517,6 +535,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       await expect(env.aplicarMigracoesPendentes()).rejects.toThrow(/conflito ambíguo/i);
@@ -534,12 +553,13 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
       await env.client.corrida.update({
         where: { id: excedenteConfirmada.id },
         data: { status: 'CONFIRMADA', veiculoId: v1.id, motoristaId: mot1User.id },
+        select: { id: true },
       });
       const auditoriasAntesFalhaVeiculo = await env.client.auditoria.count();
 
       await expect(env.aplicarMigracoesPendentes()).rejects.toThrow(/veículo\(s\) com dados incompatíveis/i);
 
-      const cAposRollback = await env.client.corrida.findUnique({ where: { id: excedenteConfirmada.id } });
+      const cAposRollback = await env.client.corrida.findUnique({ where: { id: excedenteConfirmada.id } , select: SELECT_CORRIDA_BASE });
       expect(cAposRollback.status).toBe('CONFIRMADA');
       expect(await env.client.auditoria.count()).toBe(auditoriasAntesFalhaVeiculo);
       expect(await env.listarIndicesCriados()).toHaveLength(0);
@@ -553,7 +573,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
       const recemAplicadas = await env.aplicarMigracoesPendentes();
       expect(recemAplicadas).toEqual([MIGRACAO_INDICES_CONSTRAINTS, MIGRACAO_CORRETIVA]);
 
-      const cPosSucesso = await env.client.corrida.findUnique({ where: { id: excedenteConfirmada.id } });
+      const cPosSucesso = await env.client.corrida.findUnique({ where: { id: excedenteConfirmada.id } , select: SELECT_CORRIDA_BASE });
       expect(cPosSucesso).toMatchObject({ status: 'SOLICITADA', veiculoId: null, motoristaId: null });
       expect(await env.listarIndicesCriados()).toEqual([...INDICES_ESPERADOS].sort());
       expect(await env.listarConstraintsCriadas()).toEqual([...CONSTRAINTS_ESPERADAS].sort());
@@ -584,6 +604,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       const audIncompleta = await env.client.auditoria.create({
@@ -659,6 +680,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
       await env.client.corrida.create({
         data: {
@@ -678,6 +700,7 @@ describe('Segurança, Consistência e Histórico das Migrações SQL (Cenários 
           classe: 'NORMAL',
           formaPagamento: 'PIX',
         },
+        select: SELECT_CORRIDA_BASE,
       });
 
       await env.aplicarMigracoesPendentes();

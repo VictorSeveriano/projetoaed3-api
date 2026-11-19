@@ -144,41 +144,32 @@ class CorridasRepository {
    * @returns {Promise<Array<{ id: string, usuarioId: string, origemNome: string, destinoNome: string, dataHorario: Date }>>}
    */
   async cancelarSolicitadasVencidas(agora = new Date()) {
-    const vencidas = await prisma.corrida.findMany({
-      where: {
-        status: 'SOLICITADA',
-        motoristaId: null,
-        dataHorario: { lte: agora },
-      },
-      select: {
-        id: true,
-        usuarioId: true,
-        origemNome: true,
-        destinoNome: true,
-        dataHorario: true,
-      },
-    });
+    return prisma.$transaction(async (tx) => {
+      const vencidas = await tx.$queryRaw`
+        UPDATE "corridas"
+        SET
+          "status" = 'CANCELADA',
+          "atualizada_em" = ${agora},
+          "cancelado_por" = 'SISTEMA',
+          "cancelada_em" = ${agora},
+          "motivo_cancelamento" = ${MOTIVO_CANCELAMENTO_SEM_MOTORISTA}
+        WHERE
+          "status" = 'SOLICITADA'
+          AND "motorista_id" IS NULL
+          AND "data_horario" <= ${agora}
+        RETURNING
+          "id",
+          "usuario_id" AS "usuarioId",
+          "origem_nome" AS "origemNome",
+          "destino_nome" AS "destinoNome",
+          "data_horario" AS "dataHorario"
+      `;
 
-    if (vencidas.length === 0) return [];
+      if (vencidas.length === 0) return [];
 
-    const ids = vencidas.map((c) => c.id);
+      const ids = vencidas.map((c) => c.id);
 
-    await prisma.$transaction([
-      prisma.corrida.updateMany({
-        where: {
-          id: { in: ids },
-          status: 'SOLICITADA',
-          motoristaId: null,
-        },
-        data: {
-          status: 'CANCELADA',
-          atualizadaEm: agora,
-          canceladoPor: 'SISTEMA',
-          canceladaEm: agora,
-          motivoCancelamento: MOTIVO_CANCELAMENTO_SEM_MOTORISTA,
-        },
-      }),
-      prisma.notificacao.updateMany({
+      await tx.notificacao.updateMany({
         where: {
           tipo: 'NOVA_CORRIDA',
           referenciaId: { in: ids },
@@ -188,10 +179,10 @@ class CorridasRepository {
           acaoMotorista: 'CANCELADA',
           lida: true,
         },
-      }),
-    ]);
+      });
 
-    return vencidas;
+      return vencidas;
+    });
   }
 
   // ---------- Confirmação de embarque ----------
@@ -277,10 +268,27 @@ class CorridasRepository {
    * @returns {Promise<Corrida|null>} null quando não havia o que cancelar
    */
   async cancelarConfirmadaComMotivo(id, opcoes, agora = new Date()) {
+    const andConditions = [
+      { OR: [{ embarqueMotoristaConfirmado: null }, { embarqueMotoristaConfirmado: false }] },
+    ];
+    if (opcoes.apenasSePrazoVencidoAte) {
+      // Condições avaliadas atomicamente no UPDATE para impedir corrida contra "a caminho" / embarque
+      const limite = opcoes.apenasSePrazoVencidoAte;
+      andConditions.push(
+        {
+          OR: [
+            { prazoConfirmacaoEm: { lte: limite } },
+            { prazoConfirmacaoEm: null, dataHorario: { lte: new Date(limite.getTime() - opcoes.toleranciaMs) } },
+          ],
+        },
+        { OR: [{ embarquePassageiroConfirmado: null }, { embarquePassageiroConfirmado: false }] }
+      );
+    }
+
     const where = {
       id,
       status: 'CONFIRMADA',
-      OR: [{ embarqueMotoristaConfirmado: null }, { embarqueMotoristaConfirmado: false }],
+      AND: andConditions,
     };
     if (opcoes.motoristaUsuarioId) where.motoristaId = opcoes.motoristaUsuarioId;
     if (opcoes.passageiroId) where.usuarioId = opcoes.passageiroId;
@@ -300,26 +308,6 @@ class CorridasRepository {
 
     try {
       const corrida = await prisma.$transaction(async (tx) => {
-        if (opcoes.apenasSePrazoVencidoAte) {
-          // Reavalia o prazo dentro da transação (pode ter sido estendido por "a caminho")
-          const limite = opcoes.apenasSePrazoVencidoAte;
-          const atual = await tx.corrida.findFirst({
-            where: {
-              id,
-              AND: [{
-                OR: [
-                  { prazoConfirmacaoEm: { lte: limite } },
-                  { prazoConfirmacaoEm: null, dataHorario: { lte: new Date(limite.getTime() - opcoes.toleranciaMs) } },
-                ],
-              }, {
-                OR: [{ embarquePassageiroConfirmado: null }, { embarquePassageiroConfirmado: false }],
-              }],
-            },
-            select: { id: true },
-          });
-          if (!atual) throw new RollbackError('NAO_VENCIDA');
-        }
-
         const r = await tx.corrida.updateMany({ where, data });
         if (r.count === 0) throw new RollbackError('TRANSICAO_INVALIDA');
 

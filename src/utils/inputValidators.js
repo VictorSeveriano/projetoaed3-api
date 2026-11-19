@@ -52,11 +52,6 @@ function exigirNumeroPositivo(valor, campo, { inteiro = false } = {}) {
   return n;
 }
 
-/** Campo numérico opcional: ausente/null → null; informado → validado (nunca "|| null"). */
-function numeroPositivoOpcional(valor, campo, opcoes) {
-  if (ausente(valor)) return null;
-  return exigirNumeroPositivo(valor, campo, opcoes);
-}
 
 /** Coordenada opcional: ausente/null → null; informada → número finito dentro de [min, max]. Zero é válido. */
 function coordenadaOpcional(valor, campo, min, max) {
@@ -70,6 +65,25 @@ function coordenadaOpcional(valor, campo, min, max) {
 
 const latitudeOpcional = (v, campo) => coordenadaOpcional(v, campo, -90, 90);
 const longitudeOpcional = (v, campo) => coordenadaOpcional(v, campo, -180, 180);
+
+/**
+ * Valida o par opcional (latitude, longitude) dentro de um objeto de endereço.
+ * Se nenhum for informado (ambos ausentes), retorna { latitude: null, longitude: null }.
+ * Rejeita coordenada isolada, não numérica ou fora dos limites geográficos.
+ */
+function validarCoordenadasEnderecoOpcional(endereco, campo = 'endereco') {
+  if (!endereco || typeof endereco !== 'object' || Array.isArray(endereco)) {
+    return { latitude: null, longitude: null };
+  }
+  const latitude = latitudeOpcional(endereco.latitude, `${campo}.latitude`);
+  const longitude = longitudeOpcional(endereco.longitude, `${campo}.longitude`);
+
+  if ((latitude !== null && longitude === null) || (longitude !== null && latitude === null)) {
+    throw new AppError(`${campo}.latitude e ${campo}.longitude devem ser informados juntos.`, 400);
+  }
+
+  return { latitude, longitude };
+}
 
 /**
  * Enum de string (case-insensitive, normalizado para maiúsculas). Ausente/null → `padrao`.
@@ -178,9 +192,9 @@ module.exports = {
   lerNumero,
   exigirTexto,
   exigirNumeroPositivo,
-  numeroPositivoOpcional,
   latitudeOpcional,
   longitudeOpcional,
+  validarCoordenadasEnderecoOpcional,
   enumOpcional,
   exigirPorte,
   lerDataHorario,

@@ -7,6 +7,7 @@ jest.spyOn(grafoService, 'organizarAlternativasComABB');
 
 // Mock Google Maps API integration inside rotasService
 jest.mock('https', () => ({
+  Agent: jest.fn(() => ({})),
   request: jest.fn((options, cb) => {
     const res = {
       on: jest.fn((event, handler) => {

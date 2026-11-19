@@ -17,6 +17,7 @@ const {
   validarCPF, validarCNH, validarEmail, validarCelular, validarCEP, validarSenha,
   normalizarCPF, normalizarCNH, normalizarEmail, normalizarCelular,
 } = require('../utils/validators');
+const { validarCoordenadasEnderecoOpcional } = require('../utils/inputValidators');
 
 class AuthService {
   async login(usuario, senha) {
@@ -167,6 +168,17 @@ class AuthService {
     if (!validarEmail(emailNorm))     throw new AppError('E-mail inválido.', 400);
     if (perfil !== 'ADMINISTRADOR' && !validarCEP(endereco.cep)) throw new AppError('CEP inválido.', 400);
 
+    let enderecoParaSalvar = endereco;
+    if (endereco !== undefined && endereco !== null) {
+      if (typeof endereco !== 'object' || Array.isArray(endereco)) {
+        throw new AppError('Endereço inválido: deve ser um objeto.', 400);
+      }
+      const { latitude, longitude } = validarCoordenadasEnderecoOpcional(endereco, 'endereco');
+      if (latitude !== null) {
+        enderecoParaSalvar = { ...endereco, latitude, longitude };
+      }
+    }
+
     const senhaError = validarSenha(senha, nome);
     if (senhaError) throw new AppError(senhaError, 400);
 
@@ -182,7 +194,7 @@ class AuthService {
       
       novoUsuario = await authRepository.create({
         nome, cpf: cpfNorm, celular: celularNorm, email: emailNorm,
-        usuario, senha: senhaHash, perfil, endereco,
+        usuario, senha: senhaHash, perfil, endereco: enderecoParaSalvar,
       });
     } catch (error) {
       if (error.code !== 'P2002') throw error;

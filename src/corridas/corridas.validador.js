@@ -19,7 +19,7 @@ const {
   ausente,
   exigirTexto,
   exigirNumeroPositivo,
-  numeroPositivoOpcional,
+  validarCoordenadasEnderecoOpcional,
   latitudeOpcional,
   longitudeOpcional,
   enumOpcional,
@@ -146,7 +146,9 @@ function validarDadosCriacaoCorrida(dados) {
   }
 
   const distanciaKm = exigirNumeroPositivo(dados.distanciaKm, 'distanciaKm');
-  const duracaoMin  = numeroPositivoOpcional(dados.duracaoMin, 'duracaoMin', { inteiro: true });
+  const duracaoMin  = dados.duracaoMin === undefined
+    ? null
+    : exigirNumeroPositivo(dados.duracaoMin, 'duracaoMin', { inteiro: true });
 
   const classe         = enumOpcional(dados.classe, 'Classe', CLASSES_VALIDAS, 'NORMAL');
   const formaPagamento = enumOpcional(dados.formaPagamento, 'Forma de pagamento', FORMAS_PAGAMENTO_VALIDAS, 'DINHEIRO');
@@ -201,7 +203,10 @@ function validarDadosCriacaoCorrida(dados) {
     } else if (!ehObjetoSimples(dados[campo])) {
       throw new AppError(`${campo} invalido: deve ser um objeto.`, 400);
     } else {
-      enderecos[campo] = dados[campo];
+      const { latitude, longitude } = validarCoordenadasEnderecoOpcional(dados[campo], campo);
+      enderecos[campo] = latitude !== null
+        ? { ...dados[campo], latitude, longitude }
+        : dados[campo];
     }
   }
 

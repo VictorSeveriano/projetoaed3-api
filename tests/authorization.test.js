@@ -258,5 +258,23 @@ describe('Testes de Autorização (IDOR)', () => {
       await expect(relatorioService.gerarRelatorioMensal('user-mot-a', 10, 2026, { id: 'user-mot-a', perfil: 'MOTORISTA' }))
         .resolves.toBeDefined();
     });
+
+    test('Atualização do motorista permite reenviar a própria CNH formatada sem conflito 409 e atualização de usuário rejeita coordenada isolada', async () => {
+      motoristasRepository.findById.mockResolvedValueOnce({
+        id: 'motorista-record-a',
+        usuarioId: 'user-mot-a',
+        cnh: '52998224725',
+        statusCadastro: 'APROVADO',
+      });
+      motoristasRepository.existsByCnh.mockClear();
+      await expect(
+        motoristasService.atualizar('motorista-record-a', { cnh: '529.982.247-25' }, { id: 'user-mot-a', perfil: 'MOTORISTA' })
+      ).resolves.toBeDefined();
+      expect(motoristasRepository.existsByCnh).not.toHaveBeenCalled();
+
+      await expect(
+        usuariosService.atualizar('user-mot-a', { endereco: { rua: 'Rua X', longitude: -40.3 } }, { id: 'user-mot-a', perfil: 'MOTORISTA' })
+      ).rejects.toMatchObject({ statusCode: 400 });
+    });
   });
 });

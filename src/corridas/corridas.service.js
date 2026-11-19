@@ -40,7 +40,9 @@ const {
 class CorridasService {
   constructor() {
     this._expiracaoTimer = null;
+    this._monitoramentoAtivo = false;
     this._ultimaVerificacaoExpiracaoMs = 0;
+    this._expiracaoEmAndamento = null;
   }
 
   static get TARIFAS_KM() {
@@ -56,8 +58,8 @@ class CorridasService {
    * Notifica o passageiro de cada corrida expirada sem propagar falhas de notificação.
    */
   async cancelarCorridasExpiradas(agora = new Date(), { forcar = false } = {}) {
-    if (typeof corridasRepository.cancelarSolicitadasVencidas !== 'function') {
-      return [];
+    if (this._expiracaoEmAndamento) {
+      return this._expiracaoEmAndamento;
     }
 
     if (!forcar && process.env.NODE_ENV !== 'test') {
@@ -68,29 +70,41 @@ class CorridasService {
       this._ultimaVerificacaoExpiracaoMs = ts;
     }
 
-    let vencidas = [];
-    try {
-      vencidas = (await corridasRepository.cancelarSolicitadasVencidas(agora)) || [];
-    } catch (e) {
-      console.error('[CorridasService] Falha ao cancelar corridas expiradas:', e.message);
-      return [];
-    }
+    const execucao = (async () => {
+      let vencidas = [];
+      if (typeof corridasRepository.cancelarSolicitadasVencidas === 'function') {
+        try {
+          vencidas = (await corridasRepository.cancelarSolicitadasVencidas(agora)) || [];
+        } catch (e) {
+          console.error('[CorridasService] Falha ao cancelar corridas expiradas:', e.message);
+        }
 
-    for (const c of vencidas) {
-      if (c.usuarioId && typeof notificacoesService.notificarPassageiroExpiracao === 'function') {
-        await this._notificarSemFalhar(`expiracao ${c.id}: notificar passageiro`, () =>
-          notificacoesService.notificarPassageiroExpiracao(c.usuarioId, {
-            corridaId:   c.id,
-            origemNome:  c.origemNome,
-            destinoNome: c.destinoNome,
-          })
-        );
+        for (const c of vencidas) {
+          if (c.usuarioId && typeof notificacoesService.notificarPassageiroExpiracao === 'function') {
+            await this._notificarSemFalhar(`expiracao ${c.id}: notificar passageiro`, () =>
+              notificacoesService.notificarPassageiroExpiracao(c.usuarioId, {
+                corridaId:   c.id,
+                origemNome:  c.origemNome,
+                destinoNome: c.destinoNome,
+              })
+            );
+          }
+        }
+      }
+
+      await this._cancelarConfirmadasSemEmbarque(agora);
+
+      return vencidas;
+    })();
+
+    this._expiracaoEmAndamento = execucao;
+    try {
+      return await execucao;
+    } finally {
+      if (this._expiracaoEmAndamento === execucao) {
+        this._expiracaoEmAndamento = null;
       }
     }
-
-    await this._cancelarConfirmadasSemEmbarque(agora);
-
-    return vencidas;
   }
 
   /**
@@ -207,7 +221,9 @@ class CorridasService {
       }
 
       case 'ESTOU_A_CAMINHO': {
-        if (corrida.situacaoMotorista === SITUACAO_MOTORISTA.A_CAMINHO) return corrida; // idempotente
+        if (corrida.status === STATUS_CORRIDA.CONFIRMADA && corrida.situacaoMotorista === SITUACAO_MOTORISTA.A_CAMINHO) {
+          return corrida; // idempotente
+        }
         this._validarJanelaDeEmbarque(corrida, agora);
         if (corrida.status !== STATUS_CORRIDA.CONFIRMADA) {
           throw new AppError('Esta corrida não está aguardando confirmação de embarque.', 409);
@@ -218,7 +234,9 @@ class CorridasService {
         const atualizada = await corridasRepository.registrarMotoristaACaminho(corridaId, usuarioLogado.id, novoPrazo, agora);
         if (!atualizada) {
           const atual = await corridasRepository.findById(corridaId);
-          if (atual && atual.situacaoMotorista === SITUACAO_MOTORISTA.A_CAMINHO) return atual;
+          if (atual && atual.status === STATUS_CORRIDA.CONFIRMADA && atual.situacaoMotorista === SITUACAO_MOTORISTA.A_CAMINHO) {
+            return atual;
+          }
           throw conflito();
         }
         await notificarPassageiro('Motorista a caminho',
@@ -326,16 +344,20 @@ class CorridasService {
 
   iniciarMonitoramentoExpiracao(intervaloMs = 30 * 1000) {
     if (this._expiracaoTimer || process.env.NODE_ENV === 'test') return;
+    const intervalo = Number.isFinite(intervaloMs) && intervaloMs > 0 ? intervaloMs : 30 * 1000;
+    this._monitoramentoAtivo = true;
     this.cancelarCorridasExpiradas().catch(() => {});
     this._expiracaoTimer = setInterval(() => {
+      if (!this._monitoramentoAtivo) return;
       this.cancelarCorridasExpiradas().catch(() => {});
-    }, intervaloMs);
+    }, intervalo);
     if (typeof this._expiracaoTimer.unref === 'function') {
       this._expiracaoTimer.unref();
     }
   }
 
   pararMonitoramentoExpiracao() {
+    this._monitoramentoAtivo = false;
     if (this._expiracaoTimer) {
       clearInterval(this._expiracaoTimer);
       this._expiracaoTimer = null;

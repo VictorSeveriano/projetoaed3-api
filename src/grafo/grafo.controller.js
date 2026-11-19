@@ -2,6 +2,7 @@ const grafoService = require('./grafo.service');
 const AppError = require('../utils/AppError');
 const { success } = require('../utils/responseHelper');
 const { isValidCoord } = require('../utils/geoUtils');
+const { lerNumero } = require('../utils/inputValidators');
 
 /**
  * GrafoController — Controlador para endpoints do grafo dinâmico.
@@ -37,11 +38,11 @@ const obterGrafo = (req, res, next) => {
       }, 'Grafo retornado com sucesso');
     }
 
-    const lat = Number(origemLat);
-    const lng = Number(origemLng);
-    const dLat = Number(destinoLat);
-    const dLng = Number(destinoLng);
-    const distM = Number(distanciaMetros);
+    const lat = lerNumero(origemLat);
+    const lng = lerNumero(origemLng);
+    const dLat = lerNumero(destinoLat);
+    const dLng = lerNumero(destinoLng);
+    const distM = lerNumero(distanciaMetros);
 
     if (!Number.isFinite(distM) || distM <= 0) {
       return next(new AppError('Distância inválida. Forneça um valor numérico maior que zero.', 400));

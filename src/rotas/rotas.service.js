@@ -51,7 +51,7 @@ class RotasService {
         ],
         distanciaKm,
         distanciaFormatada: rota.distanciaFormatada,
-        duracaoMin: Math.round(rota.duracaoSegundos / 60),
+        duracaoMin: Math.max(1, Math.round(rota.duracaoSegundos / 60)),
         duracaoFormatada: rota.duracaoFormatada,
         polyline: rota.polyline,
         valorEstimado,

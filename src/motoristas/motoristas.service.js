@@ -99,17 +99,19 @@ class MotoristasService {
       'Acesso negado. Você só pode alterar seus próprios dados.'
     );
 
-    if (dados.cnh && dados.cnh !== motorista.cnh) {
+    if (dados.cnh) {
       const cnhNorm = normalizarCNH(dados.cnh);
       if (!validarCNH(cnhNorm)) {
         throw new AppError('CNH inválida.', 400);
       }
-      const existente = await motoristasRepository.existsByCnh(cnhNorm);
+      if (cnhNorm !== motorista.cnh) {
+        const existente = await motoristasRepository.existsByCnh(cnhNorm);
       if (existente) {
         throw new AppError('CNH já cadastrada no sistema.', 409);
       }
       await motoristasRepository.updateCnh(motorista.id, cnhNorm);
-      motorista.cnh = cnhNorm;
+        motorista.cnh = cnhNorm;
+      }
     }
 
     return this._enriquecer(motorista);

@@ -391,4 +391,36 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário, 
       corridasService.cancelar('c1', MOT, { motivo: 'Imprevisto no veículo' })
     ).resolves.toMatchObject({ status: 'CANCELADA', canceladoPor: 'MOTORISTA' });
   });
+
+  test('19. ESTOU_A_CAMINHO em corrida já CANCELADA rejeita 409 mesmo com situacaoMotorista A_CAMINHO', async () => {
+    corridasRepository.findById.mockResolvedValue(
+      corridaBase({ status: 'CANCELADA', situacaoMotorista: 'A_CAMINHO', canceladoPor: 'PASSAGEIRO' })
+    );
+    await expect(
+      corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'ESTOU_A_CAMINHO' })
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  test('20. cancelarCorridasExpiradas coalesces execuções concorrentes e continua para fase 2 se fase 1 falhar', async () => {
+    let resolverFase1;
+    corridasRepository.cancelarSolicitadasVencidas.mockImplementationOnce(
+      () => new Promise((resolve) => { resolverFase1 = resolve; })
+    );
+    corridasRepository.findConfirmadasComPrazoVencido.mockResolvedValue([]);
+
+    const p1 = corridasService.cancelarCorridasExpiradas(new Date(), { forcar: true });
+    const p2 = corridasService.cancelarCorridasExpiradas(new Date(), { forcar: true });
+    resolverFase1([{ id: 'c-exp-1', usuarioId: 'pass-1', origemNome: 'A', destinoNome: 'B' }]);
+    await Promise.all([p1, p2]);
+
+    expect(corridasRepository.cancelarSolicitadasVencidas).toHaveBeenCalledTimes(1);
+    expect(notificacoesService.notificarPassageiroExpiracao).toHaveBeenCalledTimes(1);
+
+    // Falha em cancelarSolicitadasVencidas não impede verificação de CONFIRMADAS vencidas
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    corridasRepository.cancelarSolicitadasVencidas.mockRejectedValueOnce(new Error('Erro transitorio'));
+    corridasRepository.findConfirmadasComPrazoVencido.mockResolvedValueOnce([]);
+    await expect(corridasService.cancelarCorridasExpiradas(new Date(), { forcar: true })).resolves.toEqual([]);
+    expect(corridasRepository.findConfirmadasComPrazoVencido).toHaveBeenCalledTimes(2);
+  });
 });

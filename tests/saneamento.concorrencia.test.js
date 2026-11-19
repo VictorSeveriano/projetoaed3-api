@@ -19,6 +19,8 @@ const {
 
 jest.setTimeout(120000);
 
+const SELECT_CORRIDA_BASE = { id: true, status: true, veiculoId: true, motoristaId: true };
+
 const resultados = (settled) => ({
   ok: settled.filter((r) => r.status === 'fulfilled'),
   falhas: settled.filter((r) => r.status === 'rejected'),
@@ -67,6 +69,7 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
         dataHorario: overrides.dataHorario || new Date('2026-10-01T14:00:00.000Z'),
         status: overrides.status || 'SOLICITADA',
       },
+      select: SELECT_CORRIDA_BASE,
     });
   };
 
@@ -121,14 +124,17 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
       await prisma.corrida.update({
         where: { id: titular.id },
         data: { criadaEm: new Date('2026-10-01T13:00:00.000Z') },
+        select: { id: true },
       });
       await prisma.corrida.update({
         where: { id: excedenteConfirmada.id },
         data: { criadaEm: new Date('2026-10-01T13:05:00.000Z') },
+        select: { id: true },
       });
       await prisma.corrida.update({
         where: { id: excedenteEmAndamento.id },
         data: { criadaEm: new Date('2026-10-01T13:10:00.000Z') },
+        select: { id: true },
       });
 
       const diag = await diagnosticarConflitosVeiculoAtivo(prisma);
@@ -145,8 +151,8 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
       expect(resParcial.prontoParaIndiceUnico).toBe(false);
       expect(resParcial.naoResolvidos.map((n) => n.corridaId)).toContain(excedenteEmAndamento.id);
 
-      const aposParcialConfirmada = await prisma.corrida.findUnique({ where: { id: excedenteConfirmada.id } });
-      const aposParcialEmAndamento = await prisma.corrida.findUnique({ where: { id: excedenteEmAndamento.id } });
+      const aposParcialConfirmada = await prisma.corrida.findUnique({ where: { id: excedenteConfirmada.id } , select: SELECT_CORRIDA_BASE });
+      const aposParcialEmAndamento = await prisma.corrida.findUnique({ where: { id: excedenteEmAndamento.id } , select: SELECT_CORRIDA_BASE });
       expect(aposParcialConfirmada).toMatchObject({
         status: 'SOLICITADA',
         veiculoId: null,
@@ -170,7 +176,7 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
       });
       expect(resFinal.prontoParaIndiceUnico).toBe(true);
 
-      const aposRealocacao = await prisma.corrida.findUnique({ where: { id: excedenteEmAndamento.id } });
+      const aposRealocacao = await prisma.corrida.findUnique({ where: { id: excedenteEmAndamento.id } , select: SELECT_CORRIDA_BASE });
       expect(aposRealocacao).toMatchObject({
         status: 'EM_ANDAMENTO',
         veiculoId: v2.id,
@@ -250,10 +256,12 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
       await prisma.corrida.update({
         where: { id: titular.id },
         data: { criadaEm: new Date('2026-10-01T12:00:00.000Z') },
+        select: { id: true },
       });
       await prisma.corrida.update({
         where: { id: excedente1.id },
         data: { criadaEm: new Date('2026-10-01T12:05:00.000Z') },
+        select: { id: true },
       });
 
       // Caso 9: Ausência de justificativa -> 400
@@ -429,7 +437,7 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
       ).rejects.toThrow();
 
       const v2PosRollback = await prisma.veiculo.findUnique({ where: { id: v2.id } });
-      const exc1PosRollback = await prisma.corrida.findUnique({ where: { id: excedente1.id } });
+      const exc1PosRollback = await prisma.corrida.findUnique({ where: { id: excedente1.id } , select: SELECT_CORRIDA_BASE });
       expect(v2PosRollback.status).toBe('DISPONIVEL');
       expect(exc1PosRollback.veiculoId).toBe(v1.id);
 
@@ -501,10 +509,12 @@ describe('Saneamento auditável e concorrência de resolução de conflitos em s
       await prisma.corrida.update({
         where: { id: titularV3.id },
         data: { criadaEm: new Date('2026-10-01T12:00:00.000Z') },
+        select: { id: true },
       });
       await prisma.corrida.update({
         where: { id: excedenteV3.id },
         data: { criadaEm: new Date('2026-10-01T12:05:00.000Z') },
+        select: { id: true },
       });
 
       const { ok, falhas } = resultados(

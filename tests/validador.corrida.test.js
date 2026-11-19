@@ -183,5 +183,49 @@ describe('validarDadosCriacaoCorrida — validação pareada de coordenadas', ()
       expect(resultado.duracaoMin).toBe(30);
     });
   });
+
+  describe('duracaoMin — finito e estritamente positivo', () => {
+    test('aceita omitido (undefined -> null), inteiro positivo e string inteira positiva', () => {
+      expect(validarDadosCriacaoCorrida({ ...baseValido }).duracaoMin).toBeNull();
+      expect(validarDadosCriacaoCorrida({ ...baseValido, duracaoMin: 18 }).duracaoMin).toBe(18);
+      expect(validarDadosCriacaoCorrida({ ...baseValido, duracaoMin: '18' }).duracaoMin).toBe(18);
+    });
+
+    test.each([null, 0, -1, -30, '0', '-5', 'abc', '', NaN, Infinity, -Infinity, true, 12.5])(
+      'rejeita valor inválido de duracaoMin: %p',
+      (invalido) => {
+        expect(() => validarDadosCriacaoCorrida({ ...baseValido, duracaoMin: invalido })).toThrow(AppError);
+      }
+    );
+  });
+
+  describe('origemEndereco / destinoEndereco — validação pareada de coordenadas', () => {
+    test('rejeita origemEndereco com apenas latitude ou apenas longitude', () => {
+      expect(() =>
+        validarDadosCriacaoCorrida({ ...baseValido, origemEndereco: { logradouro: 'Rua A', latitude: -20.3 } })
+      ).toThrow(AppError);
+      expect(() =>
+        validarDadosCriacaoCorrida({ ...baseValido, origemEndereco: { logradouro: 'Rua A', longitude: -40.3 } })
+      ).toThrow(AppError);
+    });
+
+    test('rejeita destinoEndereco com coordenada isolada ou fora da faixa geográfica', () => {
+      expect(() =>
+        validarDadosCriacaoCorrida({ ...baseValido, destinoEndereco: { logradouro: 'Av B', latitude: -20.3 } })
+      ).toThrow(AppError);
+      expect(() =>
+        validarDadosCriacaoCorrida({ ...baseValido, destinoEndereco: { logradouro: 'Av B', latitude: 95, longitude: -40.3 } })
+      ).toThrow(AppError);
+    });
+
+    test('aceita origemEndereco com par válido incluindo coordenada 0', () => {
+      const r = validarDadosCriacaoCorrida({
+        ...baseValido,
+        origemEndereco: { logradouro: 'Rua Zero', latitude: 0, longitude: 0 },
+      });
+      expect(r.origemEndereco.latitude).toBe(0);
+      expect(r.origemEndereco.longitude).toBe(0);
+    });
+  });
 });
 

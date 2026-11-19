@@ -35,6 +35,17 @@ const ACOES_RESOLUCAO_VALIDAS = new Set([
   'REALOCAR_VEICULO',
 ]);
 
+const SELECT_CORRIDA_SANEAMENTO = {
+  id: true,
+  status: true,
+  motoristaId: true,
+  veiculoId: true,
+  usuarioId: true,
+  classe: true,
+  criadaEm: true,
+  atualizadaEm: true,
+};
+
 function compararPrioridadeTitular(a, b) {
   const pesoA = a.status === 'EM_ANDAMENTO' ? 0 : 1;
   const pesoB = b.status === 'EM_ANDAMENTO' ? 0 : 1;
@@ -79,6 +90,7 @@ async function diagnosticarConflitosVeiculoAtivo(db = prismaDefault, resolucoesE
       veiculoId: { not: null },
     },
     orderBy: [{ criadaEm: 'asc' }, { id: 'asc' }],
+    select: SELECT_CORRIDA_SANEAMENTO,
   });
 
   const porVeiculo = new Map();
@@ -216,7 +228,7 @@ async function sanearConflitosVeiculoAtivo(db = prismaDefault, opcoes = {}) {
     for (const [corridaId, resolucao] of Object.entries(resolucoesExplicitas)) {
       if (idsExcedentesEmConflito.has(corridaId)) continue;
 
-      const corridaAlvo = await tx.corrida.findUnique({ where: { id: corridaId } });
+      const corridaAlvo = await tx.corrida.findUnique({ where: { id: corridaId }, select: SELECT_CORRIDA_SANEAMENTO });
       if (!corridaAlvo) {
         throw new AppError(`Corrida ${corridaId} não encontrada para saneamento.`, 404);
       }
@@ -259,7 +271,7 @@ async function sanearConflitosVeiculoAtivo(db = prismaDefault, opcoes = {}) {
         const resolucao = resolucoesExplicitas[excedente.id];
 
         // Releitura dentro da transação para garantir estado fresco
-        const corridaAtual = await tx.corrida.findUnique({ where: { id: excedente.id } });
+        const corridaAtual = await tx.corrida.findUnique({ where: { id: excedente.id }, select: SELECT_CORRIDA_SANEAMENTO });
         if (
           !corridaAtual ||
           !STATUS_CORRIDA_ATIVOS.includes(corridaAtual.status) ||
