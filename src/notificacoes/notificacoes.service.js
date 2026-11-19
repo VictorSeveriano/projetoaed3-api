@@ -2,16 +2,13 @@
 /**
  * notificacoes.service.js — Regras de negócio de notificações.
  *
- * Tipos suportados:
- *   SOLICITACAO_MOTORISTA — solicitação de cadastro de motorista (para admin)
- *   SOLICITACAO_VEICULO   — solicitação de aprovação de veículo (para admin)
- *   NOVA_CORRIDA          — nova corrida disponível (para motorista)
- *   ATUALIZACAO_CORRIDA   — atualização de corrida (para passageiro)
- *   SISTEMA               — avisos gerais
+ * Delega a construção de eventos/conteúdo às estratégias polimórficas em
+ * `estrategiasNotificacao.js` e a persistência ao `notificacoesRepository`.
  */
 
 const notificacoesRepository = require('./notificacoes.repository');
 const AppError = require('../utils/AppError');
+const { ESTRATEGIAS_NOTIFICACAO } = require('./estrategiasNotificacao');
 
 class NotificacoesService {
   async listar(destinatarioId) {
@@ -23,24 +20,22 @@ class NotificacoesService {
     return lista.length;
   }
 
+  /** Emite uma notificação construída pela estratégia do evento informado. */
+  async emitirEvento(evento, destinatarioId, dados) {
+    const estrategia = ESTRATEGIAS_NOTIFICACAO[evento];
+    if (!estrategia) {
+      throw new AppError(`Tipo de evento de notificação desconhecido: ${evento}.`, 500);
+    }
+    const payload = estrategia.construir(destinatarioId, dados);
+    return notificacoesRepository.create(payload);
+  }
+
   async notificarSolicitacaoMotorista(adminId, dados) {
-    return notificacoesRepository.create({
-      destinatarioId: adminId,
-      tipo:           'SOLICITACAO_MOTORISTA',
-      titulo:         'Nova solicitação de motorista',
-      mensagem:       `${dados.nomeMotorista} solicitou cadastro como motorista.`,
-      referenciaId:   dados.motoristaId,
-    });
+    return this.emitirEvento('SOLICITACAO_MOTORISTA', adminId, dados);
   }
 
   async notificarSolicitacaoVeiculo(adminId, dados) {
-    return notificacoesRepository.create({
-      destinatarioId: adminId,
-      tipo:           'SOLICITACAO_VEICULO',
-      titulo:         'Veículo pendente de aprovação',
-      mensagem:       `${dados.nomeMotorista} cadastrou ${dados.modeloVeiculo} — aguarda aprovação.`,
-      referenciaId:   dados.veiculoId,
-    });
+    return this.emitirEvento('SOLICITACAO_VEICULO', adminId, dados);
   }
 
   /**
@@ -48,15 +43,7 @@ class NotificacoesService {
    * A notificação fica com acaoMotorista='PENDENTE' até o motorista aceitar/recusar.
    */
   async notificarNovaCorrida(motoristaUsuarioId, dados) {
-    const { corridaId, classe, origemNome, destinoNome, dataFormatada, distanciaKm } = dados;
-    return notificacoesRepository.create({
-      destinatarioId: motoristaUsuarioId,
-      tipo:           'NOVA_CORRIDA',
-      titulo:         'Nova corrida disponível',
-      mensagem:       `Classe: ${classe}\nOrigem: ${origemNome}\nDestino: ${destinoNome}\nData/Hora: ${dataFormatada}\nDistância: ${distanciaKm} km`,
-      referenciaId:   corridaId,
-      acaoMotorista:  'PENDENTE',
-    });
+    return this.emitirEvento('NOVA_CORRIDA', motoristaUsuarioId, dados);
   }
 
   /**
@@ -67,32 +54,14 @@ class NotificacoesService {
     return notificacoesRepository.atualizarAcaoMotorista(corridaId, motoristaUsuarioId, acao);
   }
 
-  /**
-   * Notifica o passageiro que sua corrida foi aceita pelo motorista.
-   */
+  /** Notifica o passageiro que sua corrida foi aceita pelo motorista. */
   async notificarPassageiroAceite(passageiroId, dados) {
-    const { corridaId, origemNome, destinoNome } = dados;
-    return notificacoesRepository.create({
-      destinatarioId: passageiroId,
-      tipo:           'ATUALIZACAO_CORRIDA',
-      titulo:         'Sua corrida foi aceita!',
-      mensagem:       `Um motorista aceitou sua corrida de ${origemNome} para ${destinoNome}. Aguarde o motorista chegar ao local de origem.`,
-      referenciaId:   corridaId,
-    });
+    return this.emitirEvento('CORRIDA_ACEITA', passageiroId, dados);
   }
 
-  /**
-   * Notifica o passageiro que sua corrida foi finalizada e o pagamento confirmado.
-   */
+  /** Notifica o passageiro que sua corrida foi finalizada e o pagamento confirmado. */
   async notificarPassageiroFinalizacao(passageiroId, dados) {
-    const { corridaId, origemNome, destinoNome } = dados;
-    return notificacoesRepository.create({
-      destinatarioId: passageiroId,
-      tipo:           'ATUALIZACAO_CORRIDA',
-      titulo:         'Corrida finalizada',
-      mensagem:       `Sua corrida de ${origemNome} para ${destinoNome} foi concluída e o pagamento confirmado.`,
-      referenciaId:   corridaId,
-    });
+    return this.emitirEvento('CORRIDA_FINALIZADA', passageiroId, dados);
   }
 
   /**
@@ -100,28 +69,14 @@ class NotificacoesService {
    * a data/horário agendado sem aceite de motorista.
    */
   async notificarPassageiroExpiracao(passageiroId, dados) {
-    const { corridaId, origemNome, destinoNome } = dados;
-    return notificacoesRepository.create({
-      destinatarioId: passageiroId,
-      tipo:           'ATUALIZACAO_CORRIDA',
-      titulo:         'Corrida cancelada automaticamente',
-      mensagem:       `Sua corrida de ${origemNome} para ${destinoNome} foi cancelada automaticamente pois nenhum motorista a aceitou até o horário agendado.`,
-      referenciaId:   corridaId,
-    });
+    return this.emitirEvento('CORRIDA_EXPIRADA', passageiroId, dados);
   }
 
   /**
    * Notificação genérica de atualização de corrida (embarque, a caminho, cancelamentos).
-   * Reutiliza o mesmo tipo/infra de ATUALIZACAO_CORRIDA.
    */
-  async notificarAtualizacaoCorrida(destinatarioId, { corridaId, titulo, mensagem }) {
-    return notificacoesRepository.create({
-      destinatarioId,
-      tipo:         'ATUALIZACAO_CORRIDA',
-      titulo,
-      mensagem,
-      referenciaId: corridaId,
-    });
+  async notificarAtualizacaoCorrida(destinatarioId, dados) {
+    return this.emitirEvento('ATUALIZACAO_CORRIDA', destinatarioId, dados);
   }
 
   async marcarLida(id, usuarioLogado = null) {

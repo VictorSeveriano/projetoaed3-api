@@ -1,4 +1,6 @@
 const corridasService = require('../src/corridas/corridas.service');
+const cancelamentoCorridaService = require('../src/corridas/cancelamentoCorrida.service');
+const finalizacaoCorridaService = require('../src/corridas/finalizacaoCorrida.service');
 const corridasRepository = require('../src/corridas/corridas.repository');
 const usuariosService = require('../src/usuarios/usuarios.service');
 const motoristasService = require('../src/motoristas/motoristas.service');
@@ -99,42 +101,42 @@ describe('Testes de Autorização (IDOR)', () => {
     });
 
     test('USUARIO A cancela corrida de A -> permitido', async () => {
-      await expect(corridasService.cancelar(1, { id: 'user-a', perfil: 'USUARIO' }))
+      await expect(cancelamentoCorridaService.cancelar(1, { id: 'user-a', perfil: 'USUARIO' }))
         .resolves.toBeDefined();
     });
 
     test('USUARIO A cancela corrida de B -> negado', async () => {
-      await expect(corridasService.cancelar(1, { id: 'user-b', perfil: 'USUARIO' }))
+      await expect(cancelamentoCorridaService.cancelar(1, { id: 'user-b', perfil: 'USUARIO' }))
         .rejects.toThrow(AppError);
     });
 
     test('MOTORISTA A cancela corrida de B -> negado', async () => {
-      await expect(corridasService.cancelar(1, { id: 'mot-b', perfil: 'MOTORISTA' }))
+      await expect(cancelamentoCorridaService.cancelar(1, { id: 'mot-b', perfil: 'MOTORISTA' }))
         .rejects.toThrow(AppError);
     });
 
     test('MOTORISTA A cancela corrida sem motorista -> negado', async () => {
-      await expect(corridasService.cancelar(2, { id: 'mot-a', perfil: 'MOTORISTA' }))
+      await expect(cancelamentoCorridaService.cancelar(2, { id: 'mot-a', perfil: 'MOTORISTA' }))
         .rejects.toThrow(AppError);
     });
 
     test('MOTORISTA A finaliza corrida de A -> permitido', async () => {
-      await expect(corridasService.confirmarPagamentoEFinalizar(1, { id: 'mot-a', perfil: 'MOTORISTA' }))
+      await expect(finalizacaoCorridaService.confirmarPagamentoEFinalizar(1, { id: 'mot-a', perfil: 'MOTORISTA' }))
         .resolves.toBeDefined();
     });
 
     test('MOTORISTA A finaliza corrida de B -> negado', async () => {
-      await expect(corridasService.confirmarPagamentoEFinalizar(1, { id: 'mot-b', perfil: 'MOTORISTA' }))
+      await expect(finalizacaoCorridaService.confirmarPagamentoEFinalizar(1, { id: 'mot-b', perfil: 'MOTORISTA' }))
         .rejects.toThrow(AppError);
     });
 
     test('MOTORISTA A finaliza corrida sem motorista -> negado', async () => {
-      await expect(corridasService.confirmarPagamentoEFinalizar(2, { id: 'mot-a', perfil: 'MOTORISTA' }))
+      await expect(finalizacaoCorridaService.confirmarPagamentoEFinalizar(2, { id: 'mot-a', perfil: 'MOTORISTA' }))
         .rejects.toThrow(AppError);
     });
 
     test('USUARIO tenta finalizar -> negado', async () => {
-      await expect(corridasService.confirmarPagamentoEFinalizar(1, { id: 'user-a', perfil: 'USUARIO' }))
+      await expect(finalizacaoCorridaService.confirmarPagamentoEFinalizar(1, { id: 'user-a', perfil: 'USUARIO' }))
         .rejects.toThrow(AppError);
     });
   });

@@ -1,5 +1,8 @@
 'use strict';
 const corridasService = require('./corridas.service');
+const confirmacaoEmbarqueService = require('./confirmacaoEmbarque.service');
+const cancelamentoCorridaService = require('./cancelamentoCorrida.service');
+const finalizacaoCorridaService = require('./finalizacaoCorrida.service');
 const AppError        = require('../utils/AppError');
 const { success }     = require('../utils/responseHelper');
 const auditoriaService = require('../auditoria/auditoria.service');
@@ -119,7 +122,7 @@ const recusar = async (req, res, next) => {
 /** PATCH /api/corridas/:id/cancelar */
 const cancelar = async (req, res, next) => {
   try {
-    const corridaCancelada = await corridasService.cancelar(req.params.id, req.usuario, req.body || {});
+    const corridaCancelada = await cancelamentoCorridaService.cancelar(req.params.id, req.usuario, req.body || {});
     await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'CANCELAMENTO_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: req.params.id });
     return success(res, corridaCancelada, 'Corrida cancelada com sucesso.');
   } catch (err) {
@@ -135,7 +138,7 @@ const cancelar = async (req, res, next) => {
  */
 const confirmarPagamento = async (req, res, next) => {
   try {
-    const corridaFinalizada = await corridasService.confirmarPagamentoEFinalizar(
+    const corridaFinalizada = await finalizacaoCorridaService.confirmarPagamentoEFinalizar(
       req.params.id,
       req.usuario
     );
@@ -150,7 +153,7 @@ const confirmarPagamento = async (req, res, next) => {
 /** PATCH /api/corridas/:id/finalizar — Admin ou motorista */
 const finalizar = async (req, res, next) => {
   try {
-    const corridaFinalizada = await corridasService.finalizar(req.params.id, req.usuario);
+    const corridaFinalizada = await finalizacaoCorridaService.finalizar(req.params.id, req.usuario);
     await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'FINALIZACAO_CORRIDA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: req.params.id });
     return success(res, corridaFinalizada, 'Corrida finalizada com sucesso.');
   } catch (err) {
@@ -163,7 +166,7 @@ const finalizar = async (req, res, next) => {
 const embarqueMotorista = async (req, res, next) => {
   try {
     const { acao, motivo } = req.body || {};
-    const corrida = await corridasService.registrarEmbarqueMotorista(req.params.id, req.usuario, { acao, motivo });
+    const corrida = await confirmacaoEmbarqueService.registrarEmbarqueMotorista(req.params.id, req.usuario, { acao, motivo });
     await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'EMBARQUE_MOTORISTA', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: req.params.id });
     return success(res, corrida, 'Decisão registrada com sucesso.');
   } catch (err) {
@@ -176,7 +179,7 @@ const embarqueMotorista = async (req, res, next) => {
 const embarquePassageiro = async (req, res, next) => {
   try {
     const { acao, cancelarViagem, motivo } = req.body || {};
-    const corrida = await corridasService.registrarEmbarquePassageiro(req.params.id, req.usuario, { acao, cancelarViagem, motivo });
+    const corrida = await confirmacaoEmbarqueService.registrarEmbarquePassageiro(req.params.id, req.usuario, { acao, cancelarViagem, motivo });
     await auditoriaService.registrar({ usuarioId: req.usuario?.id, perfil: req.usuario?.perfil, acao: 'EMBARQUE_PASSAGEIRO', modulo: 'CORRIDAS', resultado: 'SUCESSO' }, req, { entidade: 'Corrida', entidadeId: req.params.id });
     return success(res, corrida, 'Confirmação registrada com sucesso.');
   } catch (err) {

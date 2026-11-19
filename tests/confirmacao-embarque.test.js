@@ -8,7 +8,10 @@
  * - Autorização, concorrência/idempotência e resiliência a falhas de notificação
  */
 const Corrida = require('../src/corridas/Corrida');
-const corridasService = require('../src/corridas/corridas.service');
+const confirmacaoEmbarqueService = require('../src/corridas/confirmacaoEmbarque.service');
+const cancelamentoCorridaService = require('../src/corridas/cancelamentoCorrida.service');
+const expiracaoCorridaService = require('../src/corridas/expiracaoCorrida.service');
+const finalizacaoCorridaService = require('../src/corridas/finalizacaoCorrida.service');
 const corridasRepository = require('../src/corridas/corridas.repository');
 const notificacoesService = require('../src/notificacoes/notificacoes.service');
 const {
@@ -66,7 +69,7 @@ describe('1–5. Confirmação de embarque (motorista e passageiro) e independê
       })
     );
 
-    const r = await corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' });
+    const r = await confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' });
     expect(r.status).toBe('EM_ANDAMENTO');
     expect(r.embarqueMotoristaConfirmado).toBe(true);
     expect(r.embarqueMotoristaEm).toBeTruthy();
@@ -79,11 +82,11 @@ describe('1–5. Confirmação de embarque (motorista e passageiro) e independê
   test('2. Bloqueia confirmação do motorista e do passageiro antes do horário programado (400)', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase({ dataHorario: minutos(30) }));
     await expect(
-      corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' })
+      confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' })
     ).rejects.toMatchObject({ statusCode: 400 });
 
     await expect(
-      corridasService.registrarEmbarquePassageiro('c1', PASS, { acao: 'CONFIRMAR_EMBARQUE' })
+      confirmacaoEmbarqueService.registrarEmbarquePassageiro('c1', PASS, { acao: 'CONFIRMAR_EMBARQUE' })
     ).rejects.toMatchObject({ statusCode: 400 });
   });
 
@@ -96,7 +99,7 @@ describe('1–5. Confirmação de embarque (motorista e passageiro) e independê
       })
     );
 
-    const r = await corridasService.registrarEmbarquePassageiro('c1', PASS, { acao: 'CONFIRMAR_EMBARQUE' });
+    const r = await confirmacaoEmbarqueService.registrarEmbarquePassageiro('c1', PASS, { acao: 'CONFIRMAR_EMBARQUE' });
     expect(r.embarquePassageiroConfirmado).toBe(true);
     expect(r.embarquePassageiroEm).toBeTruthy();
     expect(notificacoesService.notificarAtualizacaoCorrida).toHaveBeenCalledWith(
@@ -119,7 +122,7 @@ describe('1–5. Confirmação de embarque (motorista e passageiro) e independê
       embarquePassageiroEm: agora.toISOString(),
     }));
 
-    const r = await corridasService.registrarEmbarquePassageiro('c1', PASS, { acao: 'CONFIRMAR_EMBARQUE' });
+    const r = await confirmacaoEmbarqueService.registrarEmbarquePassageiro('c1', PASS, { acao: 'CONFIRMAR_EMBARQUE' });
     expect(corridasRepository.confirmarEmbarqueMotorista).not.toHaveBeenCalled();
     expect(r.embarqueMotoristaConfirmado).toBe(true);
     expect(r.embarqueMotoristaEm).toBe('2026-10-29T13:00:00.000Z');
@@ -142,7 +145,7 @@ describe('6–8. Motorista atrasado ("Estou a caminho") e "Não vou embarcar"', 
       corridaBase({ situacaoMotorista: 'A_CAMINHO', prazoConfirmacaoEm: prazo.toISOString() })
     );
 
-    const r = await corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'ESTOU_A_CAMINHO' });
+    const r = await confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, { acao: 'ESTOU_A_CAMINHO' });
     const prazo = corridasRepository.registrarMotoristaACaminho.mock.calls[0][2];
     expect(prazo.getTime()).toBeGreaterThan(Date.now() + (EXTENSAO_A_CAMINHO_MIN - 1) * 60000);
     expect(r.situacaoMotorista).toBe('A_CAMINHO');
@@ -157,7 +160,7 @@ describe('6–8. Motorista atrasado ("Estou a caminho") e "Não vou embarcar"', 
 
     // Repetição idempotente: não estende o prazo novamente nem reenvia notificação
     corridasRepository.findById.mockResolvedValue(corridaBase({ situacaoMotorista: 'A_CAMINHO' }));
-    await corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'ESTOU_A_CAMINHO' });
+    await confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, { acao: 'ESTOU_A_CAMINHO' });
     expect(corridasRepository.registrarMotoristaACaminho).toHaveBeenCalledTimes(1);
     expect(notificacoesService.notificarAtualizacaoCorrida).toHaveBeenCalledTimes(1);
   });
@@ -174,7 +177,7 @@ describe('6–8. Motorista atrasado ("Estou a caminho") e "Não vou embarcar"', 
       })
     );
 
-    const r = await corridasService.registrarEmbarqueMotorista('c1', MOT, {
+    const r = await confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, {
       acao: 'NAO_VOU_EMBARCAR',
       motivo: '  Imprevisto mecânico no veículo  ',
     });
@@ -192,21 +195,21 @@ describe('6–8. Motorista atrasado ("Estou a caminho") e "Não vou embarcar"', 
     async (motivo) => {
       corridasRepository.findById.mockResolvedValue(corridaBase());
       await expect(
-        corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'NAO_VOU_EMBARCAR', motivo })
+        confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, { acao: 'NAO_VOU_EMBARCAR', motivo })
       ).rejects.toMatchObject({ statusCode: 400 });
       expect(corridasRepository.cancelarConfirmadaComMotivo).not.toHaveBeenCalled();
     }
   );
 });
 
-describe('Cancelamento direto pela tela Minhas corridas (corridasService.cancelar)', () => {
+describe('Cancelamento direto pela tela Minhas corridas (cancelamentoCorridaService.cancelar)', () => {
   test('Motorista cancela corrida CONFIRMADA com motivo obrigatório e notifica exclusivamente o passageiro', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase({ dataHorario: minutos(25) }));
     corridasRepository.transicionarComLiberacaoDeVeiculo.mockImplementation(async (id, transicao, meta) =>
       corridaBase({ status: 'CANCELADA', ...meta })
     );
 
-    const r = await corridasService.cancelar('c1', MOT, { motivo: '  Trânsito bloqueado na rodovia  ' });
+    const r = await cancelamentoCorridaService.cancelar('c1', MOT, { motivo: '  Trânsito bloqueado na rodovia  ' });
     expect(r.status).toBe('CANCELADA');
     expect(r.canceladoPor).toBe('MOTORISTA');
     expect(r.motivoCancelamento).toBe('Trânsito bloqueado na rodovia');
@@ -225,7 +228,7 @@ describe('Cancelamento direto pela tela Minhas corridas (corridasService.cancela
     'Motorista não pode cancelar via cancelar() sem motivo válido (%p)',
     async (motivo) => {
       corridasRepository.findById.mockResolvedValue(corridaBase({ dataHorario: minutos(25) }));
-      await expect(corridasService.cancelar('c1', MOT, { motivo })).rejects.toMatchObject({ statusCode: 400 });
+      await expect(cancelamentoCorridaService.cancelar('c1', MOT, { motivo })).rejects.toMatchObject({ statusCode: 400 });
       expect(corridasRepository.transicionarComLiberacaoDeVeiculo).not.toHaveBeenCalled();
     }
   );
@@ -236,7 +239,7 @@ describe('Cancelamento direto pela tela Minhas corridas (corridasService.cancela
       corridaBase({ status: 'CANCELADA', ...meta })
     );
 
-    const r = await corridasService.cancelar('c1', PASS, { motivo: 'Mudança de compromisso' });
+    const r = await cancelamentoCorridaService.cancelar('c1', PASS, { motivo: 'Mudança de compromisso' });
     expect(r.status).toBe('CANCELADA');
     expect(r.canceladoPor).toBe('PASSAGEIRO');
     expect(r.motivoCancelamento).toBe('Mudança de compromisso');
@@ -255,10 +258,10 @@ describe('Cancelamento direto pela tela Minhas corridas (corridasService.cancela
     for (const statusInvalido of ['EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']) {
       corridasRepository.findById.mockResolvedValue(corridaBase({ status: statusInvalido }));
       await expect(
-        corridasService.cancelar('c1', MOT, { motivo: 'Motivo válido' })
+        cancelamentoCorridaService.cancelar('c1', MOT, { motivo: 'Motivo válido' })
       ).rejects.toMatchObject({ statusCode: 409 });
       await expect(
-        corridasService.cancelar('c1', PASS, { motivo: 'Motivo válido' })
+        cancelamentoCorridaService.cancelar('c1', PASS, { motivo: 'Motivo válido' })
       ).rejects.toMatchObject({ statusCode: 409 });
     }
   });
@@ -278,7 +281,7 @@ describe('9–11. Cancelamento automático por ausência de confirmação', () =
       })
     );
 
-    await corridasService.cancelarCorridasExpiradas(new Date(), { forcar: true });
+    await expiracaoCorridaService.cancelarCorridasExpiradas(new Date(), { forcar: true });
     expect(corridasRepository.cancelarConfirmadaComMotivo).toHaveBeenCalledWith(
       'c1',
       expect.objectContaining({
@@ -296,7 +299,7 @@ describe('9–11. Cancelamento automático por ausência de confirmação', () =
     corridasRepository.cancelarSolicitadasVencidas.mockResolvedValue([]);
     corridasRepository.findConfirmadasComPrazoVencido.mockResolvedValue([]);
 
-    await corridasService.cancelarCorridasExpiradas(new Date(), { forcar: true });
+    await expiracaoCorridaService.cancelarCorridasExpiradas(new Date(), { forcar: true });
     expect(corridasRepository.cancelarConfirmadaComMotivo).not.toHaveBeenCalled();
     expect(notificacoesService.notificarAtualizacaoCorrida).not.toHaveBeenCalled();
   });
@@ -308,7 +311,7 @@ describe('9–11. Cancelamento automático por ausência de confirmação', () =
     ]);
     corridasRepository.cancelarConfirmadaComMotivo.mockResolvedValue(null);
 
-    await corridasService.cancelarCorridasExpiradas(new Date(), { forcar: true });
+    await expiracaoCorridaService.cancelarCorridasExpiradas(new Date(), { forcar: true });
     expect(notificacoesService.notificarAtualizacaoCorrida).not.toHaveBeenCalled();
   });
 });
@@ -317,40 +320,40 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário, 
   test('12. Bloqueia ações de embarque e de cancelamento por usuário não autorizado (403)', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase());
     await expect(
-      corridasService.registrarEmbarqueMotorista('c1', { id: 'outro-mot', perfil: 'MOTORISTA' }, { acao: 'CONFIRMAR_EMBARQUE' })
+      confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', { id: 'outro-mot', perfil: 'MOTORISTA' }, { acao: 'CONFIRMAR_EMBARQUE' })
     ).rejects.toMatchObject({ statusCode: 403 });
 
     await expect(
-      corridasService.registrarEmbarquePassageiro('c1', { id: 'outro-pass', perfil: 'USUARIO' }, { acao: 'CONFIRMAR_EMBARQUE' })
+      confirmacaoEmbarqueService.registrarEmbarquePassageiro('c1', { id: 'outro-pass', perfil: 'USUARIO' }, { acao: 'CONFIRMAR_EMBARQUE' })
     ).rejects.toMatchObject({ statusCode: 403 });
 
     await expect(
-      corridasService.cancelar('c1', { id: 'outro-mot', perfil: 'MOTORISTA' }, { motivo: 'Motivo válido' })
+      cancelamentoCorridaService.cancelar('c1', { id: 'outro-mot', perfil: 'MOTORISTA' }, { motivo: 'Motivo válido' })
     ).rejects.toMatchObject({ statusCode: 403 });
 
     await expect(
-      corridasService.cancelar('c1', { id: 'outro-pass', perfil: 'USUARIO' }, { motivo: 'Motivo válido' })
+      cancelamentoCorridaService.cancelar('c1', { id: 'outro-pass', perfil: 'USUARIO' }, { motivo: 'Motivo válido' })
     ).rejects.toMatchObject({ statusCode: 403 });
   });
 
   test('13 e 14. Bloqueia confirmação em viagem já CANCELADA (409) e cancelamento em viagem FINALIZADA (409)', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase({ status: 'CANCELADA' }));
     await expect(
-      corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' })
+      confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, { acao: 'CONFIRMAR_EMBARQUE' })
     ).rejects.toMatchObject({ statusCode: 409 });
     await expect(
-      corridasService.registrarEmbarquePassageiro('c1', PASS, { acao: 'CONFIRMAR_EMBARQUE' })
+      confirmacaoEmbarqueService.registrarEmbarquePassageiro('c1', PASS, { acao: 'CONFIRMAR_EMBARQUE' })
     ).rejects.toMatchObject({ statusCode: 409 });
 
     corridasRepository.findById.mockResolvedValue(corridaBase({ status: 'FINALIZADA' }));
     await expect(
-      corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'NAO_VOU_EMBARCAR', motivo: 'Motivo válido' })
+      confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, { acao: 'NAO_VOU_EMBARCAR', motivo: 'Motivo válido' })
     ).rejects.toMatchObject({ statusCode: 409 });
   });
 
   test('15 e 16. Idempotência em requisições repetidas e concorrência (409 quando transição perde corrida)', async () => {
     corridasRepository.findById.mockResolvedValue(corridaBase({ status: 'CANCELADA', canceladoPor: 'MOTORISTA' }));
-    await corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'NAO_VOU_EMBARCAR', motivo: 'Pneu furado' });
+    await confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, { acao: 'NAO_VOU_EMBARCAR', motivo: 'Pneu furado' });
     expect(corridasRepository.cancelarConfirmadaComMotivo).not.toHaveBeenCalled();
     expect(notificacoesService.notificarAtualizacaoCorrida).not.toHaveBeenCalled();
 
@@ -358,7 +361,7 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário, 
     corridasRepository.findById.mockResolvedValue(corridaBase());
     corridasRepository.transicionarComLiberacaoDeVeiculo.mockResolvedValueOnce(null);
     await expect(
-      corridasService.cancelar('c1', MOT, { motivo: 'Pneu furado' })
+      cancelamentoCorridaService.cancelar('c1', MOT, { motivo: 'Pneu furado' })
     ).rejects.toMatchObject({ statusCode: 409 });
     expect(notificacoesService.notificarAtualizacaoCorrida).not.toHaveBeenCalled();
   });
@@ -371,7 +374,7 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário, 
       corridaBase({ status: 'FINALIZADA', embarqueMotoristaConfirmado: true })
     );
 
-    const r = await corridasService.confirmarPagamentoEFinalizar('c1', MOT);
+    const r = await finalizacaoCorridaService.confirmarPagamentoEFinalizar('c1', MOT);
     expect(r.status).toBe('FINALIZADA');
     expect(notificacoesService.notificarPassageiroFinalizacao).toHaveBeenCalledWith(
       'pass-1',
@@ -388,7 +391,7 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário, 
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
-      corridasService.cancelar('c1', MOT, { motivo: 'Imprevisto no veículo' })
+      cancelamentoCorridaService.cancelar('c1', MOT, { motivo: 'Imprevisto no veículo' })
     ).resolves.toMatchObject({ status: 'CANCELADA', canceladoPor: 'MOTORISTA' });
   });
 
@@ -397,7 +400,7 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário, 
       corridaBase({ status: 'CANCELADA', situacaoMotorista: 'A_CAMINHO', canceladoPor: 'PASSAGEIRO' })
     );
     await expect(
-      corridasService.registrarEmbarqueMotorista('c1', MOT, { acao: 'ESTOU_A_CAMINHO' })
+      confirmacaoEmbarqueService.registrarEmbarqueMotorista('c1', MOT, { acao: 'ESTOU_A_CAMINHO' })
     ).rejects.toMatchObject({ statusCode: 409 });
   });
 
@@ -408,8 +411,8 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário, 
     );
     corridasRepository.findConfirmadasComPrazoVencido.mockResolvedValue([]);
 
-    const p1 = corridasService.cancelarCorridasExpiradas(new Date(), { forcar: true });
-    const p2 = corridasService.cancelarCorridasExpiradas(new Date(), { forcar: true });
+    const p1 = expiracaoCorridaService.cancelarCorridasExpiradas(new Date(), { forcar: true });
+    const p2 = expiracaoCorridaService.cancelarCorridasExpiradas(new Date(), { forcar: true });
     resolverFase1([{ id: 'c-exp-1', usuarioId: 'pass-1', origemNome: 'A', destinoNome: 'B' }]);
     await Promise.all([p1, p2]);
 
@@ -420,7 +423,7 @@ describe('12–18. Autorização, estados finais, idempotência, fuso horário, 
     jest.spyOn(console, 'error').mockImplementation(() => {});
     corridasRepository.cancelarSolicitadasVencidas.mockRejectedValueOnce(new Error('Erro transitorio'));
     corridasRepository.findConfirmadasComPrazoVencido.mockResolvedValueOnce([]);
-    await expect(corridasService.cancelarCorridasExpiradas(new Date(), { forcar: true })).resolves.toEqual([]);
+    await expect(expiracaoCorridaService.cancelarCorridasExpiradas(new Date(), { forcar: true })).resolves.toEqual([]);
     expect(corridasRepository.findConfirmadasComPrazoVencido).toHaveBeenCalledTimes(2);
   });
 });

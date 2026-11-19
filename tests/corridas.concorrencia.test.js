@@ -5,6 +5,8 @@
 
 const prisma = require('../src/database/prisma');
 const corridasService = require('../src/corridas/corridas.service');
+const cancelamentoCorridaService = require('../src/corridas/cancelamentoCorrida.service');
+const finalizacaoCorridaService = require('../src/corridas/finalizacaoCorrida.service');
 const corridasRepository = require('../src/corridas/corridas.repository');
 const veiculosService = require('../src/veiculos/veiculos.service');
 const notificacoesService = require('../src/notificacoes/notificacoes.service');
@@ -313,7 +315,7 @@ describe('Concorrência, Transações e Integridade no Banco de Dados (Prisma + 
         motoristaId: mot1User.id,
       });
 
-      const r = await corridasService.cancelar(c1.id, admin);
+      const r = await cancelamentoCorridaService.cancelar(c1.id, admin);
       expect(r.status).toBe('CANCELADA');
 
       const cBanco = await prisma.corrida.findUnique({ where: { id: c1.id } });
@@ -330,7 +332,7 @@ describe('Concorrência, Transações e Integridade no Banco de Dados (Prisma + 
         motoristaId: mot1User.id,
       });
 
-      const r = await corridasService.confirmarPagamentoEFinalizar(c1.id, {
+      const r = await finalizacaoCorridaService.confirmarPagamentoEFinalizar(c1.id, {
         id: mot1User.id,
         perfil: 'MOTORISTA',
       });
@@ -351,8 +353,8 @@ describe('Concorrência, Transações e Integridade no Banco de Dados (Prisma + 
       });
 
       const { ok, falhas } = resultados(await Promise.allSettled([
-        corridasService.cancelar(c1.id, admin),
-        corridasService.confirmarPagamentoEFinalizar(c1.id, admin),
+        cancelamentoCorridaService.cancelar(c1.id, admin),
+        finalizacaoCorridaService.confirmarPagamentoEFinalizar(c1.id, admin),
       ]));
 
       expect(ok).toHaveLength(1);
@@ -369,10 +371,10 @@ describe('Concorrência, Transações e Integridade no Banco de Dados (Prisma + 
       const cFinalizada = await criarCorridaNoBanco({ status: 'FINALIZADA' });
       const cCancelada = await criarCorridaNoBanco({ status: 'CANCELADA' });
 
-      await expect(corridasService.cancelar(cFinalizada.id, admin)).rejects.toMatchObject({ statusCode: 409 });
-      await expect(corridasService.confirmarPagamentoEFinalizar(cFinalizada.id, admin)).rejects.toMatchObject({ statusCode: 409 });
-      await expect(corridasService.cancelar(cCancelada.id, admin)).rejects.toMatchObject({ statusCode: 409 });
-      await expect(corridasService.confirmarPagamentoEFinalizar(cCancelada.id, admin)).rejects.toMatchObject({ statusCode: 409 });
+      await expect(cancelamentoCorridaService.cancelar(cFinalizada.id, admin)).rejects.toMatchObject({ statusCode: 409 });
+      await expect(finalizacaoCorridaService.confirmarPagamentoEFinalizar(cFinalizada.id, admin)).rejects.toMatchObject({ statusCode: 409 });
+      await expect(cancelamentoCorridaService.cancelar(cCancelada.id, admin)).rejects.toMatchObject({ statusCode: 409 });
+      await expect(finalizacaoCorridaService.confirmarPagamentoEFinalizar(cCancelada.id, admin)).rejects.toMatchObject({ statusCode: 409 });
     });
   });
 

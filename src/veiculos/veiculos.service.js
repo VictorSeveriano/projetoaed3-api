@@ -20,6 +20,7 @@ const veiculosRepository   = require('./veiculos.repository');
 const motoristasRepository = require('../motoristas/motoristas.repository');
 const authRepository       = require('../auth/auth.repository');
 const notificacoesService  = require('../notificacoes/notificacoes.service');
+const { despacharNotificacaoSemFalhar } = require('../notificacoes/despachoNotificacao');
 const AppError             = require('../utils/AppError');
 const {
   ADMIN_ID,
@@ -97,15 +98,16 @@ class VeiculosService {
       motoristaId:              usuarioId,
     });
 
-    try {
-      await notificacoesService.notificarSolicitacaoVeiculo(ADMIN_ID, {
-        nomeMotorista:  usuario.nome,
-        veiculoId:      novoVeiculo.id,
-        modeloVeiculo:  `${marca} ${modelo}`,
-      });
-    } catch (error) {
-      console.error('[VeiculosService] Falha ao notificar cadastro de veículo:', error.message);
-    }
+    await despacharNotificacaoSemFalhar(
+      'VeiculosService',
+      `cadastro veiculo ${novoVeiculo.id}`,
+      () =>
+        notificacoesService.notificarSolicitacaoVeiculo(ADMIN_ID, {
+          nomeMotorista:  usuario.nome,
+          veiculoId:      novoVeiculo.id,
+          modeloVeiculo:  `${marca} ${modelo}`,
+        })
+    );
 
     return novoVeiculo;
   }

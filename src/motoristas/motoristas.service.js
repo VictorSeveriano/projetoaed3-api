@@ -11,6 +11,7 @@ const authRepository       = require('../auth/auth.repository');
 const corridasRepository   = require('../corridas/corridas.repository');
 const veiculosRepository   = require('../veiculos/veiculos.repository');
 const notificacoesService  = require('../notificacoes/notificacoes.service');
+const { despacharNotificacaoSemFalhar } = require('../notificacoes/despachoNotificacao');
 const AppError             = require('../utils/AppError');
 const { ADMIN_ID }         = require('../utils/constants');
 const { validarCNH, normalizarCNH } = require('../utils/validators');
@@ -57,14 +58,15 @@ class MotoristasService {
 
     const novoMotorista = await motoristasRepository.create({ usuarioId, cnh: cnhNorm });
 
-    try {
-      await notificacoesService.notificarSolicitacaoMotorista(ADMIN_ID, {
-        nomeMotorista: usuario.nome,
-        motoristaId:   novoMotorista.id,
-      });
-    } catch (error) {
-      console.error('[MotoristasService] Falha ao notificar solicitação de motorista:', error.message);
-    }
+    await despacharNotificacaoSemFalhar(
+      'MotoristasService',
+      `solicitacao motorista ${novoMotorista.id}`,
+      () =>
+        notificacoesService.notificarSolicitacaoMotorista(ADMIN_ID, {
+          nomeMotorista: usuario.nome,
+          motoristaId:   novoMotorista.id,
+        })
+    );
 
     return novoMotorista;
   }

@@ -14,6 +14,7 @@ const {
   CLASSES_VALIDAS,
   FORMAS_PAGAMENTO_VALIDAS,
   BUSINESS_TIMEZONE,
+  LIMITES_MOTIVO_CANCELAMENTO,
 } = require('../utils/constants');
 const {
   ausente,
@@ -217,10 +218,24 @@ function validarDadosCriacaoCorrida(dados) {
   };
 }
 
+/** Valida e normaliza o motivo de cancelamento (trim, mínimo e máximo). */
+function validarMotivoCancelamento(motivo) {
+  const limpo = typeof motivo === 'string' ? motivo.trim() : '';
+  if (!limpo) throw new AppError('Informe o motivo do cancelamento.', 400);
+  if (limpo.length < LIMITES_MOTIVO_CANCELAMENTO.MIN) {
+    throw new AppError(`O motivo deve ter ao menos ${LIMITES_MOTIVO_CANCELAMENTO.MIN} caracteres.`, 400);
+  }
+  if (limpo.length > LIMITES_MOTIVO_CANCELAMENTO.MAX) {
+    throw new AppError(`O motivo deve ter no máximo ${LIMITES_MOTIVO_CANCELAMENTO.MAX} caracteres.`, 400);
+  }
+  return limpo;
+}
+
 module.exports = {
   TARIFAS_KM,
   determinarFaixaHorario,
   calcularValorCorrida,
   validarDadosCriacaoCorrida,
+  validarMotivoCancelamento,
 };
 

@@ -1,13 +1,18 @@
+'use strict';
+
+const {
+  STATUS_CORRIDA,
+  STATUS_CORRIDA_ATIVOS,
+  SITUACAO_MOTORISTA,
+  TOLERANCIA_CONFIRMACAO_EMBARQUE_MIN,
+} = require('../utils/constants');
+
 /**
  * Corrida — Entidade central do sistema de corridas.
  *
- * Representa uma solicitação de transporte pelo usuário:
- *   - Origem: ponto de partida (endereço livre, CEP ou GPS)
- *   - Destino: ponto de chegada
- *   - Rota: trajeto selecionado (geometria real da malha viária via Google Routes API)
- *   - Veículo: recurso alocado pelo backend para atender a corrida
- *   - Classe: BASICO, NORMAL ou PREMIUM (selecionada pelo passageiro)
- *   - FormaPagamento: DINHEIRO, CARTAO_DEBITO, CARTAO_CREDITO ou PIX
+ * Concentra o modelo e as invariantes puras do domínio (estados, janelas de
+ * confirmação, regras de transição por perfil e posse), sem depender de banco
+ * de dados, HTTP ou serviços externos.
  *
  * STATUS possíveis:
  *   SOLICITADA   — corrida criada pelo usuário, aguardando motorista aceitar
@@ -18,30 +23,7 @@
  */
 class Corrida {
   /**
-   * @param {object}   dados
-   * @param {string}   dados.id
-   * @param {string}   dados.usuarioId
-   * @param {string}   [dados.motoristaId]        - ID do motorista responsável
-   * @param {string}   [dados.veiculoId]          - ID do veículo alocado
-   * @param {string}   dados.origemNome           - Nome/endereço de exibição da origem
-   * @param {string}   dados.destinoNome          - Nome/endereço de exibição do destino
-   * @param {number}   [dados.origemLat]          - Latitude da origem
-   * @param {number}   [dados.origemLng]          - Longitude da origem
-   * @param {number}   [dados.destinoLat]         - Latitude do destino
-   * @param {number}   [dados.destinoLng]         - Longitude do destino
-   * @param {object}   [dados.origemEndereco]     - Endereço estruturado da origem
-   * @param {object}   [dados.destinoEndereco]    - Endereço estruturado do destino
-   * @param {string[]} [dados.rotaCaminho]        - Sequência de nomes dos pontos da rota
-   * @param {Array}    [dados.rotasAlternativas]  - Todas as rotas retornadas pela API
-   * @param {string}   [dados.polyline]           - Encoded polyline da rota
-   * @param {number}   dados.distanciaKm          - Distância em km
-   * @param {number}   [dados.duracaoMin]         - Duração estimada em minutos
-   * @param {number}   dados.valor                - Valor da corrida em R$
-   * @param {string}   [dados.classe]             - Classe desejada: BASICO, NORMAL ou PREMIUM
-   * @param {string}   [dados.formaPagamento]     - Forma de pagamento: DINHEIRO, CARTAO_DEBITO, CARTAO_CREDITO, PIX
-   * @param {string}   [dados.dataHorario]        - ISO 8601: quando a corrida está agendada
-   * @param {string}   [dados.status]             - Ver STATUS possíveis acima
-   * @param {string}   [dados.criadaEm]           - ISO 8601: quando a corrida foi criada
+   * @param {object} dados
    */
   constructor(dados) {
     this.id = dados.id;
@@ -83,8 +65,12 @@ class Corrida {
     this.formaPagamento = dados.formaPagamento || 'DINHEIRO';
 
     // Temporal
+    Object.defineProperty(this, '_temDataHorarioInformada', {
+      value: Boolean(dados.dataHorario),
+      enumerable: false,
+    });
     this.dataHorario = dados.dataHorario || new Date().toISOString();
-    this.status = dados.status || 'SOLICITADA';
+    this.status = dados.status || STATUS_CORRIDA.SOLICITADA;
     this.criadaEm = dados.criadaEm || new Date().toISOString();
 
     // Confirmação de embarque
@@ -100,6 +86,105 @@ class Corrida {
     this.motivoCancelamento = dados.motivoCancelamento ?? null;
     this.canceladoPor = dados.canceladoPor ?? null;
     this.canceladaEm = dados.canceladaEm ?? null;
+  }
+
+  /** Garante uma instância de domínio `Corrida` a partir de um registro cru ou instância existente. */
+  static garantirInstancia(dados) {
+    if (!dados) return null;
+    return dados instanceof Corrida ? dados : new Corrida(dados);
+  }
+
+  estaSolicitada() {
+    return this.status === STATUS_CORRIDA.SOLICITADA;
+  }
+
+  estaConfirmada() {
+    return this.status === STATUS_CORRIDA.CONFIRMADA;
+  }
+
+  estaEmAndamento() {
+    return this.status === STATUS_CORRIDA.EM_ANDAMENTO;
+  }
+
+  estaFinalizada() {
+    return this.status === STATUS_CORRIDA.FINALIZADA;
+  }
+
+  estaCancelada() {
+    return this.status === STATUS_CORRIDA.CANCELADA;
+  }
+
+  estaAtiva() {
+    return STATUS_CORRIDA_ATIVOS.includes(this.status);
+  }
+
+  embarqueMotoristaFoiConfirmado() {
+    return this.embarqueMotoristaConfirmado === true;
+  }
+
+  embarquePassageiroFoiConfirmado() {
+    return this.embarquePassageiroConfirmado === true;
+  }
+
+  motoristaEstaACaminho() {
+    return this.estaConfirmada() && this.situacaoMotorista === SITUACAO_MOTORISTA.A_CAMINHO;
+  }
+
+  estaAguardandoConfirmacaoEmbarque() {
+    return this.estaConfirmada() && !this.embarqueMotoristaFoiConfirmado();
+  }
+
+  pertenceAoPassageiro(usuarioId) {
+    return Boolean(usuarioId && this.usuarioId === usuarioId);
+  }
+
+  pertenceAoMotorista(motoristaUsuarioId) {
+    return Boolean(motoristaUsuarioId && this.motoristaId === motoristaUsuarioId);
+  }
+
+  podeSerAcessadaPor(usuarioLogado) {
+    if (!usuarioLogado || usuarioLogado.perfil === 'ADMINISTRADOR') return true;
+    if (usuarioLogado.perfil === 'MOTORISTA') return this.pertenceAoMotorista(usuarioLogado.id);
+    if (usuarioLogado.perfil === 'USUARIO') return this.pertenceAoPassageiro(usuarioLogado.id);
+    return true;
+  }
+
+  podeSerCanceladaPor(perfil) {
+    if (this.estaCancelada() || this.estaFinalizada()) return false;
+    if (perfil === 'MOTORISTA' || perfil === 'USUARIO') {
+      return !this.estaEmAndamento() && !this.embarqueMotoristaFoiConfirmado();
+    }
+    return true;
+  }
+
+  podeSerFinalizada() {
+    return this.estaConfirmada() || this.estaEmAndamento();
+  }
+
+  horarioAgendadoJaChegou(agora = new Date()) {
+    const agendada = new Date(this.dataHorario);
+    return !Number.isNaN(agendada.getTime()) && agendada <= agora;
+  }
+
+  estaDentroDaJanelaConfirmacao(agora = new Date()) {
+    return (this.estaConfirmada() || this.estaEmAndamento()) && this.horarioAgendadoJaChegou(agora);
+  }
+
+  prazoConfirmacaoVigente(toleranciaMin = TOLERANCIA_CONFIRMACAO_EMBARQUE_MIN) {
+    if (this.prazoConfirmacaoEm) return new Date(this.prazoConfirmacaoEm);
+    return new Date(new Date(this.dataHorario).getTime() + toleranciaMin * 60 * 1000);
+  }
+
+  estaExpiradaParaAceite(agora = new Date()) {
+    if (!this.estaSolicitada() || !this._temDataHorarioInformada) return false;
+    const dataAgendada = new Date(this.dataHorario);
+    if (Number.isNaN(dataAgendada.getTime()) || dataAgendada > agora) return false;
+    const dataCriacao = this.criadaEm ? new Date(this.criadaEm) : null;
+    return !dataCriacao || Number.isNaN(dataCriacao.getTime()) || dataCriacao <= dataAgendada;
+  }
+
+  trajetoDescricao() {
+    return `${this.origemNome} para ${this.destinoNome}`;
   }
 
   /**
