@@ -91,6 +91,19 @@ class VeiculosRepository {
     return veiculos.map(formatarVeiculo);
   }
 
+  /** Consulta leve apenas com os campos necessários para agregações do Dashboard (sem joins de motorista/endereço). */
+  async findAllParaDashboard() {
+    return prisma.veiculo.findMany({
+      where: { statusAprovacao: { not: 'EXCLUIDO' } },
+      select: {
+        id: true,
+        status: true,
+        marca: true,
+        modelo: true,
+      },
+    });
+  }
+
   async findById(id) {
     const veiculo = await prisma.veiculo.findUnique({
       where: { id }

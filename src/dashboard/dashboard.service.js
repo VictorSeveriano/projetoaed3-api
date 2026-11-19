@@ -15,9 +15,21 @@ class DashboardService {
     this._veiculosCache = { valor: null, expiraEm: 0, promise: null };
   }
 
+  _buscarCorridasFonte() {
+    return typeof corridasRepository.findAllParaDashboard === 'function'
+      ? corridasRepository.findAllParaDashboard()
+      : corridasRepository.findAll();
+  }
+
+  _buscarVeiculosFonte() {
+    return typeof veiculosRepository.findAllParaDashboard === 'function'
+      ? veiculosRepository.findAllParaDashboard()
+      : veiculosRepository.findAll();
+  }
+
   async _obterCorridas() {
     if (process.env.NODE_ENV === 'test') {
-      return corridasRepository.findAll();
+      return this._buscarCorridasFonte();
     }
     const agora = Date.now();
     if (this._corridasCache.valor && agora < this._corridasCache.expiraEm) {
@@ -26,7 +38,7 @@ class DashboardService {
     if (this._corridasCache.promise) {
       return this._corridasCache.promise;
     }
-    this._corridasCache.promise = corridasRepository.findAll()
+    this._corridasCache.promise = this._buscarCorridasFonte()
       .then((dados) => {
         this._corridasCache.valor = dados;
         this._corridasCache.expiraEm = Date.now() + CACHE_TTL_MS;
@@ -42,7 +54,7 @@ class DashboardService {
 
   async _obterVeiculos() {
     if (process.env.NODE_ENV === 'test') {
-      return veiculosRepository.findAll();
+      return this._buscarVeiculosFonte();
     }
     const agora = Date.now();
     if (this._veiculosCache.valor && agora < this._veiculosCache.expiraEm) {
@@ -51,7 +63,7 @@ class DashboardService {
     if (this._veiculosCache.promise) {
       return this._veiculosCache.promise;
     }
-    this._veiculosCache.promise = veiculosRepository.findAll()
+    this._veiculosCache.promise = this._buscarVeiculosFonte()
       .then((dados) => {
         this._veiculosCache.valor = dados;
         this._veiculosCache.expiraEm = Date.now() + CACHE_TTL_MS;

@@ -39,11 +39,17 @@ function ehFalhaTransitoriaDeConexao(err) {
 const urlNormalizada = normalizarDatabaseUrl(process.env.DATABASE_URL);
 
 // Instância centralizada do Prisma para evitar conexões excessivas no Neon
-const prisma = new PrismaClient(
-  urlNormalizada
-    ? { datasources: { db: { url: urlNormalizada } } }
-    : undefined
-);
+const TRANSACTION_OPTIONS = {
+  maxWait: 15000,
+  timeout: 30000,
+};
+
+const prismaOptions = {
+  transactionOptions: TRANSACTION_OPTIONS,
+  ...(urlNormalizada ? { datasources: { db: { url: urlNormalizada } } } : {}),
+};
+
+const prisma = new PrismaClient(prismaOptions);
 
 // Middleware de retry automático para absorver cold-start e reconexão de pool do Neon
 if (typeof prisma.$use === 'function') {
@@ -84,15 +90,16 @@ async function executarPingBanco() {
 }
 
 function iniciarKeepAlive(intervaloMs = Number(process.env.DB_PING_INTERVAL_MS) || INTERVALO_PADRAO_PING_MS) {
-  if (process.env.NODE_ENV === 'test' || keepAliveTimer) return;
+  if (process.env.NODE_ENV === 'test' || keepAliveTimer) return Promise.resolve();
 
   // Aquecimento imediato ao subir o servidor
-  executarPingBanco();
+  const aquecimento = executarPingBanco();
 
   keepAliveTimer = setInterval(executarPingBanco, intervaloMs);
   if (typeof keepAliveTimer.unref === 'function') {
     keepAliveTimer.unref();
   }
+  return aquecimento;
 }
 
 function pararKeepAlive() {

@@ -14,6 +14,9 @@ const {
 } = require('../utils/constants');
 const { paraNumeroOuNull, enderecoParaPrisma } = require('../utils/prismaMappers');
 
+/** Timeout seguro para transações interativas em bancos serverless (ex.: Neon). */
+const TRANSACTION_OPTIONS = { maxWait: 15000, timeout: 30000 };
+
 /** Erro interno usado para abortar (rollback) uma transacao com um motivo de dominio. */
 class RollbackError extends Error {
   constructor(motivo) {
@@ -70,6 +73,24 @@ class CorridasRepository {
       orderBy: { criadaEm: 'desc' }
     });
     return corridas.map(formatarCorrida);
+  }
+
+  /** Consulta leve apenas com os campos necessários para agregações do Dashboard (sem polylines/joins). */
+  async findAllParaDashboard() {
+    const corridas = await prisma.corrida.findMany({
+      select: {
+        status: true,
+        valor: true,
+        dataHorario: true,
+        origemNome: true,
+        destinoNome: true,
+        veiculoId: true,
+      },
+    });
+    return corridas.map((c) => ({
+      ...c,
+      valor: c.valor != null ? paraNumeroOuNull(c.valor) : 0,
+    }));
   }
 
   async findById(id) {
@@ -182,7 +203,7 @@ class CorridasRepository {
       });
 
       return vencidas;
-    });
+    }, TRANSACTION_OPTIONS);
   }
 
   // ---------- Confirmação de embarque ----------
@@ -327,7 +348,7 @@ class CorridasRepository {
           }
         }
         return atual;
-      });
+      }, TRANSACTION_OPTIONS);
       return formatarCorrida(corrida);
     } catch (error) {
       if (error instanceof RollbackError) return null;
@@ -453,7 +474,7 @@ class CorridasRepository {
           where: { id: corridaId },
           include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
         });
-      });
+      }, TRANSACTION_OPTIONS);
       return { ok: true, corrida: formatarCorrida(corrida) };
     } catch (error) {
       if (error instanceof RollbackError) return { ok: false, motivo: error.motivo };
@@ -504,7 +525,7 @@ class CorridasRepository {
           }
         }
         return atual;
-      });
+      }, TRANSACTION_OPTIONS);
       return formatarCorrida(corrida);
     } catch (error) {
       if (error instanceof RollbackError) return null;

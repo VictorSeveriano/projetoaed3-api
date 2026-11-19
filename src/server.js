@@ -28,11 +28,14 @@ const server = app.listen(PORT, () => {
   console.log(` Grafo    : http://localhost:${PORT}/api/grafo`);
   console.log(`========================================\n`);
 
-  if (typeof prisma.iniciarKeepAlive === 'function') {
-    prisma.iniciarKeepAlive();
-  }
+  const aquecimentoBanco = typeof prisma.iniciarKeepAlive === 'function'
+    ? Promise.resolve(prisma.iniciarKeepAlive())
+    : Promise.resolve();
+
   if (typeof expiracaoCorridaService.iniciarMonitoramentoExpiracao === 'function') {
-    expiracaoCorridaService.iniciarMonitoramentoExpiracao();
+    aquecimentoBanco.finally(() => {
+      expiracaoCorridaService.iniciarMonitoramentoExpiracao();
+    });
   }
 });
 
