@@ -13,22 +13,36 @@ const veiculosRepository   = require('../veiculos/veiculos.repository');
 const notificacoesService  = require('../notificacoes/notificacoes.service');
 const { despacharNotificacaoSemFalhar } = require('../notificacoes/despachoNotificacao');
 const AppError             = require('../utils/AppError');
+const { readCache }        = require('../utils/readCache');
 const { ADMIN_ID }         = require('../utils/constants');
 const { validarCNH, normalizarCNH } = require('../utils/validators');
+
+const CACHE_TTL_MOTORISTAS_MS = 20000;
+
+function invalidarCachesMotoristas() {
+  readCache.invalidarPrefixo('motoristas:');
+  readCache.invalidarPrefixo('veiculos:');
+  readCache.invalidarPrefixo('usuarios:');
+}
 
 class MotoristasService {
   // ----- Consultas admin -----
 
   async listarPorStatus(statusCadastro) {
-    const lista = statusCadastro
-      ? await motoristasRepository.findByStatusCadastro(statusCadastro)
-      : await motoristasRepository.findAll();
-    return Promise.all(lista.map((m) => this._enriquecer(m)));
+    const chave = `motoristas:status:${statusCadastro || 'ALL'}`;
+    return readCache.obterOuCarregar(chave, CACHE_TTL_MOTORISTAS_MS, async () => {
+      const lista = statusCadastro
+        ? await motoristasRepository.findByStatusCadastro(statusCadastro)
+        : await motoristasRepository.findAll();
+      return Promise.all(lista.map((m) => this._enriquecer(m)));
+    });
   }
 
   async listarOnline() {
-    const lista = await motoristasRepository.findByStatusPresenca('ONLINE');
-    return Promise.all(lista.map((m) => this._enriquecer(m)));
+    return readCache.obterOuCarregar('motoristas:online', CACHE_TTL_MOTORISTAS_MS, async () => {
+      const lista = await motoristasRepository.findByStatusPresenca('ONLINE');
+      return Promise.all(lista.map((m) => this._enriquecer(m)));
+    });
   }
 
   // ----- Fluxo de solicitação -----
@@ -68,28 +82,43 @@ class MotoristasService {
         })
     );
 
+    invalidarCachesMotoristas();
     return novoMotorista;
   }
 
+  async _encontrarPorIdOuUsuario(id, { apenasResumo = false } = {}) {
+    if (process.env.NODE_ENV !== 'test') {
+      if (apenasResumo && typeof motoristasRepository.findResumoByIdOuUsuarioId === 'function') {
+        return motoristasRepository.findResumoByIdOuUsuarioId(id);
+      }
+      if (typeof motoristasRepository.findByIdOuUsuarioId === 'function') {
+        return motoristasRepository.findByIdOuUsuarioId(id);
+      }
+    }
+    return (await motoristasRepository.findById(id)) || (await motoristasRepository.findByUsuarioId(id));
+  }
+
   async aprovar(id) {
-    const m = (await motoristasRepository.findById(id)) || (await motoristasRepository.findByUsuarioId(id));
+    const m = await this._encontrarPorIdOuUsuario(id, { apenasResumo: true });
     if (!m) throw new AppError('Motorista não encontrado.', 404);
     if (m.statusCadastro === 'APROVADO') throw new AppError('Motorista já está aprovado.', 409);
     const atualizado = await motoristasRepository.updateStatusCadastro(m.id, 'APROVADO');
     if (typeof notificacoesService.marcarSolicitacaoMotoristaLida === 'function') {
       await notificacoesService.marcarSolicitacaoMotoristaLida([m.id, m.usuarioId]);
     }
+    invalidarCachesMotoristas();
     return this._enriquecer(atualizado);
   }
 
   async rejeitar(id) {
-    const m = (await motoristasRepository.findById(id)) || (await motoristasRepository.findByUsuarioId(id));
+    const m = await this._encontrarPorIdOuUsuario(id, { apenasResumo: true });
     if (!m) throw new AppError('Motorista não encontrado.', 404);
     if (m.statusCadastro === 'REJEITADO') throw new AppError('Motorista já está rejeitado.', 409);
     const atualizado = await motoristasRepository.updateStatusCadastro(m.id, 'REJEITADO');
     if (typeof notificacoesService.marcarSolicitacaoMotoristaLida === 'function') {
       await notificacoesService.marcarSolicitacaoMotoristaLida([m.id, m.usuarioId]);
     }
+    invalidarCachesMotoristas();
     return this._enriquecer(atualizado);
   }
 
@@ -108,14 +137,15 @@ class MotoristasService {
       }
       if (cnhNorm !== motorista.cnh) {
         const existente = await motoristasRepository.existsByCnh(cnhNorm);
-      if (existente) {
-        throw new AppError('CNH já cadastrada no sistema.', 409);
-      }
-      await motoristasRepository.updateCnh(motorista.id, cnhNorm);
+        if (existente) {
+          throw new AppError('CNH já cadastrada no sistema.', 409);
+        }
+        await motoristasRepository.updateCnh(motorista.id, cnhNorm);
         motorista.cnh = cnhNorm;
       }
     }
 
+    invalidarCachesMotoristas();
     return this._enriquecer(motorista);
   }
 
@@ -125,8 +155,13 @@ class MotoristasService {
    * Busca um motorista por ID (do registro de motorista ou do usuário) e valida que o usuário
    * autenticado é ADMINISTRADOR ou o próprio dono do registro de motorista.
    */
-  async obterMotoristaAutorizado(id, usuarioLogado = null, mensagemNegado = 'Voce nao tem permissao para acessar este motorista.') {
-    const m = (await motoristasRepository.findById(id)) || (await motoristasRepository.findByUsuarioId(id));
+  async obterMotoristaAutorizado(
+    id,
+    usuarioLogado = null,
+    mensagemNegado = 'Voce nao tem permissao para acessar este motorista.',
+    { apenasResumo = false } = {}
+  ) {
+    const m = await this._encontrarPorIdOuUsuario(id, { apenasResumo });
     if (!m) throw new AppError('Motorista não encontrado.', 404);
 
     if (usuarioLogado && usuarioLogado.perfil !== 'ADMINISTRADOR') {
@@ -143,15 +178,24 @@ class MotoristasService {
         throw new AppError('Voce nao tem permissao para acessar este perfil.', 403);
       }
     }
-    
-    const usuario = await authRepository.encontrarPorId(usuarioId);
-    if (!usuario) throw new AppError('Usuário não encontrado.', 404);
-    if (usuario.perfil !== 'MOTORISTA') throw new AppError('Usuário não é motorista.', 403);
 
-    const motorista = await motoristasRepository.findByUsuarioId(usuarioId);
-    if (!motorista) return null;
+    return readCache.obterOuCarregar(`motoristas:perfil:${usuarioId}`, CACHE_TTL_MOTORISTAS_MS, async () => {
+      // Consulta motorista já com usuário e veículo em 1 único JOIN, evitando segunda consulta ao authRepository
+      const motorista = await motoristasRepository.findByUsuarioId(usuarioId);
+      if (motorista && motorista._enriquecidoPreCarregado?.usuario) {
+        if (motorista._enriquecidoPreCarregado.usuario.perfil !== 'MOTORISTA') {
+          throw new AppError('Usuário não é motorista.', 403);
+        }
+        return this._enriquecer(motorista);
+      }
 
-    return this._enriquecer(motorista);
+      const usuario = await authRepository.encontrarPorId(usuarioId);
+      if (!usuario) throw new AppError('Usuário não encontrado.', 404);
+      if (usuario.perfil !== 'MOTORISTA') throw new AppError('Usuário não é motorista.', 403);
+
+      if (!motorista) return null;
+      return this._enriquecer(motorista);
+    });
   }
 
   async buscarPorId(id, usuarioLogado = null) {
@@ -167,7 +211,8 @@ class MotoristasService {
     const m = await this.obterMotoristaAutorizado(
       id,
       usuarioLogado,
-      'Voce nao tem permissao para acessar as corridas deste motorista.'
+      'Voce nao tem permissao para acessar as corridas deste motorista.',
+      { apenasResumo: true }
     );
     return corridasRepository.findByMotoristaId(m.usuarioId);
   }
@@ -176,7 +221,8 @@ class MotoristasService {
     const m = await this.obterMotoristaAutorizado(
       id,
       usuarioLogado,
-      'Voce nao tem permissao para acessar o veiculo deste motorista.'
+      'Voce nao tem permissao para acessar o veiculo deste motorista.',
+      { apenasResumo: true }
     );
     return veiculosRepository.findByMotoristaId(m.usuarioId);
   }
@@ -196,9 +242,11 @@ class MotoristasService {
         veiculo: motorista._enriquecidoPreCarregado.veiculo || null,
       };
     }
-    const usuario = await authRepository.encontrarPorId(motorista.usuarioId);
+    const [usuario, veiculo] = await Promise.all([
+      authRepository.encontrarPorId(motorista.usuarioId),
+      veiculosRepository.findByMotoristaId(motorista.usuarioId),
+    ]);
     const { senha, ...dadosUsuario } = usuario || {};
-    const veiculo = await veiculosRepository.findByMotoristaId(motorista.usuarioId);
     return {
       ...motorista,
       usuario: dadosUsuario || null,

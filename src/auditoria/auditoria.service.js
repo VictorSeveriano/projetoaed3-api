@@ -2,6 +2,9 @@
 
 const auditoriaRepository = require('./auditoria.repository');
 const AppError = require('../utils/AppError');
+const { readCache } = require('../utils/readCache');
+
+const CACHE_TTL_AUDITORIA_MS = 15000;
 
 class AuditoriaService {
   /**
@@ -39,7 +42,7 @@ class AuditoriaService {
       };
 
       // Ocultar dados sensíveis se presentes
-      ['dadosAnteriores', 'dadosNovos'].forEach(campo => {
+      ['dadosAnteriores', 'dadosNovos'].forEach((campo) => {
         if (registro[campo]) {
           delete registro[campo].senha;
           delete registro[campo].token;
@@ -47,6 +50,7 @@ class AuditoriaService {
       });
 
       await auditoriaRepository.create(registro);
+      readCache.invalidarPrefixo('auditoria:');
     } catch (e) {
       console.error('[AuditoriaService] Falha ao registrar auditoria:', e.message);
       // Nunca lança erro para cima, preserva a operação principal.
@@ -86,16 +90,19 @@ class AuditoriaService {
       }
     }
 
-    const result = await auditoriaRepository.findAll({ skip, take, orderBy, where });
-    return {
-      data: result.registros,
-      meta: {
-        total: result.total,
-        page: paginacao.page,
-        limit: take,
-        totalPages: Math.ceil(result.total / take)
-      }
-    };
+    const chave = `auditoria:lista:${JSON.stringify({ skip, take, filtros })}`;
+    return readCache.obterOuCarregar(chave, CACHE_TTL_AUDITORIA_MS, async () => {
+      const result = await auditoriaRepository.findAll({ skip, take, orderBy, where });
+      return {
+        data: result.registros,
+        meta: {
+          total: result.total,
+          page: paginacao.page,
+          limit: take,
+          totalPages: Math.ceil(result.total / take),
+        },
+      };
+    });
   }
 
   async buscarPorId(id) {

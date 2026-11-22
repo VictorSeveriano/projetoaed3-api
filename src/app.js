@@ -13,6 +13,7 @@ const veiculosRoutes = require('./veiculos/veiculos.routes');
 const auditoriaRoutes = require('./auditoria/auditoria.routes');
 const grafoRoutes = require('./grafo/grafo.routes');
 const errorHandler = require('./middlewares/errorHandler');
+const perfMonitor = require('./middlewares/perfMonitor');
 
 const app = express();
 
@@ -20,8 +21,10 @@ const app = express();
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' ? (process.env.FRONTEND_URL || '*') : true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  maxAge: 600,
 };
 app.use(cors(corsOptions));
+app.use(perfMonitor);
 
 // --- Middlewares ---
 app.use(express.json());

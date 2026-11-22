@@ -22,6 +22,7 @@ const authRepository       = require('../auth/auth.repository');
 const notificacoesService  = require('../notificacoes/notificacoes.service');
 const { despacharNotificacaoSemFalhar } = require('../notificacoes/despachoNotificacao');
 const AppError             = require('../utils/AppError');
+const { readCache }        = require('../utils/readCache');
 const {
   ADMIN_ID,
   PORTES_VALIDOS,
@@ -30,6 +31,14 @@ const {
   STATUS_VEICULO,
 } = require('../utils/constants');
 const { exigirPorte } = require('../utils/inputValidators');
+
+const CACHE_TTL_VEICULOS_MS = 20000;
+
+function invalidarCachesVeiculos() {
+  readCache.invalidarPrefixo('veiculos:');
+  readCache.invalidarPrefixo('dashboard:');
+  readCache.invalidarPrefixo('motoristas:');
+}
 
 class VeiculosService {
   /**
@@ -45,13 +54,24 @@ class VeiculosService {
   }
 
   async listarPendentes() {
-    const lista = await veiculosRepository.findByStatusAprovacao(STATUS_APROVACAO_VEICULO.PENDENTE);
-    return Promise.all(lista.map((v) => this._enriquecer(v)));
+    return readCache.obterOuCarregar('veiculos:analise', CACHE_TTL_VEICULOS_MS, async () => {
+      const lista = await veiculosRepository.findByStatusAprovacao(STATUS_APROVACAO_VEICULO.PENDENTE);
+      return Promise.all(lista.map((v) => this._enriquecer(v)));
+    });
   }
 
   async listarTodos(filtros = {}) {
-    const lista = await veiculosRepository.findAll(filtros);
-    return Promise.all(lista.map((v) => this._enriquecer(v)));
+    const chave = `veiculos:lista:${JSON.stringify({
+      status: filtros.status || '',
+      porte: filtros.porte || '',
+      classe: filtros.classe || '',
+      motoristaId: filtros.motoristaId || '',
+      search: filtros.search ? String(filtros.search).trim().toLowerCase() : '',
+    })}`;
+    return readCache.obterOuCarregar(chave, CACHE_TTL_VEICULOS_MS, async () => {
+      const lista = await veiculosRepository.findAll(filtros);
+      return Promise.all(lista.map((v) => this._enriquecer(v)));
+    });
   }
 
   async cadastrar(usuarioId, dados) {
@@ -109,6 +129,7 @@ class VeiculosService {
         })
     );
 
+    invalidarCachesVeiculos();
     return novoVeiculo;
   }
 
@@ -123,6 +144,7 @@ class VeiculosService {
     if (typeof notificacoesService.marcarSolicitacaoVeiculoLida === 'function') {
       await notificacoesService.marcarSolicitacaoVeiculoLida([v.id]);
     }
+    invalidarCachesVeiculos();
     return this._enriquecer(atualizado);
   }
 
@@ -135,6 +157,7 @@ class VeiculosService {
     if (typeof notificacoesService.marcarSolicitacaoVeiculoLida === 'function') {
       await notificacoesService.marcarSolicitacaoVeiculoLida([v.id]);
     }
+    invalidarCachesVeiculos();
     return this._enriquecer(atualizado);
   }
 
@@ -154,12 +177,14 @@ class VeiculosService {
       throw new AppError('Não é possível excluir um veículo que está em uma corrida.', 409);
     }
 
-    return this._enriquecer(await veiculosRepository.softDelete(id));
+    const excluido = await veiculosRepository.softDelete(id);
+    invalidarCachesVeiculos();
+    return this._enriquecer(excluido);
   }
 
   async atualizar(id, dados, usuarioLogado) {
     if (!usuarioLogado) throw new AppError('Acesso negado.', 401);
-    
+
     const veiculo = await veiculosRepository.findById(id);
     if (!veiculo) throw new AppError('Veículo não encontrado.', 404);
     this._garantirNaoExcluido(veiculo);
@@ -176,7 +201,7 @@ class VeiculosService {
     // `classe` NÃO é permitida no payload: é derivada exclusivamente de `porte` e recalculada de forma atômica.
     const camposPermitidos = ['marca', 'modelo', 'ano', 'placa', 'cor', 'porte', 'quilometragem', 'quantidadePassageiros', 'possuiArCondicionado', 'possuiExtintor', 'possuiCintoSeguranca', 'documentacaoRegularizada'];
     const dadosLimpos = Object.keys(dados)
-      .filter(key => camposPermitidos.includes(key))
+      .filter((key) => camposPermitidos.includes(key))
       .reduce((obj, key) => {
         obj[key] = dados[key];
         return obj;
@@ -201,9 +226,10 @@ class VeiculosService {
         400
       );
     }
-    
+
     const atualizado = await veiculosRepository.update(id, dadosLimpos);
     if (!atualizado) throw new AppError('Veículo não encontrado.', 404);
+    invalidarCachesVeiculos();
     return this._enriquecer(atualizado);
   }
 
@@ -220,9 +246,11 @@ class VeiculosService {
     if (veiculo._motoristaPreCarregado !== undefined) {
       return { ...veiculo, motorista: veiculo._motoristaPreCarregado };
     }
-    const usuario = await authRepository.encontrarPorId(veiculo.motoristaId);
+    const [usuario, motoristaRecord] = await Promise.all([
+      authRepository.encontrarPorId(veiculo.motoristaId),
+      motoristasRepository.findByUsuarioId(veiculo.motoristaId),
+    ]);
     const { senha, ...dadosUsuario } = usuario || {};
-    const motoristaRecord = await motoristasRepository.findByUsuarioId(veiculo.motoristaId);
     return {
       ...veiculo,
       motorista: dadosUsuario

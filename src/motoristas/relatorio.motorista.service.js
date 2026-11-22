@@ -6,16 +6,51 @@
 
 const motoristasService = require('./motoristas.service');
 const corridasRepository = require('../corridas/corridas.repository');
+const { readCache } = require('../utils/readCache');
+
+const CACHE_TTL_RELATORIO_MS = 20000;
 
 class RelatorioMotoristaService {
   async gerarRelatorioMensal(id, mes, ano, usuarioLogado = null) {
+    // Quando o próprio motorista consulta seu relatório por usuarioId, executamos
+    // autorização e busca do período em paralelo (1 único round-trip ao banco).
+    const ehProprioMotoristaPorUsuarioId =
+      process.env.NODE_ENV !== 'test' &&
+      usuarioLogado &&
+      usuarioLogado.perfil === 'MOTORISTA' &&
+      usuarioLogado.id === id;
+
+    let corridas;
+    if (ehProprioMotoristaPorUsuarioId) {
+      const chave = `motoristas:relatorio:${id}:${mes}:${ano}`;
+      return readCache.obterOuCarregar(chave, CACHE_TTL_RELATORIO_MS, async () => {
+        const [, listaCorridas] = await Promise.all([
+          motoristasService.obterMotoristaAutorizado(
+            id,
+            usuarioLogado,
+            'Voce nao tem permissao para acessar este relatorio.',
+            { apenasResumo: true }
+          ),
+          corridasRepository.findByMotoristaIdAndPeriodo(id, mes, ano),
+        ]);
+        return this._montarRelatorio(mes, ano, listaCorridas);
+      });
+    }
+
     const m = await motoristasService.obterMotoristaAutorizado(
       id,
       usuarioLogado,
-      'Voce nao tem permissao para acessar este relatorio.'
+      'Voce nao tem permissao para acessar este relatorio.',
+      { apenasResumo: true }
     );
-    const corridas = await corridasRepository.findByMotoristaIdAndPeriodo(m.usuarioId, mes, ano);
+    const chave = `motoristas:relatorio:${m.usuarioId}:${mes}:${ano}`;
+    return readCache.obterOuCarregar(chave, CACHE_TTL_RELATORIO_MS, async () => {
+      corridas = await corridasRepository.findByMotoristaIdAndPeriodo(m.usuarioId, mes, ano);
+      return this._montarRelatorio(mes, ano, corridas);
+    });
+  }
 
+  _montarRelatorio(mes, ano, corridas) {
     const finalizadas = corridas.filter((c) => c.status === 'FINALIZADA');
     const canceladas  = corridas.filter((c) => c.status === 'CANCELADA');
 

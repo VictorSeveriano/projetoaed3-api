@@ -3,6 +3,7 @@
  * corridas.repository.js — Repositório de corridas com Prisma ORM.
  */
 
+const { Prisma } = require('@prisma/client');
 const Corrida = require('./Corrida');
 const prisma = require('../database/prisma');
 const {
@@ -12,10 +13,62 @@ const {
   TRANSICOES_CORRIDA,
   MOTIVO_CANCELAMENTO_SEM_MOTORISTA,
 } = require('../utils/constants');
-const { paraNumeroOuNull, enderecoParaPrisma } = require('../utils/prismaMappers');
+const { ehUuid, paraNumeroOuNull, enderecoParaPrisma } = require('../utils/prismaMappers');
 
 /** Timeout seguro para transações interativas em bancos serverless (ex.: Neon). */
 const TRANSACTION_OPTIONS = { maxWait: 15000, timeout: 30000 };
+
+/**
+ * Consulta única com LEFT JOIN para listagens de corridas:
+ *  - Elimina múltiplos round-trips de `include` no banco remoto
+ *  - Omite campos geométricos volumosos (polyline, rota_caminho, corrida_rotas)
+ *    que não são utilizados nas telas de listagem nem confirmação de embarque.
+ */
+const SELECT_CORRIDA_LISTAGEM_SQL = Prisma.sql`
+  SELECT
+    c."id",
+    c."usuario_id" AS "usuarioId",
+    c."motorista_id" AS "motoristaId",
+    c."veiculo_id" AS "veiculoId",
+    c."origem_nome" AS "origemNome",
+    c."destino_nome" AS "destinoNome",
+    c."origem_lat" AS "origemLat",
+    c."origem_lng" AS "origemLng",
+    c."destino_lat" AS "destinoLat",
+    c."destino_lng" AS "destinoLng",
+    c."distancia_km" AS "distanciaKm",
+    c."duracao_min" AS "duracaoMin",
+    c."valor",
+    c."data_horario" AS "dataHorario",
+    c."status",
+    c."criada_em" AS "criadaEm",
+    c."atualizada_em" AS "atualizadaEm",
+    c."classe",
+    c."forma_pagamento" AS "formaPagamento",
+    c."embarque_motorista_confirmado" AS "embarqueMotoristaConfirmado",
+    c."embarque_motorista_em" AS "embarqueMotoristaEm",
+    c."embarque_passageiro_confirmado" AS "embarquePassageiroConfirmado",
+    c."embarque_passageiro_em" AS "embarquePassageiroEm",
+    c."situacao_motorista" AS "situacaoMotorista",
+    c."motorista_a_caminho_em" AS "motoristaACaminhoEm",
+    c."prazo_confirmacao_em" AS "prazoConfirmacaoEm",
+    c."motivo_cancelamento" AS "motivoCancelamento",
+    c."cancelado_por" AS "canceladoPor",
+    c."cancelada_em" AS "canceladaEm",
+    v."id" AS "v_id",
+    v."marca" AS "v_marca",
+    v."modelo" AS "v_modelo",
+    v."ano" AS "v_ano",
+    v."placa" AS "v_placa",
+    v."cor" AS "v_cor",
+    v."porte" AS "v_porte",
+    v."classe" AS "v_classe",
+    v."status" AS "v_status",
+    v."status_aprovacao" AS "v_statusAprovacao",
+    v."motorista_id" AS "v_motoristaId"
+  FROM "corridas" c
+  LEFT JOIN "veiculos" v ON v."id" = c."veiculo_id"
+`;
 
 /** Erro interno usado para abortar (rollback) uma transacao com um motivo de dominio. */
 class RollbackError extends Error {
@@ -29,7 +82,7 @@ class RollbackError extends Error {
 
 function formatarCorrida(cPrisma) {
   if (!cPrisma) return null;
-  
+
   return new Corrida({
     ...cPrisma,
     origemLat: paraNumeroOuNull(cPrisma.origemLat),
@@ -41,12 +94,62 @@ function formatarCorrida(cPrisma) {
     rotaCaminho: cPrisma.rotaCaminho || [],
     classe: cPrisma.classe || 'NORMAL',
     formaPagamento: cPrisma.formaPagamento || 'DINHEIRO',
-    
+
     // Mapeia rotas alternativas para ter as propriedades no formato da aplicação
-    rotasAlternativas: (cPrisma.rotasAlternativas || []).map(r => ({
+    rotasAlternativas: (cPrisma.rotasAlternativas || []).map((r) => ({
       ...r,
-      distanciaKm: r.distanciaKm != null ? paraNumeroOuNull(r.distanciaKm) : 0
-    }))
+      distanciaKm: r.distanciaKm != null ? paraNumeroOuNull(r.distanciaKm) : 0,
+    })),
+  });
+}
+
+function formatarCorridaListagemSql(row) {
+  if (!row) return null;
+  const veiculo = row.v_id ? {
+    id: row.v_id,
+    marca: row.v_marca,
+    modelo: row.v_modelo,
+    ano: row.v_ano,
+    placa: row.v_placa,
+    cor: row.v_cor,
+    porte: row.v_porte,
+    classe: row.v_classe,
+    status: row.v_status,
+    statusAprovacao: row.v_statusAprovacao,
+    motoristaId: row.v_motoristaId,
+  } : null;
+
+  return formatarCorrida({
+    id: row.id,
+    usuarioId: row.usuarioId,
+    motoristaId: row.motoristaId,
+    veiculoId: row.veiculoId,
+    veiculo,
+    origemNome: row.origemNome,
+    destinoNome: row.destinoNome,
+    origemLat: row.origemLat,
+    origemLng: row.origemLng,
+    destinoLat: row.destinoLat,
+    destinoLng: row.destinoLng,
+    distanciaKm: row.distanciaKm,
+    duracaoMin: row.duracaoMin,
+    valor: row.valor,
+    dataHorario: row.dataHorario,
+    status: row.status,
+    criadaEm: row.criadaEm,
+    atualizadaEm: row.atualizadaEm,
+    classe: row.classe,
+    formaPagamento: row.formaPagamento,
+    embarqueMotoristaConfirmado: row.embarqueMotoristaConfirmado,
+    embarqueMotoristaEm: row.embarqueMotoristaEm,
+    embarquePassageiroConfirmado: row.embarquePassageiroConfirmado,
+    embarquePassageiroEm: row.embarquePassageiroEm,
+    situacaoMotorista: row.situacaoMotorista,
+    motoristaACaminhoEm: row.motoristaACaminhoEm,
+    prazoConfirmacaoEm: row.prazoConfirmacaoEm,
+    motivoCancelamento: row.motivoCancelamento,
+    canceladoPor: row.canceladoPor,
+    canceladaEm: row.canceladaEm,
   });
 }
 
@@ -60,19 +163,21 @@ function rotaParaPrisma(rota, ordem, selecionada = false) {
     distanciaKm,
     distanciaMetros,
     polyline,
-    selecionada
+    selecionada,
   };
 }
 
 // ---------- CorridasRepository ----------
 
 class CorridasRepository {
-  async findAll() {
-    const corridas = await prisma.corrida.findMany({
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
-      orderBy: { criadaEm: 'desc' }
-    });
-    return corridas.map(formatarCorrida);
+  async findAll(status = null) {
+    const whereSql = status ? Prisma.sql`WHERE c."status" = ${status}` : Prisma.empty;
+    const rows = await prisma.$queryRaw`
+      ${SELECT_CORRIDA_LISTAGEM_SQL}
+      ${whereSql}
+      ORDER BY c."criada_em" DESC
+    `;
+    return rows.map(formatarCorridaListagemSql);
   }
 
   /** Consulta leve apenas com os campos necessários para agregações do Dashboard (sem polylines/joins). */
@@ -94,66 +199,86 @@ class CorridasRepository {
   }
 
   async findById(id) {
+    if (!ehUuid(id)) return undefined;
     const corrida = await prisma.corrida.findUnique({
       where: { id },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true }
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
     });
     return formatarCorrida(corrida) || undefined;
   }
 
   async findByUsuarioId(usuarioId) {
-    const corridas = await prisma.corrida.findMany({
-      where: { usuarioId },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
-      orderBy: { criadaEm: 'desc' }
-    });
-    return corridas.map(formatarCorrida);
+    if (!ehUuid(usuarioId)) return [];
+    const rows = await prisma.$queryRaw`
+      ${SELECT_CORRIDA_LISTAGEM_SQL}
+      WHERE c."usuario_id" = ${usuarioId}::uuid
+      ORDER BY c."criada_em" DESC
+    `;
+    return rows.map(formatarCorridaListagemSql);
   }
 
   async findByMotoristaId(motoristaId) {
-    const corridas = await prisma.corrida.findMany({
-      where: { motoristaId },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
-      orderBy: { criadaEm: 'desc' }
-    });
-    return corridas.map(formatarCorrida);
+    if (!ehUuid(motoristaId)) return [];
+    const rows = await prisma.$queryRaw`
+      ${SELECT_CORRIDA_LISTAGEM_SQL}
+      WHERE c."motorista_id" = ${motoristaId}::uuid
+      ORDER BY c."criada_em" DESC
+    `;
+    return rows.map(formatarCorridaListagemSql);
   }
 
   async findByMotoristaIdAndPeriodo(motoristaId, mes, ano) {
+    if (!ehUuid(motoristaId)) return [];
     // Para buscar por período exato em Prisma, usamos limites de datas
     const dataInicial = new Date(ano, mes - 1, 1);
     const dataFinal = new Date(ano, mes, 1); // 1o dia do próximo mês
 
+    // Projeção mínima para o relatório mensal (sem joins de rotas/veículo nem polylines)
     const corridas = await prisma.corrida.findMany({
       where: {
         motoristaId,
         dataHorario: {
           gte: dataInicial,
-          lt: dataFinal
-        }
+          lt: dataFinal,
+        },
       },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
-      orderBy: { dataHorario: 'desc' }
+      select: {
+        id: true,
+        origemNome: true,
+        destinoNome: true,
+        distanciaKm: true,
+        duracaoMin: true,
+        valor: true,
+        status: true,
+        dataHorario: true,
+      },
+      orderBy: { dataHorario: 'desc' },
     });
-    return corridas.map(formatarCorrida);
+    return corridas.map((c) => ({
+      ...c,
+      distanciaKm: c.distanciaKm != null ? paraNumeroOuNull(c.distanciaKm) : 0,
+      valor: c.valor != null ? paraNumeroOuNull(c.valor) : 0,
+    }));
   }
 
   async findByUsuarioIdAndStatus(usuarioId, status) {
-    const corridas = await prisma.corrida.findMany({
-      where: { usuarioId, status },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
-      orderBy: { criadaEm: 'desc' }
-    });
-    return corridas.map(formatarCorrida);
+    if (!ehUuid(usuarioId)) return [];
+    const rows = await prisma.$queryRaw`
+      ${SELECT_CORRIDA_LISTAGEM_SQL}
+      WHERE c."usuario_id" = ${usuarioId}::uuid AND c."status" = ${status}
+      ORDER BY c."criada_em" DESC
+    `;
+    return rows.map(formatarCorridaListagemSql);
   }
 
   async findByMotoristaIdAndStatus(motoristaId, status) {
-    const corridas = await prisma.corrida.findMany({
-      where: { motoristaId, status },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
-      orderBy: { criadaEm: 'desc' }
-    });
-    return corridas.map(formatarCorrida);
+    if (!ehUuid(motoristaId)) return [];
+    const rows = await prisma.$queryRaw`
+      ${SELECT_CORRIDA_LISTAGEM_SQL}
+      WHERE c."motorista_id" = ${motoristaId}::uuid AND c."status" = ${status}
+      ORDER BY c."criada_em" DESC
+    `;
+    return rows.map(formatarCorridaListagemSql);
   }
 
   /**
@@ -387,24 +512,24 @@ class CorridasRepository {
     const rotas = dados.rotasAlternativas || [];
     const rotasCriacao = rotas
       .map((r, i) => rotaParaPrisma(r, i, i === 0))
-      .filter(r => !!r.polyline);
+      .filter((r) => !!r.polyline);
 
     const novaCorrida = await prisma.corrida.create({
       data: {
         usuario: { connect: { id: dados.usuarioId } },
         motorista: dados.motoristaId ? { connect: { id: dados.motoristaId } } : undefined,
         veiculo: dados.veiculoId ? { connect: { id: dados.veiculoId } } : undefined,
-        
+
         origemNome: dados.origemNome,
         destinoNome: dados.destinoNome,
         origemLat: dados.origemLat ?? null, // ?? preserva 0 (coordenada valida)
         origemLng: dados.origemLng ?? null,
         destinoLat: dados.destinoLat ?? null,
         destinoLng: dados.destinoLng ?? null,
-        
+
         rotaCaminho: Array.isArray(dados.rotaCaminho) ? dados.rotaCaminho : [],
         polyline: dados.polyline || null,
-        
+
         distanciaKm: dados.distanciaKm,
         duracaoMin: dados.duracaoMin ?? null,
         valor: dados.valor, // Valor obrigatorio — deve ter sido calculado e validado pelo Service
@@ -412,18 +537,18 @@ class CorridasRepository {
         formaPagamento: dados.formaPagamento || 'DINHEIRO',
         dataHorario: dados.dataHorario ? new Date(dados.dataHorario) : new Date(),
         status: dados.status || 'SOLICITADA',
-        
+
         origemEndereco: {
-          create: enderecoParaPrisma(dados.origemEndereco, dados.origemLat, dados.origemLng)
+          create: enderecoParaPrisma(dados.origemEndereco, dados.origemLat, dados.origemLng),
         },
         destinoEndereco: {
-          create: enderecoParaPrisma(dados.destinoEndereco, dados.destinoLat, dados.destinoLng)
+          create: enderecoParaPrisma(dados.destinoEndereco, dados.destinoLat, dados.destinoLng),
         },
         rotasAlternativas: {
-          create: rotasCriacao
-        }
+          create: rotasCriacao,
+        },
       },
-      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true }
+      include: { rotasAlternativas: { orderBy: { ordem: 'asc' } }, veiculo: true },
     });
 
     return formatarCorrida(novaCorrida);

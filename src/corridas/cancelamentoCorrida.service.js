@@ -6,6 +6,7 @@ const { validarMotivoCancelamento } = require('./corridas.validador');
 const notificacoesService = require('../notificacoes/notificacoes.service');
 const { despacharNotificacaoSemFalhar } = require('../notificacoes/despachoNotificacao');
 const AppError = require('../utils/AppError');
+const { readCache } = require('../utils/readCache');
 const { ORIGEM_CANCELAMENTO, SITUACAO_MOTORISTA } = require('../utils/constants');
 
 /**
@@ -57,6 +58,11 @@ class CancelamentoCorridaService {
     }
 
     await this._notificarParteOposta(id, corrida, canceladoPor, motivoLimpo);
+    readCache.invalidarPrefixo('corridas:');
+    readCache.invalidarPrefixo('dashboard:');
+    readCache.invalidarPrefixo('veiculos:');
+    readCache.invalidarPrefixo('motoristas:');
+    readCache.invalidarPrefixo('notificacoes:');
     return corridaAtualizada;
   }
 

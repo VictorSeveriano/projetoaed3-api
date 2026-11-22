@@ -12,6 +12,9 @@ const AppError           = require('../utils/AppError');
 const { STATUS_CORRIDA } = require('../utils/constants');
 const { invalidarCacheUsuario } = require('../middlewares/auth.middleware');
 const { validarCoordenadasEnderecoOpcional } = require('../utils/inputValidators');
+const { readCache } = require('../utils/readCache');
+
+const CACHE_TTL_USUARIOS_MS = 20000;
 
 class UsuariosService {
   async buscarPorId(id, usuarioLogado = null) {
@@ -20,7 +23,7 @@ class UsuariosService {
         throw new AppError('Voce nao tem permissao para acessar os dados deste usuario.', 403);
       }
     }
-    
+
     const user = await authRepository.encontrarPorId(id);
     if (!user) throw new AppError('Usuário não encontrado.', 404);
     const { senha, ...dadosSeguros } = user;
@@ -28,24 +31,34 @@ class UsuariosService {
   }
 
   async listarTodos(filtros = {}) {
-    let lista = await authRepository.findAll();
+    const perfilNorm = filtros.perfil ? String(filtros.perfil).toUpperCase() : '';
+    const searchNorm = filtros.search ? String(filtros.search).trim() : '';
+    const chave = `usuarios:lista:${perfilNorm}:${searchNorm.toLowerCase()}`;
 
-    lista = lista.filter((u) => u.perfil !== 'INATIVO');
+    return readCache.obterOuCarregar(chave, CACHE_TTL_USUARIOS_MS, async () => {
+      let lista = await authRepository.findAll({
+        perfil: perfilNorm || undefined,
+        search: searchNorm || undefined,
+      });
 
-    if (filtros.perfil) {
-      lista = lista.filter((u) => u.perfil === filtros.perfil.toUpperCase());
-    }
+      // Filtro defensivo mantém compatibilidade com mocks em testes unitários
+      lista = lista.filter((u) => u.perfil !== 'INATIVO');
 
-    if (filtros.search) {
-      const termo = filtros.search.toLowerCase().trim();
-      lista = lista.filter((u) =>
-        (u.nome    && u.nome.toLowerCase().includes(termo)) ||
-        (u.usuario && u.usuario.toLowerCase().includes(termo))
-      );
-    }
+      if (perfilNorm) {
+        lista = lista.filter((u) => u.perfil === perfilNorm);
+      }
 
-    // Senha já foi removida pelo findAll (retorna sem senha)
-    return lista;
+      if (searchNorm) {
+        const termo = searchNorm.toLowerCase();
+        lista = lista.filter((u) =>
+          (u.nome    && u.nome.toLowerCase().includes(termo)) ||
+          (u.usuario && u.usuario.toLowerCase().includes(termo))
+        );
+      }
+
+      // Senha já foi removida pelo findAll (retorna sem senha)
+      return lista;
+    });
   }
 
   async removerComSeguranca(id, usuarioLogado = null) {
@@ -62,23 +75,25 @@ class UsuariosService {
       throw new AppError('Este usuário já foi removido do sistema e mantido apenas no histórico.', 409);
     }
 
-    const motorista = await prisma.motorista.findUnique({ where: { usuarioId: id } });
-    const veiculo = await prisma.veiculo.findFirst({ where: { motoristaId: id } });
-    const corridasAtivas = await prisma.corrida.count({
-      where: {
-        OR: [
-          { usuarioId: id },
-          { motoristaId: id },
-        ],
-        status: {
-          in: [
-            STATUS_CORRIDA.SOLICITADA,
-            STATUS_CORRIDA.CONFIRMADA,
-            STATUS_CORRIDA.EM_ANDAMENTO,
+    const [motorista, veiculo, corridasAtivas] = await Promise.all([
+      prisma.motorista.findUnique({ where: { usuarioId: id }, select: { id: true } }),
+      prisma.veiculo.findFirst({ where: { motoristaId: id }, select: { id: true } }),
+      prisma.corrida.count({
+        where: {
+          OR: [
+            { usuarioId: id },
+            { motoristaId: id },
           ],
+          status: {
+            in: [
+              STATUS_CORRIDA.SOLICITADA,
+              STATUS_CORRIDA.CONFIRMADA,
+              STATUS_CORRIDA.EM_ANDAMENTO,
+            ],
+          },
         },
-      },
-    });
+      }),
+    ]);
 
     if (motorista || veiculo || corridasAtivas > 0) {
       throw new AppError(
@@ -100,6 +115,7 @@ class UsuariosService {
       },
     });
     invalidarCacheUsuario(id);
+    readCache.invalidarPrefixo('usuarios:');
 
     return {
       id: atualizado.id,
@@ -148,6 +164,9 @@ class UsuariosService {
 
     const updated = await authRepository.update(id, dadosAtualizar);
     invalidarCacheUsuario(id);
+    readCache.invalidarPrefixo('usuarios:');
+    readCache.invalidarPrefixo('motoristas:');
+    readCache.invalidarPrefixo('veiculos:');
     const { senha, ...dadosSeguros } = updated;
     return dadosSeguros;
   }
@@ -167,7 +186,8 @@ class UsuariosService {
     }
 
     const novoUsuario = await authService.executarCadastro(dados, ['USUARIO', 'MOTORISTA', 'ADMINISTRADOR']);
-    
+    readCache.invalidarPrefixo('usuarios:');
+
     const { senha: _, ...dadosSeguros } = novoUsuario;
     return dadosSeguros;
   }

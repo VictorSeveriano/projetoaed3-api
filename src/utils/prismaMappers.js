@@ -1,5 +1,12 @@
 'use strict';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Verifica se uma string possui formato UUID válido antes de cast `::uuid` no PostgreSQL. */
+function ehUuid(valor) {
+  return typeof valor === 'string' && UUID_REGEX.test(valor);
+}
+
 /**
  * Converte Prisma Decimal (ou valor numérico/string) para number JS,
  * preservando 0 e retornando null para null/undefined.
@@ -42,9 +49,34 @@ function formatarEndereco(endereco) {
   };
 }
 
+/**
+ * Converte colunas prefixadas (e_*) retornadas por consulta SQL JOIN para o mesmo
+ * formato produzido por `formatarEndereco`.
+ */
+function formatarEnderecoSql(row) {
+  if (!row || !row.e_id) return null;
+  return formatarEndereco({
+    id:           row.e_id,
+    logradouro:   row.e_logradouro,
+    numero:       row.e_numero,
+    complemento:  row.e_complemento,
+    bairro:       row.e_bairro,
+    cidade:       row.e_cidade,
+    estado:       row.e_estado,
+    uf:           row.e_uf,
+    cep:          row.e_cep,
+    pais:         row.e_pais,
+    latitude:     row.e_latitude,
+    longitude:    row.e_longitude,
+    criadoEm:     row.e_criado_em,
+    atualizadoEm: row.e_atualizado_em,
+  });
+}
+
 module.exports = {
+  ehUuid,
   paraNumeroOuNull,
   enderecoParaPrisma,
   formatarEndereco,
+  formatarEnderecoSql,
 };
-

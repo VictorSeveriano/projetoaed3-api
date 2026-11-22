@@ -16,6 +16,7 @@ const expiracaoCorridaService = require('./expiracaoCorrida.service');
 const Corrida = require('./Corrida');
 const { buscarCorridaAutorizada } = require('./corridas.acesso');
 const AppError = require('../utils/AppError');
+const { readCache } = require('../utils/readCache');
 const { STATUS_CORRIDA, BUSINESS_TIMEZONE } = require('../utils/constants');
 const {
   TARIFAS_KM,
@@ -23,6 +24,16 @@ const {
   calcularValorCorrida,
   validarDadosCriacaoCorrida,
 } = require('./corridas.validador');
+
+const CACHE_TTL_CORRIDAS_MS = 15000;
+
+function invalidarCachesPosMutacaoCorrida() {
+  readCache.invalidarPrefixo('corridas:');
+  readCache.invalidarPrefixo('dashboard:');
+  readCache.invalidarPrefixo('veiculos:');
+  readCache.invalidarPrefixo('motoristas:');
+  readCache.invalidarPrefixo('notificacoes:');
+}
 
 class CorridasService {
   static get TARIFAS_KM() {
@@ -34,26 +45,45 @@ class CorridasService {
   }
 
   async listarTodas() {
-    await expiracaoCorridaService.cancelarCorridasExpiradas();
-    return corridasRepository.findAll();
+    if (typeof expiracaoCorridaService.dispararVerificacaoEmBackground === 'function') {
+      await expiracaoCorridaService.dispararVerificacaoEmBackground();
+    } else {
+      await expiracaoCorridaService.cancelarCorridasExpiradas();
+    }
+    return readCache.obterOuCarregar(
+      'corridas:todas',
+      CACHE_TTL_CORRIDAS_MS,
+      () => corridasRepository.findAll()
+    );
   }
 
   async listarPorPerfil(usuarioId, perfil, status) {
-    await expiracaoCorridaService.cancelarCorridasExpiradas();
-    if (perfil === 'ADMINISTRADOR') {
-      const todas = await corridasRepository.findAll();
-      return status ? todas.filter((c) => c.status === status) : todas;
+    if (typeof expiracaoCorridaService.dispararVerificacaoEmBackground === 'function') {
+      await expiracaoCorridaService.dispararVerificacaoEmBackground();
+    } else {
+      await expiracaoCorridaService.cancelarCorridasExpiradas();
     }
-    if (perfil === 'MOTORISTA') {
-      const motorista = await motoristasRepository.findByUsuarioId(usuarioId);
-      if (!motorista) return [];
+
+    const chave = `corridas:perfil:${perfil}:${usuarioId}:${status || 'ALL'}`;
+    return readCache.obterOuCarregar(chave, CACHE_TTL_CORRIDAS_MS, async () => {
+      if (perfil === 'ADMINISTRADOR') {
+        const todas = await corridasRepository.findAll(status || null);
+        return status ? todas.filter((c) => c.status === status) : todas;
+      }
+      if (perfil === 'MOTORISTA') {
+        const [motorista, corridas] = await Promise.all([
+          motoristasRepository.findByUsuarioId(usuarioId),
+          status
+            ? corridasRepository.findByMotoristaIdAndStatus(usuarioId, status)
+            : corridasRepository.findByMotoristaId(usuarioId),
+        ]);
+        if (!motorista) return [];
+        return corridas;
+      }
       return status
-        ? corridasRepository.findByMotoristaIdAndStatus(usuarioId, status)
-        : corridasRepository.findByMotoristaId(usuarioId);
-    }
-    return status
-      ? corridasRepository.findByUsuarioIdAndStatus(usuarioId, status)
-      : corridasRepository.findByUsuarioId(usuarioId);
+        ? corridasRepository.findByUsuarioIdAndStatus(usuarioId, status)
+        : corridasRepository.findByUsuarioId(usuarioId);
+    });
   }
 
   async buscarPorId(id, usuarioLogado = null) {
@@ -119,17 +149,19 @@ class CorridasService {
       status:             STATUS_CORRIDA.SOLICITADA,
     });
 
-    await this._notificarMotoristasElegiveis(novaCorrida);
+    await this._notificarMotoristasElegiveis(novaCorrida, veiculosDaClasse);
+    invalidarCachesPosMutacaoCorrida();
 
     return novaCorrida;
   }
 
   /** @private */
-  async _notificarMotoristasElegiveis(corrida) {
+  async _notificarMotoristasElegiveis(corrida, veiculosDaClassePreCarregados = null) {
     let usuarioIds = [];
     try {
-      const veiculosDisponiveis = await veiculosRepository.findDisponiveis();
-      const veiculosDaClasse = veiculosDisponiveis.filter((v) => v.classe === corrida.classe);
+      const veiculosDaClasse = Array.isArray(veiculosDaClassePreCarregados)
+        ? veiculosDaClassePreCarregados
+        : (await veiculosRepository.findDisponiveis()).filter((v) => v.classe === corrida.classe);
 
       usuarioIds = [...new Set(
         veiculosDaClasse
@@ -233,23 +265,25 @@ class CorridasService {
     }
     const corridaAtualizada = resultado.corrida;
 
-    await despacharNotificacaoSemFalhar(
-      'CorridasService',
-      `aceite ${corridaId}: atualizar acao do motorista`,
-      () => notificacoesService.atualizarAcaoMotorista(corridaId, motorista.usuarioId, 'ACEITA')
-    );
+    await Promise.all([
+      despacharNotificacaoSemFalhar(
+        'CorridasService',
+        `aceite ${corridaId}: atualizar acao do motorista`,
+        () => notificacoesService.atualizarAcaoMotorista(corridaId, motorista.usuarioId, 'ACEITA')
+      ),
+      despacharNotificacaoSemFalhar(
+        'CorridasService',
+        `aceite ${corridaId}: notificar passageiro`,
+        () =>
+          notificacoesService.notificarPassageiroAceite(corrida.usuarioId, {
+            corridaId,
+            origemNome:  corrida.origemNome,
+            destinoNome: corrida.destinoNome,
+          })
+      ),
+    ]);
 
-    await despacharNotificacaoSemFalhar(
-      'CorridasService',
-      `aceite ${corridaId}: notificar passageiro`,
-      () =>
-        notificacoesService.notificarPassageiroAceite(corrida.usuarioId, {
-          corridaId,
-          origemNome:  corrida.origemNome,
-          destinoNome: corrida.destinoNome,
-        })
-    );
-
+    invalidarCachesPosMutacaoCorrida();
     return corridaAtualizada;
   }
 
@@ -269,6 +303,7 @@ class CorridasService {
     if (!motorista) throw new AppError('Perfil de motorista nao encontrado.', 404);
 
     await notificacoesService.atualizarAcaoMotorista(corridaId, motorista.usuarioId, 'RECUSADA');
+    readCache.invalidarPrefixo('notificacoes:');
 
     return { message: 'Corrida recusada com sucesso.' };
   }

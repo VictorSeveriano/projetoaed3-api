@@ -52,15 +52,28 @@ const prismaOptions = {
 const prisma = new PrismaClient(prismaOptions);
 
 // Middleware de retry automático para absorver cold-start e reconexão de pool do Neon
+// + monitoramento leve de consultas lentas (sem expor parâmetros/dados sensíveis).
 if (typeof prisma.$use === 'function') {
   const MAX_TENTATIVAS = 3;
-  const BASE_DELAY_MS = process.env.NODE_ENV === 'test' ? 50 : 1200;
+  const BASE_DELAY_MS = process.env.NODE_ENV === 'test' ? 50 : 400;
+  const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS) || 1500;
 
   prisma.$use(async (params, next) => {
+    const medirPerf = process.env.NODE_ENV !== 'test';
+    const inicioNs = medirPerf ? process.hrtime.bigint() : null;
     let ultimaFalha;
     for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
       try {
-        return await next(params);
+        const resultado = await next(params);
+        if (medirPerf && inicioNs !== null) {
+          const duracaoMs = Number(process.hrtime.bigint() - inicioNs) / 1e6;
+          if (process.env.LOG_PERF === 'true' || duracaoMs >= SLOW_QUERY_MS) {
+            const alvo = params.model ? `${params.model}.${params.action}` : params.action;
+            const nivel = duracaoMs >= SLOW_QUERY_MS ? 'warn' : 'log';
+            console[nivel](`[DB Perf] ${alvo} (${duracaoMs.toFixed(1)}ms)`);
+          }
+        }
+        return resultado;
       } catch (err) {
         ultimaFalha = err;
         if (!ehFalhaTransitoriaDeConexao(err) || tentativa === MAX_TENTATIVAS) {

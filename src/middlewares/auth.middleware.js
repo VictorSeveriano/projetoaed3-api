@@ -13,7 +13,7 @@ const ehIndisponibilidadeDeBanco = (err) =>
   );
 
 // Cache curto em memória para evitar N consultas repetidas ao banco remoto em requisições paralelas
-const AUTH_USER_CACHE_TTL_MS = 10000;
+const AUTH_USER_CACHE_TTL_MS = 60000;
 const authUserCache = new Map();
 
 async function obterUsuarioAutenticado(id) {
@@ -32,7 +32,11 @@ async function obterUsuarioAutenticado(id) {
     }
   }
 
-  const promise = authRepository.encontrarPorId(id)
+  const buscarUsuario = typeof authRepository.encontrarResumoAuthPorId === 'function'
+    ? authRepository.encontrarResumoAuthPorId(id)
+    : authRepository.encontrarPorId(id);
+
+  const promise = buscarUsuario
     .then((user) => {
       if (user) {
         authUserCache.set(id, {

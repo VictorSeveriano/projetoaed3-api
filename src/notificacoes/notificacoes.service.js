@@ -9,13 +9,57 @@
 const notificacoesRepository = require('./notificacoes.repository');
 const AppError = require('../utils/AppError');
 const { ESTRATEGIAS_NOTIFICACAO } = require('./estrategiasNotificacao');
+const { readCache } = require('../utils/readCache');
+
+const CACHE_TTL_LISTA_MS = 15000;
+const CACHE_TTL_RESUMO_MS = 20000;
 
 class NotificacoesService {
+  _invalidarCacheDestinatario(destinatarioId) {
+    if (destinatarioId) {
+      readCache.invalidar(`notificacoes:lista:${destinatarioId}`);
+      readCache.invalidar(`notificacoes:resumo:${destinatarioId}`);
+    } else {
+      readCache.invalidarPrefixo('notificacoes:');
+    }
+  }
+
   async listar(destinatarioId) {
-    return notificacoesRepository.findByDestinatario(destinatarioId);
+    return readCache.obterOuCarregar(
+      `notificacoes:lista:${destinatarioId}`,
+      CACHE_TTL_LISTA_MS,
+      () => notificacoesRepository.findByDestinatario(destinatarioId)
+    );
+  }
+
+  async obterResumo(destinatarioId) {
+    return readCache.obterOuCarregar(
+      `notificacoes:resumo:${destinatarioId}`,
+      CACHE_TTL_RESUMO_MS,
+      async () => {
+        if (typeof notificacoesRepository.obterResumoNaoLidas === 'function') {
+          const resumo = await notificacoesRepository.obterResumoNaoLidas(destinatarioId);
+          if (resumo) return resumo;
+        }
+        const lista = (await notificacoesRepository.findByDestinatario(destinatarioId)) || [];
+        const porTipo = {};
+        let naoLidas = 0;
+        for (const n of lista) {
+          if (!n.lida) {
+            naoLidas++;
+            porTipo[n.tipo] = (porTipo[n.tipo] || 0) + 1;
+          }
+        }
+        return { naoLidas, porTipo };
+      }
+    );
   }
 
   async contarNaoLidas(destinatarioId) {
+    if (typeof notificacoesRepository.contarNaoLidas === 'function') {
+      const total = await notificacoesRepository.contarNaoLidas(destinatarioId);
+      if (typeof total === 'number') return total;
+    }
     const lista = await notificacoesRepository.findNaoLidas(destinatarioId);
     return lista.length;
   }
@@ -27,7 +71,9 @@ class NotificacoesService {
       throw new AppError(`Tipo de evento de notificação desconhecido: ${evento}.`, 500);
     }
     const payload = estrategia.construir(destinatarioId, dados);
-    return notificacoesRepository.create(payload);
+    const criada = await notificacoesRepository.create(payload);
+    readCache.invalidarPrefixo('notificacoes:');
+    return criada;
   }
 
   async notificarSolicitacaoMotorista(adminId, dados) {
@@ -51,7 +97,9 @@ class NotificacoesService {
    * Usado quando o motorista aceita (ACEITA) ou recusa (RECUSADA).
    */
   async atualizarAcaoMotorista(corridaId, motoristaUsuarioId, acao) {
-    return notificacoesRepository.atualizarAcaoMotorista(corridaId, motoristaUsuarioId, acao);
+    const res = await notificacoesRepository.atualizarAcaoMotorista(corridaId, motoristaUsuarioId, acao);
+    this._invalidarCacheDestinatario(motoristaUsuarioId);
+    return res;
   }
 
   /** Notifica o passageiro que sua corrida foi aceita pelo motorista. */
@@ -90,22 +138,27 @@ class NotificacoesService {
     const atualizada = await notificacoesRepository.marcarLida(id);
     // Repositorio retorna null quando o registro nao existe: nao reportar sucesso falso (ex.: perfil ADMIN)
     if (!atualizada) throw new AppError('Notificacao nao encontrada.', 404);
+    this._invalidarCacheDestinatario(atualizada.destinatarioId || usuarioLogado?.id);
     return atualizada;
   }
 
   async marcarTodasLidas(destinatarioId) {
-    return notificacoesRepository.marcarTodasLidas(destinatarioId);
+    const res = await notificacoesRepository.marcarTodasLidas(destinatarioId);
+    this._invalidarCacheDestinatario(destinatarioId);
+    return res;
   }
 
   async marcarSolicitacaoMotoristaLida(referenciaIds) {
     if (typeof notificacoesRepository.marcarLidaPorReferencia === 'function') {
       await notificacoesRepository.marcarLidaPorReferencia('SOLICITACAO_MOTORISTA', referenciaIds);
+      readCache.invalidarPrefixo('notificacoes:');
     }
   }
 
   async marcarSolicitacaoVeiculoLida(referenciaIds) {
     if (typeof notificacoesRepository.marcarLidaPorReferencia === 'function') {
       await notificacoesRepository.marcarLidaPorReferencia('SOLICITACAO_VEICULO', referenciaIds);
+      readCache.invalidarPrefixo('notificacoes:');
     }
   }
 }

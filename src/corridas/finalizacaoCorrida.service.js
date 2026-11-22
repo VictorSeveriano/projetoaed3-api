@@ -5,6 +5,7 @@ const { buscarCorridaAutorizada } = require('./corridas.acesso');
 const notificacoesService = require('../notificacoes/notificacoes.service');
 const { despacharNotificacaoSemFalhar } = require('../notificacoes/despachoNotificacao');
 const AppError = require('../utils/AppError');
+const { readCache } = require('../utils/readCache');
 
 /**
  * FinalizacaoCorridaService — Confirmação de pagamento presencial e
@@ -51,6 +52,11 @@ class FinalizacaoCorridaService {
       );
     }
 
+    readCache.invalidarPrefixo('corridas:');
+    readCache.invalidarPrefixo('dashboard:');
+    readCache.invalidarPrefixo('veiculos:');
+    readCache.invalidarPrefixo('motoristas:');
+    readCache.invalidarPrefixo('notificacoes:');
     return corridaFinalizada;
   }
 

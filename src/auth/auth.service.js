@@ -11,6 +11,7 @@
 const authRepository = require('./auth.repository');
 const motoristasRepository = require('../motoristas/motoristas.repository');
 const AppError = require('../utils/AppError');
+const { readCache } = require('../utils/readCache');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const {
@@ -212,6 +213,7 @@ class AuthService {
       await motoristasService.solicitar(novoUsuario.id, cnhNorm);
     }
 
+    readCache.invalidarPrefixo('usuarios:');
     return novoUsuario;
   }
 

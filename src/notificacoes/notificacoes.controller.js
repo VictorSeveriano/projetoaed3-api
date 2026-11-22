@@ -6,13 +6,24 @@ const { success }             = require('../utils/responseHelper');
 /** GET /api/notificacoes?destinatarioId= */
 const listar = async (req, res, next) => {
   try {
-    if (typeof expiracaoCorridaService.cancelarCorridasExpiradas === 'function') {
+    if (typeof expiracaoCorridaService.dispararVerificacaoEmBackground === 'function') {
+      await expiracaoCorridaService.dispararVerificacaoEmBackground();
+    } else if (typeof expiracaoCorridaService.cancelarCorridasExpiradas === 'function') {
       await expiracaoCorridaService.cancelarCorridasExpiradas();
     }
     const destinatarioId = req.usuario.id;
     const dados    = (await notificacoesService.listar(destinatarioId)) || [];
     const naoLidas = dados.filter((n) => !n.lida).length;
     return success(res, { notificacoes: dados, naoLidas }, 'Notificações listadas.');
+  } catch (err) { next(err); }
+};
+
+/** GET /api/notificacoes/resumo — Contadores leves de não lidas por tipo (badges da Sidebar) */
+const obterResumo = async (req, res, next) => {
+  try {
+    const destinatarioId = req.usuario.id;
+    const resumo = await notificacoesService.obterResumo(destinatarioId);
+    return success(res, resumo, 'Resumo de notificações obtido.');
   } catch (err) { next(err); }
 };
 
@@ -33,4 +44,4 @@ const marcarTodasLidas = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { listar, marcarLida, marcarTodasLidas };
+module.exports = { listar, obterResumo, marcarLida, marcarTodasLidas };

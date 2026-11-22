@@ -3,11 +3,14 @@
 const corridasRepository = require('./corridas.repository');
 const notificacoesService = require('../notificacoes/notificacoes.service');
 const { despacharNotificacaoSemFalhar } = require('../notificacoes/despachoNotificacao');
+const { readCache } = require('../utils/readCache');
 const {
   TOLERANCIA_CONFIRMACAO_EMBARQUE_MIN,
   ORIGEM_CANCELAMENTO,
   MOTIVO_CANCELAMENTO_AUSENCIA_CONFIRMACAO,
 } = require('../utils/constants');
+
+const INTERVALO_THROTTLE_EXPIRACAO_MS = 30 * 1000;
 
 /**
  * ExpiracaoCorridaService — Processamento de corridas expiradas sem aceite e
@@ -23,6 +26,19 @@ class ExpiracaoCorridaService {
   }
 
   /**
+   * Dispara a verificação de expiração sem bloquear requisições GET de leitura
+   * em ambientes de execução normal (dev/prod), preservando execução síncrona
+   * determinística em testes automatizados.
+   */
+  async dispararVerificacaoEmBackground(agora = new Date()) {
+    if (process.env.NODE_ENV === 'test') {
+      return this.cancelarCorridasExpiradas(agora);
+    }
+    this.cancelarCorridasExpiradas(agora).catch(() => {});
+    return [];
+  }
+
+  /**
    * Cancela automaticamente corridas SOLICITADAS (sem motorista) vencidas e
    * corridas CONFIRMADAS sem confirmação de embarque no prazo.
    */
@@ -33,38 +49,51 @@ class ExpiracaoCorridaService {
 
     if (!forcar && process.env.NODE_ENV !== 'test') {
       const ts = Date.now();
-      if (ts - this._ultimaVerificacaoExpiracaoMs < 10000) {
+      if (ts - this._ultimaVerificacaoExpiracaoMs < INTERVALO_THROTTLE_EXPIRACAO_MS) {
         return [];
       }
       this._ultimaVerificacaoExpiracaoMs = ts;
     }
 
     const execucao = (async () => {
-      let vencidas = [];
-      if (typeof corridasRepository.cancelarSolicitadasVencidas === 'function') {
-        try {
-          vencidas = (await corridasRepository.cancelarSolicitadasVencidas(agora)) || [];
-        } catch (e) {
-          console.error('[ExpiracaoCorridaService] Falha ao cancelar corridas expiradas:', e.message);
-        }
+      // Executa as duas varreduras independentes em paralelo para reduzir latência acumulada
+      const [vencidas, confirmadasCanceladas] = await Promise.all([
+        (async () => {
+          let lista = [];
+          if (typeof corridasRepository.cancelarSolicitadasVencidas === 'function') {
+            try {
+              lista = (await corridasRepository.cancelarSolicitadasVencidas(agora)) || [];
+            } catch (e) {
+              console.error('[ExpiracaoCorridaService] Falha ao cancelar corridas expiradas:', e.message);
+            }
 
-        for (const c of vencidas) {
-          if (c.usuarioId && typeof notificacoesService.notificarPassageiroExpiracao === 'function') {
-            await despacharNotificacaoSemFalhar(
-              'ExpiracaoCorridaService',
-              `expiracao ${c.id}: notificar passageiro`,
-              () =>
-                notificacoesService.notificarPassageiroExpiracao(c.usuarioId, {
-                  corridaId:   c.id,
-                  origemNome:  c.origemNome,
-                  destinoNome: c.destinoNome,
-                })
-            );
+            for (const c of lista) {
+              if (c.usuarioId && typeof notificacoesService.notificarPassageiroExpiracao === 'function') {
+                await despacharNotificacaoSemFalhar(
+                  'ExpiracaoCorridaService',
+                  `expiracao ${c.id}: notificar passageiro`,
+                  () =>
+                    notificacoesService.notificarPassageiroExpiracao(c.usuarioId, {
+                      corridaId:   c.id,
+                      origemNome:  c.origemNome,
+                      destinoNome: c.destinoNome,
+                    })
+                );
+              }
+            }
           }
-        }
-      }
+          return lista;
+        })(),
+        this._cancelarConfirmadasSemEmbarque(agora),
+      ]);
 
-      await this._cancelarConfirmadasSemEmbarque(agora);
+      if (vencidas.length > 0 || confirmadasCanceladas.length > 0) {
+        readCache.invalidarPrefixo('corridas:');
+        readCache.invalidarPrefixo('dashboard:');
+        readCache.invalidarPrefixo('veiculos:');
+        readCache.invalidarPrefixo('notificacoes:');
+        readCache.invalidarPrefixo('motoristas:relatorio:');
+      }
 
       return vencidas;
     })();

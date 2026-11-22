@@ -6,6 +6,12 @@ const dashboardService = require('./dashboard.service');
  * Todos os métodos são async para suportar o service PostgreSQL.
  */
 class DashboardController {
+  async getCompleto(req, res, next) {
+    try {
+      res.json({ success: true, data: await dashboardService.getCompleto() });
+    } catch (err) { next(err); }
+  }
+
   async getResumo(req, res, next) {
     try {
       res.json({ success: true, data: await dashboardService.getResumo() });

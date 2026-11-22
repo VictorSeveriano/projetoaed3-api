@@ -160,12 +160,15 @@ model Corrida {
   rotasAlternativas CorridaRota[]
 
   @@index([dataHorario], map: "idx_corridas_data_horario")
+  @@index([status, dataHorario], map: "idx_corridas_status_data_horario")
   @@index([motoristaId], map: "idx_corridas_motorista_id")
   @@index([motoristaId, status], map: "idx_corridas_motorista_status")
   @@index([motoristaId, dataHorario], map: "idx_corridas_motorista_data_horario")
+  @@index([motoristaId, criadaEm(sort: Desc)], map: "idx_corridas_motorista_criada_em")
   @@index([status], map: "idx_corridas_status")
   @@index([usuarioId], map: "idx_corridas_usuario_id")
   @@index([usuarioId, status], map: "idx_corridas_usuario_status")
+  @@index([usuarioId, criadaEm(sort: Desc)], map: "idx_corridas_usuario_criada_em")
   @@index([veiculoId], map: "idx_corridas_veiculo_id")
   @@map("corridas")
 }
@@ -207,6 +210,7 @@ model Notificacao {
   @@index([criadaEm(sort: Desc)], map: "idx_notificacoes_criada_em")
   @@index([destinatarioId], map: "idx_notificacoes_destinatario")
   @@index([destinatarioId, lida], map: "idx_notificacoes_lida")
+  @@index([destinatarioId, criadaEm(sort: Desc)], map: "idx_notificacoes_destinatario_criada_em")
   @@map("notificacoes")
 }
 

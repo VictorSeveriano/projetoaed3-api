@@ -5,6 +5,7 @@ const Corrida = require('./Corrida');
 const notificacoesService = require('../notificacoes/notificacoes.service');
 const { despacharNotificacaoSemFalhar } = require('../notificacoes/despachoNotificacao');
 const AppError = require('../utils/AppError');
+const { readCache } = require('../utils/readCache');
 const {
   EXTENSAO_A_CAMINHO_MIN,
   ORIGEM_CANCELAMENTO,
@@ -64,6 +65,8 @@ class ConfirmacaoEmbarqueService {
         if (!atualizada) throw erroConflito();
         await notificarPassageiro('Embarque confirmado',
           `O motorista confirmou o seu embarque na corrida de ${trajeto}. Boa viagem!`, 'confirmacao');
+        readCache.invalidarPrefixo('corridas:');
+        readCache.invalidarPrefixo('dashboard:');
         return atualizada;
       }
 
@@ -83,6 +86,7 @@ class ConfirmacaoEmbarqueService {
         }
         await notificarPassageiro('Motorista a caminho',
           `O motorista informou que está a caminho para realizar sua corrida (${trajeto}). Acompanhe as atualizações na área Minhas corridas.`, 'a caminho');
+        readCache.invalidarPrefixo('corridas:');
         return atualizada;
       }
 
@@ -110,6 +114,10 @@ class ConfirmacaoEmbarqueService {
         }
         await notificarPassageiro('Corrida cancelada pelo motorista',
           `O motorista cancelou a corrida de ${trajeto}. Motivo: ${motivoLimpo}`, 'cancelamento');
+        readCache.invalidarPrefixo('corridas:');
+        readCache.invalidarPrefixo('dashboard:');
+        readCache.invalidarPrefixo('veiculos:');
+        readCache.invalidarPrefixo('motoristas:');
         return cancelada;
       }
 
@@ -146,6 +154,7 @@ class ConfirmacaoEmbarqueService {
       if (!atualizada) throw erroConflito();
       await notificarMotorista('Embarque confirmado pelo passageiro',
         `O passageiro confirmou que embarcou na corrida de ${trajeto}.`, 'confirmacao passageiro');
+      readCache.invalidarPrefixo('corridas:');
       return atualizada;
     }
 
@@ -173,6 +182,10 @@ class ConfirmacaoEmbarqueService {
         }
         await notificarMotorista('Corrida cancelada pelo passageiro',
           `O passageiro cancelou a corrida de ${trajeto}. Motivo: ${motivoLimpo}`, 'cancelamento passageiro');
+        readCache.invalidarPrefixo('corridas:');
+        readCache.invalidarPrefixo('dashboard:');
+        readCache.invalidarPrefixo('veiculos:');
+        readCache.invalidarPrefixo('motoristas:');
         return cancelada;
       }
 
@@ -182,6 +195,7 @@ class ConfirmacaoEmbarqueService {
       if (!atualizada) throw erroConflito();
       await notificarMotorista('Passageiro ainda não embarcou',
         `O passageiro informou que ainda não embarcou na corrida de ${trajeto}.`, 'nao embarcou passageiro');
+      readCache.invalidarPrefixo('corridas:');
       return atualizada;
     }
 
