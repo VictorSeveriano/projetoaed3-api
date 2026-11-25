@@ -150,14 +150,17 @@ model Corrida {
   motivoCancelamento           String?   @map("motivo_cancelamento") @db.VarChar(500)
   canceladoPor                 String?   @map("cancelado_por") @db.VarChar(20)
   canceladaEm                  DateTime? @map("cancelada_em") @db.Timestamptz(6)
+  aceitaEm                     DateTime? @map("aceita_em") @db.Timestamptz(6)
+  finalizadaEm                 DateTime? @map("finalizada_em") @db.Timestamptz(6)
 
   // Relações
-  usuario           Usuario       @relation("CorridaUsuario", fields: [usuarioId], references: [id], onDelete: Restrict, map: "fk_corridas_usuario")
-  motorista         Usuario?      @relation("CorridaMotoristaUsuario", fields: [motoristaId], references: [id], onDelete: Restrict, map: "fk_corridas_motorista")
-  veiculo           Veiculo?      @relation("CorridaVeiculo", fields: [veiculoId], references: [id], onDelete: Restrict, map: "fk_corridas_veiculo")
-  origemEndereco    Endereco      @relation("OrigemEndereco", fields: [origemEnderecoId], references: [id], onDelete: Restrict, map: "fk_corridas_origem")
-  destinoEndereco   Endereco      @relation("DestinoEndereco", fields: [destinoEnderecoId], references: [id], onDelete: Restrict, map: "fk_corridas_destino")
+  usuario           Usuario         @relation("CorridaUsuario", fields: [usuarioId], references: [id], onDelete: Restrict, map: "fk_corridas_usuario")
+  motorista         Usuario?        @relation("CorridaMotoristaUsuario", fields: [motoristaId], references: [id], onDelete: Restrict, map: "fk_corridas_motorista")
+  veiculo           Veiculo?        @relation("CorridaVeiculo", fields: [veiculoId], references: [id], onDelete: Restrict, map: "fk_corridas_veiculo")
+  origemEndereco    Endereco        @relation("OrigemEndereco", fields: [origemEnderecoId], references: [id], onDelete: Restrict, map: "fk_corridas_origem")
+  destinoEndereco   Endereco        @relation("DestinoEndereco", fields: [destinoEnderecoId], references: [id], onDelete: Restrict, map: "fk_corridas_destino")
   rotasAlternativas CorridaRota[]
+  eventos           CorridaEvento[]
 
   @@index([dataHorario], map: "idx_corridas_data_horario")
   @@index([status, dataHorario], map: "idx_corridas_status_data_horario")
@@ -170,7 +173,27 @@ model Corrida {
   @@index([usuarioId, status], map: "idx_corridas_usuario_status")
   @@index([usuarioId, criadaEm(sort: Desc)], map: "idx_corridas_usuario_criada_em")
   @@index([veiculoId], map: "idx_corridas_veiculo_id")
+  @@index([canceladoPor], map: "idx_corridas_cancelado_por")
   @@map("corridas")
+}
+
+model CorridaEvento {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  corridaId         String   @map("corrida_id") @db.Uuid
+  tipo              String   @db.VarChar(50)
+  titulo            String   @db.VarChar(160)
+  descricao         String   @db.Text
+  autorId           String?  @map("autor_id") @db.Uuid
+  autorPerfil       String?  @map("autor_perfil") @db.VarChar(20)
+  autorNome         String?  @map("autor_nome") @db.VarChar(150)
+  metadados         Json?    @db.JsonB
+  chaveIdempotencia String?  @unique(map: "uq_corrida_eventos_chave_idempotencia") @map("chave_idempotencia") @db.VarChar(140)
+  criadoEm          DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+
+  corrida Corrida @relation(fields: [corridaId], references: [id], onDelete: Cascade, map: "fk_corrida_eventos_corrida")
+
+  @@index([corridaId, criadoEm(sort: Asc)], map: "idx_corrida_eventos_corrida_criado")
+  @@map("corrida_eventos")
 }
 
 model CorridaRota {

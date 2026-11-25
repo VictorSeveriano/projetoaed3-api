@@ -52,7 +52,16 @@ class CancelamentoCorridaService {
         : {}),
     };
 
-    const corridaAtualizada = await corridasRepository.transicionarComLiberacaoDeVeiculo(id, 'cancelar', metadados);
+    const corridaAtualizada = await corridasRepository.transicionarComLiberacaoDeVeiculo(
+      id,
+      'cancelar',
+      metadados,
+      {
+        autorId: usuarioLogado?.id || null,
+        autorPerfil: perfil || 'SISTEMA',
+        autorNome: usuarioLogado?.nome || null,
+      }
+    );
     if (!corridaAtualizada) {
       throw new AppError('O estado da corrida foi alterado por outra operacao. Atualize e tente novamente.', 409);
     }

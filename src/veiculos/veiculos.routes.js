@@ -1,10 +1,13 @@
 const express = require('express');
-const { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, atualizar, excluir } = require('./veiculos.controller');
+const {
+  listarAnalise, listarTodos, exportarRelatorio, cadastrar, aprovar, rejeitar, atualizar, excluir,
+} = require('./veiculos.controller');
 const { authMiddleware, requireAdmin } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
 router.get('/analise',        authMiddleware, requireAdmin, listarAnalise);
+router.get('/exportar',       authMiddleware, requireAdmin, exportarRelatorio);
 router.get('/',               authMiddleware, requireAdmin, listarTodos);
 router.post('/',              authMiddleware, cadastrar);
 router.patch('/:id/aprovar',  authMiddleware, requireAdmin, aprovar);

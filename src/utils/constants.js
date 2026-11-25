@@ -82,13 +82,43 @@ const TRANSICOES_CORRIDA = Object.freeze({
  */
 const BUSINESS_TIMEZONE = 'America/Sao_Paulo';
 
-// ---------- Confirmação de embarque ----------
+// ---------- Confirmação de embarque e Pontualidade ----------
+
+/**
+ * Tolerância (min) após o horário agendado (`dataHorario`) para classificar visualmente
+ * uma corrida ainda não embarcada (`SOLICITADA` ou `CONFIRMADA`) como "Em atraso".
+ * Configuração única centralizada — não altera o status de banco nem os prazos de expiração.
+ */
+const TOLERANCIA_ATRASO_MIN = 5;
 
 /** Tolerância (min) após o horário agendado para a confirmação de embarque antes do cancelamento automático. */
 const TOLERANCIA_CONFIRMACAO_EMBARQUE_MIN = 15;
 /** Extensão única (min) concedida quando o motorista informa "Estou a caminho". */
 const EXTENSAO_A_CAMINHO_MIN = 15;
 const LIMITES_MOTIVO_CANCELAMENTO = Object.freeze({ MIN: 5, MAX: 500 });
+
+const SITUACAO_PONTUALIDADE_CORRIDA = Object.freeze({
+  NO_HORARIO:          'NO_HORARIO',
+  AGUARDANDO_EMBARQUE: 'AGUARDANDO_EMBARQUE',
+  EM_ATRASO:           'EM_ATRASO',
+  EM_ANDAMENTO:        'EM_ANDAMENTO',
+  FINALIZADA:          'FINALIZADA',
+  CANCELADA:           'CANCELADA',
+  EXPIRADA:            'EXPIRADA',
+});
+
+const TIPO_EVENTO_CORRIDA = Object.freeze({
+  CORRIDA_SOLICITADA:             'CORRIDA_SOLICITADA',
+  CORRIDA_ACEITA:                 'CORRIDA_ACEITA',
+  MOTORISTA_A_CAMINHO:            'MOTORISTA_A_CAMINHO',
+  EMBARQUE_MOTORISTA_CONFIRMADO:  'EMBARQUE_MOTORISTA_CONFIRMADO',
+  CORRIDA_INICIADA:               'CORRIDA_INICIADA',
+  EMBARQUE_PASSAGEIRO_CONFIRMADO: 'EMBARQUE_PASSAGEIRO_CONFIRMADO',
+  PASSAGEIRO_NAO_EMBARCOU:        'PASSAGEIRO_NAO_EMBARCOU',
+  CORRIDA_CANCELADA:              'CORRIDA_CANCELADA',
+  CORRIDA_EXPIRADA:               'CORRIDA_EXPIRADA',
+  CORRIDA_FINALIZADA:             'CORRIDA_FINALIZADA',
+});
 
 const ORIGEM_CANCELAMENTO = Object.freeze({
   MOTORISTA:  'MOTORISTA',
@@ -108,9 +138,12 @@ const MOTIVO_CANCELAMENTO_SEM_MOTORISTA =
   'Cancelada automaticamente pelo sistema: nenhum motorista aceitou a corrida até o horário agendado.';
 
 module.exports = {
+  TOLERANCIA_ATRASO_MIN,
   TOLERANCIA_CONFIRMACAO_EMBARQUE_MIN,
   EXTENSAO_A_CAMINHO_MIN,
   LIMITES_MOTIVO_CANCELAMENTO,
+  SITUACAO_PONTUALIDADE_CORRIDA,
+  TIPO_EVENTO_CORRIDA,
   ORIGEM_CANCELAMENTO,
   SITUACAO_MOTORISTA,
   MOTIVO_CANCELAMENTO_AUSENCIA_CONFIRMACAO,

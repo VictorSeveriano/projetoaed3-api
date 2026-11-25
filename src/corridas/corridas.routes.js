@@ -1,6 +1,7 @@
 const express = require('express');
 const {
-  listarTodas, listarMinhas, buscarPorId, criar, calcularValorPrevia,
+  listarTodas, listarMinhas, consultarHistorico, exportarRelatorio, obterLinhaDoTempo,
+  buscarPorId, criar, calcularValorPrevia,
   aceitar, recusar, cancelar, confirmarPagamento, finalizar,
   embarqueMotorista, embarquePassageiro,
 } = require('./corridas.controller');
@@ -12,6 +13,9 @@ router.use(authMiddleware);
 
 router.get('/',                          requireAdmin, listarTodas);
 router.get('/minhas',                    listarMinhas);
+router.get('/historico',                 consultarHistorico);
+router.get('/exportar',                  exportarRelatorio);
+router.get('/:id/linha-do-tempo',        obterLinhaDoTempo);
 router.get('/:id',                       buscarPorId);
 router.post('/calcular-valor',           calcularValorPrevia);
 router.post('/',                         criar);

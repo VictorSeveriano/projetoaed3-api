@@ -34,7 +34,16 @@ class FinalizacaoCorridaService {
       }
     }
 
-    const corridaFinalizada = await corridasRepository.transicionarComLiberacaoDeVeiculo(id, 'finalizar');
+    const corridaFinalizada = await corridasRepository.transicionarComLiberacaoDeVeiculo(
+      id,
+      'finalizar',
+      {},
+      {
+        autorId: usuarioLogado?.id || null,
+        autorPerfil: usuarioLogado?.perfil || 'MOTORISTA',
+        autorNome: usuarioLogado?.nome || null,
+      }
+    );
     if (!corridaFinalizada) {
       throw new AppError('O estado da corrida foi alterado por outra operacao. Atualize e tente novamente.', 409);
     }

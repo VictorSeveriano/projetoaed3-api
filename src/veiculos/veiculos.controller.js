@@ -1,8 +1,31 @@
 'use strict';
 const veiculosService = require('./veiculos.service');
+const relatorioVeiculosService = require('./relatorioVeiculos.service');
 const { success }     = require('../utils/responseHelper');
 const AppError        = require('../utils/AppError');
 const auditoriaService = require('../auditoria/auditoria.service');
+const { enviarArquivoExportado } = require('../utils/exportacaoHelper');
+
+/** GET /api/veiculos/exportar — Admin: exporta veículos filtrados em CSV ou PDF */
+const exportarRelatorio = async (req, res, next) => {
+  try {
+    const arquivo = await relatorioVeiculosService.exportar(req.query, req.usuario);
+    await auditoriaService.registrar(
+      {
+        usuarioId: req.usuario?.id,
+        perfil: req.usuario?.perfil,
+        acao: 'EXPORTACAO_RELATORIO_VEICULOS',
+        modulo: 'VEICULOS',
+        resultado: 'SUCESSO',
+      },
+      req,
+      {
+        descricao: `Exportação de veículos (${String(req.query.formato || 'csv').toUpperCase()})`,
+      }
+    );
+    return enviarArquivoExportado(res, arquivo);
+  } catch (err) { next(err); }
+};
 
 /** GET /api/veiculos/analise — Admin: veículos PENDENTE */
 const listarAnalise = async (req, res, next) => {
@@ -90,4 +113,4 @@ const excluir = async (req, res, next) => {
   }
 };
 
-module.exports = { listarAnalise, listarTodos, cadastrar, aprovar, rejeitar, atualizar, excluir };
+module.exports = { listarAnalise, listarTodos, exportarRelatorio, cadastrar, aprovar, rejeitar, atualizar, excluir };

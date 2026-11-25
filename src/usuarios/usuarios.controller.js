@@ -1,7 +1,30 @@
 'use strict';
 const usuariosService = require('./usuarios.service');
+const relatorioUsuariosService = require('./relatorioUsuarios.service');
 const { success }     = require('../utils/responseHelper');
 const auditoriaService = require('../auditoria/auditoria.service');
+const { enviarArquivoExportado } = require('../utils/exportacaoHelper');
+
+/** GET /api/usuarios/exportar — Admin: exporta usuários filtrados em CSV ou PDF */
+const exportarRelatorio = async (req, res, next) => {
+  try {
+    const arquivo = await relatorioUsuariosService.exportar(req.query, req.usuario);
+    await auditoriaService.registrar(
+      {
+        usuarioId: req.usuario?.id,
+        perfil: req.usuario?.perfil,
+        acao: 'EXPORTACAO_RELATORIO_USUARIOS',
+        modulo: 'USUARIOS',
+        resultado: 'SUCESSO',
+      },
+      req,
+      {
+        descricao: `Exportação de usuários (${String(req.query.formato || 'csv').toUpperCase()})`,
+      }
+    );
+    return enviarArquivoExportado(res, arquivo);
+  } catch (err) { next(err); }
+};
 
 /** GET /api/usuarios/:id */
 const buscarPorId = async (req, res, next) => {
@@ -87,4 +110,4 @@ const listarCorridas = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { buscarPorId, listarCorridas, listarTodos, atualizar, remover, criar };
+module.exports = { buscarPorId, listarCorridas, listarTodos, exportarRelatorio, atualizar, remover, criar };

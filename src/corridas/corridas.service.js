@@ -129,6 +129,7 @@ class CorridasService {
 
     const novaCorrida = await corridasRepository.create({
       usuarioId,
+      ...(usuarioLogado.nome ? { autorNome: usuarioLogado.nome } : {}),
       origemNome:         v.origemNome,
       destinoNome:        v.destinoNome,
       origemLat:          v.origemLat,

@@ -1,5 +1,8 @@
 'use strict';
 const corridasService = require('./corridas.service');
+const historicoCorridasService = require('./historicoCorridas.service');
+const corridaEventosService = require('./corridaEventos.service');
+const relatorioCorridasService = require('./relatorioCorridas.service');
 const confirmacaoEmbarqueService = require('./confirmacaoEmbarque.service');
 const cancelamentoCorridaService = require('./cancelamentoCorrida.service');
 const finalizacaoCorridaService = require('./finalizacaoCorrida.service');
@@ -36,6 +39,63 @@ const listarMinhas = async (req, res, next) => {
     const corridas = await corridasService.listarPorPerfil(usuarioId, perfil, status || null);
     return success(res, corridas, 'Corridas listadas.');
   } catch (err) { next(err); }
+};
+
+/** GET /api/corridas/historico — Consulta paginada, filtrada e ordenada conforme permissões */
+const consultarHistorico = async (req, res, next) => {
+  try {
+    const resultado = await historicoCorridasService.consultar(req.query, req.usuario);
+    return res.status(200).json({
+      success: true,
+      data: resultado.data,
+      meta: resultado.meta,
+      message: 'Consulta de corridas realizada com sucesso.',
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** GET /api/corridas/exportar — Exportação de relatório em CSV ou PDF com filtros ativos */
+const exportarRelatorio = async (req, res, next) => {
+  try {
+    const { buffer, contentType, filename } = await relatorioCorridasService.exportar(
+      req.query,
+      req.usuario
+    );
+    await auditoriaService.registrar(
+      {
+        usuarioId: req.usuario?.id,
+        perfil: req.usuario?.perfil,
+        acao: 'EXPORTACAO_RELATORIO_CORRIDAS',
+        modulo: 'CORRIDAS',
+        resultado: 'SUCESSO',
+      },
+      req,
+      {
+        descricao: `Exportação de relatório (${String(req.query.formato || 'csv').toUpperCase()})`,
+      }
+    );
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).send(buffer);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** GET /api/corridas/:id/linha-do-tempo — Detalhes completos e linha do tempo sob demanda */
+const obterLinhaDoTempo = async (req, res, next) => {
+  try {
+    const detalhes = await corridaEventosService.obterDetalhesComLinhaDoTempo(
+      req.params.id,
+      req.usuario
+    );
+    return success(res, detalhes, 'Linha do tempo carregada com sucesso.');
+  } catch (err) {
+    next(err);
+  }
 };
 
 /** GET /api/corridas/:id */
@@ -190,6 +250,7 @@ const embarquePassageiro = async (req, res, next) => {
 
 module.exports = {
   embarqueMotorista, embarquePassageiro,
-  listarTodas, listarMinhas, buscarPorId, criar, calcularValorPrevia,
+  listarTodas, listarMinhas, consultarHistorico, exportarRelatorio, obterLinhaDoTempo,
+  buscarPorId, criar, calcularValorPrevia,
   aceitar, recusar, cancelar, confirmarPagamento, finalizar,
 };

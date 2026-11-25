@@ -171,6 +171,7 @@ class VeiculosRepository {
       select: {
         id: true,
         status: true,
+        classe: true,
         marca: true,
         modelo: true,
       },

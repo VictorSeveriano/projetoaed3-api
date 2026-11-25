@@ -82,10 +82,16 @@ class Corrida {
     this.motoristaACaminhoEm = dados.motoristaACaminhoEm ?? null;
     this.prazoConfirmacaoEm = dados.prazoConfirmacaoEm ?? null;
 
-    // Cancelamento
+    // Cancelamento e marcos temporais efetivos
     this.motivoCancelamento = dados.motivoCancelamento ?? null;
     this.canceladoPor = dados.canceladoPor ?? null;
     this.canceladaEm = dados.canceladaEm ?? null;
+    this.aceitaEm = dados.aceitaEm ?? null;
+    this.finalizadaEm = dados.finalizadaEm ?? null;
+
+    // Participantes opcionais enriquecidos em consultas de histórico/detalhes
+    if (dados.passageiro !== undefined) this.passageiro = dados.passageiro;
+    if (dados.motorista !== undefined) this.motorista = dados.motorista;
   }
 
   /** Garante uma instância de domínio `Corrida` a partir de um registro cru ou instância existente. */
@@ -218,6 +224,8 @@ class Corrida {
       motivoCancelamento: this.motivoCancelamento,
       canceladoPor: this.canceladoPor,
       canceladaEm: this.canceladaEm,
+      aceitaEm: this.aceitaEm,
+      finalizadaEm: this.finalizadaEm,
     };
   }
 }

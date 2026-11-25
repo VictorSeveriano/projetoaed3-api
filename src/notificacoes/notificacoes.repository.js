@@ -1,32 +1,41 @@
 'use strict';
 /**
- * notificacoes.repository.js — Repositório de notificações com Prisma ORM.
+ * notificacoes.repository.js — Repositório de notificações com Prisma ORM,
+ * validação de destinatário elegível, proteção contra concorrência e deduplicação.
  */
 
 const prisma = require('../database/prisma');
 const { ADMIN_ID } = require('../utils/constants');
+const { ehUuid } = require('../utils/prismaMappers');
+
+const PERFIS_ATIVOS_NOTIFICAVEIS = new Set(['ADMINISTRADOR', 'MOTORISTA', 'USUARIO']);
+
+/** Janela temporal para evitar duplicação de notificações idênticas não lidas em retries/concorrência. */
+const JANELA_DEDUPLICACAO_MS = 5 * 60 * 1000;
 
 class NotificacoesRepository {
   constructor() {
     this._adminIdResolvido = null;
+    /** Coalescência em memória para chamadas simultâneas idênticas no mesmo processo. */
+    this._criacoesEmAndamento = new Map();
   }
 
   /**
-   * Resolve o ID real do destinatário quando a notificação é endereçada ao ADMIN_ID simbólico.
-   * No PostgreSQL, o administrador possui UUID gerado pelo banco (perfil = 'ADMINISTRADOR').
+   * Resolve o ID real do destinatário e valida se a conta existe e possui perfil ativo
+   * compatível com o tipo de notificação emitida.
    */
-  async _resolverDestinatarioId(destinatarioId) {
+  async _resolverEValidarDestinatario(destinatarioId, tipoNotificacao) {
     if (!destinatarioId || destinatarioId === ADMIN_ID) {
       if (process.env.NODE_ENV !== 'test' && this._adminIdResolvido) {
         return this._adminIdResolvido;
       }
 
-      if (destinatarioId) {
+      if (destinatarioId && ehUuid(destinatarioId)) {
         const existeFixo = await prisma.usuario.findUnique({
           where: { id: destinatarioId },
-          select: { id: true },
+          select: { id: true, perfil: true },
         });
-        if (existeFixo) {
+        if (existeFixo && PERFIS_ATIVOS_NOTIFICAVEIS.has(existeFixo.perfil)) {
           this._adminIdResolvido = existeFixo.id;
           return existeFixo.id;
         }
@@ -43,7 +52,44 @@ class NotificacoesRepository {
       }
       return null;
     }
-    return destinatarioId;
+
+    if (!ehUuid(destinatarioId)) {
+      console.warn(`[NotificacoesRepository] Destinatário inválido ignorado para tipo=${tipoNotificacao}.`);
+      return null;
+    }
+
+    const destinatario = await prisma.usuario.findUnique({
+      where: { id: destinatarioId },
+      select: { id: true, perfil: true },
+    });
+
+    if (!destinatario || !PERFIS_ATIVOS_NOTIFICAVEIS.has(destinatario.perfil)) {
+      console.warn(
+        `[NotificacoesRepository] Notificação bloqueada: destinatário inexistente ou inativo (${destinatarioId}, tipo=${tipoNotificacao}).`
+      );
+      return null;
+    }
+
+    // Validação de permissão por perfil: ofertas NOVA_CORRIDA só podem ser destinadas a MOTORISTA
+    if (tipoNotificacao === 'NOVA_CORRIDA' && destinatario.perfil !== 'MOTORISTA') {
+      console.warn(
+        `[NotificacoesRepository] Permissão negada: NOVA_CORRIDA não pode ser enviada ao perfil ${destinatario.perfil}.`
+      );
+      return null;
+    }
+
+    // Solicitações administrativas só podem ser destinadas a ADMINISTRADOR
+    if (
+      (tipoNotificacao === 'SOLICITACAO_MOTORISTA' || tipoNotificacao === 'SOLICITACAO_VEICULO') &&
+      destinatario.perfil !== 'ADMINISTRADOR'
+    ) {
+      console.warn(
+        `[NotificacoesRepository] Permissão negada: ${tipoNotificacao} restrita a ADMINISTRADOR.`
+      );
+      return null;
+    }
+
+    return destinatario.id;
   }
 
   async findByDestinatario(destinatarioId) {
@@ -80,7 +126,6 @@ class NotificacoesRepository {
 
   /**
    * Agregação leve de notificações não lidas agrupadas por tipo para badges da Sidebar.
-   * Evita carregar corpo/mensagem e histórico de notificações já lidas.
    */
   async obterResumoNaoLidas(destinatarioId) {
     const grupos = await prisma.notificacao.groupBy({
@@ -102,28 +147,82 @@ class NotificacoesRepository {
     return { naoLidas, porTipo };
   }
 
+  /**
+   * Cria uma notificação validando destinatário elegível e prevenindo duplicações
+   * sob concorrência ou reexecução de tentativas transitórias.
+   */
   async create(dados) {
-    const destinatarioId = await this._resolverDestinatarioId(dados.destinatarioId);
+    const destinatarioId = await this._resolverEValidarDestinatario(dados.destinatarioId, dados.tipo);
     if (!destinatarioId) {
       return null;
     }
 
-    return prisma.notificacao.create({
-      data: {
-        destinatarioId,
-        tipo:           dados.tipo,
-        titulo:         dados.titulo,
-        mensagem:       dados.mensagem,
-        referenciaId:   dados.referenciaId   || null,
-        acaoMotorista:  dados.acaoMotorista  || null,
-      },
-    });
+    const referenciaId = dados.referenciaId && ehUuid(dados.referenciaId) ? dados.referenciaId : null;
+    const chaveCoalescencia = [
+      destinatarioId,
+      dados.tipo || '',
+      referenciaId || 'sem-ref',
+      dados.titulo || '',
+      dados.mensagem || '',
+    ].join('::');
+
+    if (this._criacoesEmAndamento.has(chaveCoalescencia)) {
+      return this._criacoesEmAndamento.get(chaveCoalescencia);
+    }
+
+    const promessaCriacao = (async () => {
+      // Deduplicação em banco para eventos referenciados (evita notificações duplicadas em retries/concorrência)
+      if (referenciaId) {
+        const criterioExistente =
+          dados.tipo === 'NOVA_CORRIDA'
+            ? {
+                destinatarioId,
+                tipo: 'NOVA_CORRIDA',
+                referenciaId,
+              }
+            : {
+                destinatarioId,
+                tipo: dados.tipo,
+                referenciaId,
+                titulo: dados.titulo,
+                mensagem: dados.mensagem,
+                lida: false,
+                criadaEm: { gte: new Date(Date.now() - JANELA_DEDUPLICACAO_MS) },
+              };
+
+        const jaExistente = await prisma.notificacao.findFirst({
+          where: criterioExistente,
+          orderBy: { criadaEm: 'desc' },
+        });
+        if (jaExistente) {
+          return jaExistente;
+        }
+      }
+
+      return prisma.notificacao.create({
+        data: {
+          destinatarioId,
+          tipo:          dados.tipo,
+          titulo:        dados.titulo,
+          mensagem:      dados.mensagem,
+          referenciaId,
+          acaoMotorista: dados.acaoMotorista || null,
+        },
+      });
+    })();
+
+    this._criacoesEmAndamento.set(chaveCoalescencia, promessaCriacao);
+    try {
+      return await promessaCriacao;
+    } finally {
+      if (this._criacoesEmAndamento.get(chaveCoalescencia) === promessaCriacao) {
+        this._criacoesEmAndamento.delete(chaveCoalescencia);
+      }
+    }
   }
 
   /**
-   * Atualiza o campo acaoMotorista na notificação NOVA_CORRIDA
-   * de um motorista específico para uma corrida específica.
-   * Usado quando o motorista aceita (ACEITA) ou recusa (RECUSADA).
+   * Atualiza o campo acaoMotorista na notificação NOVA_CORRIDA de um motorista específico.
    */
   async atualizarAcaoMotorista(corridaId, motoristaUsuarioId, acao) {
     try {
@@ -139,7 +238,6 @@ class NotificacoesRepository {
         },
       });
     } catch (error) {
-      // Não falhar o fluxo principal se a notificação não for encontrada
       console.error('[NotificacoesRepository] atualizarAcaoMotorista:', error.message);
     }
   }

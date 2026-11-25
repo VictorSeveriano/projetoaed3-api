@@ -1,25 +1,95 @@
 'use strict';
 /**
- * dashboard.service.js — Métricas e indicadores do sistema de corridas.
- * Todos os métodos são async para suportar o repositório PostgreSQL.
+ * dashboard.service.js — Métricas e indicadores do sistema de corridas,
+ * com suporte a recortes opcionais (período, status e classe) compartilhados
+ * entre a tela de Dashboard e a exportação de relatórios.
  */
 
 const prisma = require('../database/prisma');
 const corridasRepository = require('../corridas/corridas.repository');
 const veiculosRepository = require('../veiculos/veiculos.repository');
+const AppError = require('../utils/AppError');
 const { paraNumeroOuNull } = require('../utils/prismaMappers');
 const { readCache } = require('../utils/readCache');
+const { STATUS_CORRIDA, CLASSES_VALIDAS } = require('../utils/constants');
 
 const CACHE_TTL_MS = 30000;
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const STATUS_VALIDOS = Object.freeze(Object.values(STATUS_CORRIDA));
+
+function lerDataFiltroDashboard(valor, nomeCampo, fimDoDia = false) {
+  if (valor === undefined || valor === null || String(valor).trim() === '') return null;
+  const texto = String(valor).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    const sufixo = fimDoDia ? 'T23:59:59.999-03:00' : 'T00:00:00.000-03:00';
+    const d = new Date(`${texto}${sufixo}`);
+    if (Number.isNaN(d.getTime())) throw new AppError(`Data inválida em '${nomeCampo}'.`, 400);
+    return d;
+  }
+  const d = new Date(texto);
+  if (Number.isNaN(d.getTime())) throw new AppError(`Data inválida em '${nomeCampo}'.`, 400);
+  return d;
+}
 
 class DashboardService {
-  /**
-   * Invalida explicitamente o cache do dashboard após mutações em corridas ou veículos,
-   * garantindo consistência imediata sem sacrificar desempenho em leituras repetidas.
-   */
   invalidarCache() {
     readCache.invalidarPrefixo('dashboard:');
+  }
+
+  validarFiltros(query = {}) {
+    const dataInicio = lerDataFiltroDashboard(query.dataInicio, 'dataInicio', false);
+    const dataFim = lerDataFiltroDashboard(query.dataFim, 'dataFim', true);
+    if (dataInicio && dataFim && dataInicio.getTime() > dataFim.getTime()) {
+      throw new AppError('O período inicial (dataInicio) não pode ser posterior ao período final (dataFim).', 400);
+    }
+
+    let status = null;
+    if (query.status !== undefined && query.status !== null && String(query.status).trim() !== '') {
+      status = String(query.status).trim().toUpperCase();
+      if (!STATUS_VALIDOS.includes(status)) {
+        throw new AppError(`Status inválido para filtro do dashboard: '${query.status}'.`, 400);
+      }
+    }
+
+    let classe = null;
+    if (query.classe !== undefined && query.classe !== null && String(query.classe).trim() !== '') {
+      classe = String(query.classe).trim().toUpperCase();
+      if (!CLASSES_VALIDAS.includes(classe)) {
+        throw new AppError(`Classe inválida para filtro do dashboard: '${query.classe}'.`, 400);
+      }
+    }
+
+    return {
+      dataInicio,
+      dataFim,
+      status,
+      classe,
+      possuiFiltro: Boolean(dataInicio || dataFim || status || classe),
+    };
+  }
+
+  _aplicarFiltrosEmMemoria(corridas, carros, filtrosNorm) {
+    if (!filtrosNorm || !filtrosNorm.possuiFiltro) {
+      return { corridas, carros };
+    }
+
+    const corridasFiltradas = corridas.filter((c) => {
+      if (filtrosNorm.status && c.status !== filtrosNorm.status) return false;
+      if (filtrosNorm.classe && (c.classe || 'NORMAL') !== filtrosNorm.classe) return false;
+      if (filtrosNorm.dataInicio || filtrosNorm.dataFim) {
+        const t = new Date(c.dataHorario).getTime();
+        if (Number.isNaN(t)) return false;
+        if (filtrosNorm.dataInicio && t < filtrosNorm.dataInicio.getTime()) return false;
+        if (filtrosNorm.dataFim && t > filtrosNorm.dataFim.getTime()) return false;
+      }
+      return true;
+    });
+
+    const carrosFiltrados = filtrosNorm.classe
+      ? carros.filter((v) => !v.classe || v.classe === filtrosNorm.classe)
+      : carros;
+
+    return { corridas: corridasFiltradas, carros: carrosFiltrados };
   }
 
   _buscarCorridasFonte() {
@@ -35,8 +105,7 @@ class DashboardService {
   }
 
   /**
-   * Busca corridas e veículos resumidos em uma ÚNICA consulta SQL (1 único round-trip
-   * na conexão já aquecida, evitando abrir múltiplas conexões simultâneas no pooler remoto).
+   * Busca corridas e veículos resumidos em uma ÚNICA consulta SQL.
    */
   async _obterFontesUnificadas() {
     if (process.env.NODE_ENV === 'test' || typeof prisma.$queryRaw !== 'function') {
@@ -53,6 +122,7 @@ class DashboardService {
           COALESCE((
             SELECT json_agg(json_build_object(
               'status', c."status",
+              'classe', c."classe",
               'valor', c."valor",
               'dataHorario', c."data_horario",
               'origemNome', c."origem_nome",
@@ -65,6 +135,7 @@ class DashboardService {
             SELECT json_agg(json_build_object(
               'id', v."id",
               'status', v."status",
+              'classe', v."classe",
               'marca', v."marca",
               'modelo', v."modelo"
             ))
@@ -199,12 +270,18 @@ class DashboardService {
 
   /**
    * Retorna todas as métricas e séries do Dashboard em uma única chamada consolidada,
-   * reduzindo de 6 requisições HTTP paralelas para 1 (e apenas 1 consulta SQL).
+   * aplicando filtros opcionais (`dataInicio`, `dataFim`, `status`, `classe`).
    */
-  async getCompleto() {
-    const { corridas, carros } = await this._obterFontesUnificadas();
+  async getCompleto(queryFiltros = {}) {
+    const filtrosNorm = this.validarFiltros(queryFiltros);
+    const fontesBase = await this._obterFontesUnificadas();
+    const { corridas, carros } = this._aplicarFiltrosEmMemoria(
+      fontesBase.corridas,
+      fontesBase.carros,
+      filtrosNorm
+    );
 
-    return {
+    const resultado = {
       resumo:      this._calcularResumo(corridas, carros),
       faturamento: this._calcularFaturamento(corridas),
       corridas:    this._calcularCorridasPorMes(corridas),
@@ -212,6 +289,11 @@ class DashboardService {
       origens:     this._calcularOrigens(corridas),
       veiculos:    this._calcularVeiculos(corridas, carros),
     };
+
+    if (filtrosNorm.possuiFiltro) {
+      resultado.destinos = this._calcularDestinos(corridas);
+    }
+    return resultado;
   }
 
   async getResumo() {

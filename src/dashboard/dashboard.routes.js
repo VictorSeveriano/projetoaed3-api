@@ -6,6 +6,7 @@ const { authMiddleware, requireAdmin } = require('../middlewares/auth.middleware
 router.use(authMiddleware, requireAdmin);
 
 router.get('/completo',     dashboardController.getCompleto.bind(dashboardController));
+router.get('/exportar',     dashboardController.exportarRelatorio.bind(dashboardController));
 router.get('/resumo',       dashboardController.getResumo.bind(dashboardController));
 router.get('/corridas',     dashboardController.getCorridas.bind(dashboardController));
 router.get('/origens',      dashboardController.getOrigens.bind(dashboardController));
