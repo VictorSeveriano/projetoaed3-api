@@ -156,6 +156,13 @@ function validarDadosCriacaoCorrida(dados) {
 
   const dataHorario = ausente(dados.dataHorario) ? new Date() : lerDataHorario(dados.dataHorario);
 
+  // Rejeita datas no passado (tolerância de 60 s para latência de rede)
+  const agora = new Date();
+  const toleranciaMs = 60 * 1000;
+  if (dataHorario.getTime() < agora.getTime() - toleranciaMs) {
+    throw new AppError('Data ou Horario invalidos. Tente novamente!', 422);
+  }
+
   const origemLat  = latitudeOpcional(dados.origemLat, 'origemLat');
   const origemLng  = longitudeOpcional(dados.origemLng, 'origemLng');
   const destinoLat = latitudeOpcional(dados.destinoLat, 'destinoLat');
