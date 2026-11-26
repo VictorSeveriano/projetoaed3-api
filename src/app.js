@@ -18,27 +18,11 @@ const perfMonitor = require('./middlewares/perfMonitor');
 const app = express();
 
 // --- Configuracao CORS ---
-// Em producao: aceita a origem do frontend configurada em FRONTEND_URL.
-// Suporta multiplas origens separadas por virgula (ex: "https://a.vercel.app,https://b.vercel.app").
-// Se FRONTEND_URL nao estiver definida, aceita qualquer origem (*).
-function resolverOrigens() {
-  const raw = process.env.FRONTEND_URL || '';
-  if (!raw.trim()) return '*';
-  const origens = raw.split(',').map((o) => o.trim()).filter(Boolean);
-  if (origens.length === 1) return origens[0];
-  return origens;
-}
-
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' ? resolverOrigens() : true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
-  optionsSuccessStatus: 204,
+  origin: process.env.NODE_ENV === 'production' ? (process.env.FRONTEND_URL || '*') : true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   maxAge: 600,
 };
-
-// Responde ao preflight OPTIONS em todas as rotas antes de qualquer outro middleware
-app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(perfMonitor);
 

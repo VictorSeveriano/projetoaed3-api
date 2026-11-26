@@ -97,17 +97,6 @@ class AuthRepository {
     return formatarUsuarioSql(rows[0], true);
   }
 
-  async encontrarPorUsuarioInsensivel(usuario) {
-    if (!usuario) return null;
-    const termo = String(usuario).trim();
-    const rows = await prisma.$queryRaw`
-      ${SELECT_USUARIO_COM_ENDERECO}
-      WHERE LOWER(u."usuario") = LOWER(${termo})
-      LIMIT 1
-    `;
-    return formatarUsuarioSql(rows[0], true);
-  }
-
   async encontrarPorId(id) {
     if (!ehUuid(id)) return null;
     const rows = await prisma.$queryRaw`

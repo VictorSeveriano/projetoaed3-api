@@ -52,34 +52,4 @@ const cadastrar = async (req, res, next) => {
   }
 };
 
-const verificarIdentidade = async (req, res, next) => {
-  try {
-    const { usuario, cpf } = req.body;
-    const resultado = await authService.verificarIdentidade(usuario, cpf);
-    return success(res, resultado, 'Identidade verificada com sucesso.');
-  } catch (err) {
-    next(err);
-  }
-};
-
-const redefinirSenha = async (req, res, next) => {
-  try {
-    const { usuario, cpf, novaSenha } = req.body;
-    await authService.redefinirSenha(usuario, cpf, novaSenha);
-    await auditoriaService.registrar(
-      { acao: 'REDEFINICAO_SENHA', modulo: 'AUTH', resultado: 'SUCESSO' },
-      req,
-      { descricao: `Senha redefinida para o usuario: ${usuario}` }
-    );
-    return success(res, null, 'Senha redefinida com sucesso.');
-  } catch (err) {
-    await auditoriaService.registrar(
-      { acao: 'REDEFINICAO_SENHA_FALHA', modulo: 'AUTH', resultado: 'FALHA' },
-      req,
-      { descricao: `Falha ao redefinir senha do usuario: ${req.body.usuario}. Erro: ${err.message}`, statusHttp: err.statusCode || 500 }
-    );
-    next(err);
-  }
-};
-
-module.exports = { login, cadastrar, verificarDisponibilidadeCadastro, verificarIdentidade, redefinirSenha };
+module.exports = { login, cadastrar, verificarDisponibilidadeCadastro };

@@ -247,55 +247,6 @@ class AuthService {
       expiresIn: process.env.JWT_EXPIRES_IN || '8h',
     });
   }
-
-  /**
-   * Verifica se o par (usuario, cpf) pertence a um usuário ativo.
-   * Não retorna dados sensíveis — apenas confirma a identidade.
-   */
-  async verificarIdentidade(usuario, cpf) {
-    if (!usuario || !cpf) {
-      throw new AppError('Login e CPF sao obrigatorios.', 400);
-    }
-    const loginLimpo = String(usuario).trim();
-    const user = authRepository.encontrarPorUsuarioInsensivel
-      ? await authRepository.encontrarPorUsuarioInsensivel(loginLimpo)
-      : await authRepository.encontrarPorUsuario(loginLimpo);
-    if (!user) throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 400);
-    if (user.perfil === 'INATIVO') throw new AppError('Esta conta foi inativada.', 403);
-
-    const cpfNorm = normalizarCPF(cpf);
-    if (!cpfNorm || normalizarCPF(user.cpf) !== cpfNorm) {
-      throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 400);
-    }
-    return { valido: true, usuarioId: user.id };
-  }
-
-  /**
-   * Redefine a senha do usuário após validação de identidade (login + CPF).
-   */
-  async redefinirSenha(usuario, cpf, novaSenha) {
-    if (!usuario || !cpf || !novaSenha) {
-      throw new AppError('Login, CPF e nova senha sao obrigatorios.', 400);
-    }
-    const loginLimpo = String(usuario).trim();
-    const user = authRepository.encontrarPorUsuarioInsensivel
-      ? await authRepository.encontrarPorUsuarioInsensivel(loginLimpo)
-      : await authRepository.encontrarPorUsuario(loginLimpo);
-    if (!user) throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 400);
-    if (user.perfil === 'INATIVO') throw new AppError('Esta conta foi inativada.', 403);
-
-    const cpfNorm = normalizarCPF(cpf);
-    if (!cpfNorm || normalizarCPF(user.cpf) !== cpfNorm) {
-      throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 400);
-    }
-
-    const senhaError = validarSenha(novaSenha, user.nome);
-    if (senhaError) throw new AppError(senhaError, 400);
-
-    const senhaHash = await bcrypt.hash(novaSenha, 10);
-    await authRepository.atualizarSenha(user.id, senhaHash);
-    return { sucesso: true };
-  }
 }
 
 module.exports = new AuthService();
