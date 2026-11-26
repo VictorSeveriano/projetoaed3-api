@@ -247,6 +247,75 @@ class AuthService {
       expiresIn: process.env.JWT_EXPIRES_IN || '8h',
     });
   }
+
+  /**
+   * Valida login e CPF para recuperação de senha, garantindo que pertençam ao mesmo
+   * registro ativo no banco de dados sem revelar existência de contas de terceiros.
+   * @private
+   */
+  async _validarUsuarioECpfParaRedefinicao(usuario, cpf) {
+    const usuarioLimpo = typeof usuario === 'string' ? usuario.trim() : '';
+    const cpfTexto = typeof cpf === 'string' ? cpf : '';
+
+    if (!usuarioLimpo || !cpfTexto.trim()) {
+      throw new AppError('Usuário e CPF são obrigatórios.', 400);
+    }
+
+    const cpfNorm = normalizarCPF(cpfTexto);
+    if (!validarCPF(cpfNorm)) {
+      throw new AppError('CPF inválido.', 400);
+    }
+
+    const user = await authRepository.encontrarPorUsuario(usuarioLimpo);
+    if (!user || normalizarCPF(user.cpf) !== cpfNorm) {
+      throw new AppError(
+        'Não foi possível validar os dados informados. Verifique o usuário e o CPF.',
+        400
+      );
+    }
+
+    if (user.perfil === 'INATIVO') {
+      throw new AppError('Esta conta foi inativada e não permite redefinição de senha.', 403);
+    }
+
+    return user;
+  }
+
+  /**
+   * Valida a identidade do usuário por login e CPF para iniciar a redefinição de senha.
+   * Não retorna senha, hash, CPF ou dados pessoais desnecessários.
+   */
+  async verificarIdentidadeRedefinicao(usuario, cpf) {
+    await this._validarUsuarioECpfParaRedefinicao(usuario, cpf);
+    return { valido: true };
+  }
+
+  /**
+   * Redefine a senha revalidando obrigatoriamente login e CPF no banco de dados,
+   * aplicando validarSenha e persistindo novo hash bcrypt.
+   */
+  async redefinirSenha(usuario, cpf, novaSenha) {
+    const usuarioLimpo = typeof usuario === 'string' ? usuario.trim() : '';
+    const cpfTexto = typeof cpf === 'string' ? cpf : '';
+
+    if (!usuarioLimpo || !cpfTexto.trim() || typeof novaSenha !== 'string' || !novaSenha) {
+      throw new AppError('Usuário, CPF e nova senha são obrigatórios.', 400);
+    }
+
+    const user = await this._validarUsuarioECpfParaRedefinicao(usuarioLimpo, cpfTexto);
+
+    const senhaError = validarSenha(novaSenha, user.nome);
+    if (senhaError) {
+      throw new AppError(senhaError, 400);
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const senhaHash = await bcrypt.hash(novaSenha, salt);
+    await authRepository.atualizarSenha(user.id, senhaHash);
+    readCache.invalidarPrefixo('usuarios:');
+
+    return { redefinida: true };
+  }
 }
 
 module.exports = new AuthService();

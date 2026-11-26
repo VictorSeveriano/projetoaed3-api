@@ -270,4 +270,127 @@ describe('AuthService cadastro availability', () => {
     })).rejects.toMatchObject({ statusCode: 400 });
     expect(authRepository.create).not.toHaveBeenCalled();
   });
+
+  describe('recuperacao e redefinicao de senha (service)', () => {
+    const usuarioBase = {
+      id: 'usuario-rec-1',
+      nome: 'Ana Silva',
+      usuario: 'anasilva',
+      cpf: '52998224725',
+      email: 'ana@example.com',
+      celular: '27999998888',
+      perfil: 'USUARIO',
+      senha: '$2b$10$hashantigo0000000000000000000000000000000000000000000',
+    };
+
+    test('valida identidade com login correto e CPF com ou sem pontuacao sem expor dados pessoais', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue(usuarioBase);
+
+      const resSemMascara = await authService.verificarIdentidadeRedefinicao('anasilva', '52998224725');
+      expect(resSemMascara).toEqual({ valido: true });
+      expect(resSemMascara).not.toHaveProperty('cpf');
+      expect(resSemMascara).not.toHaveProperty('senha');
+      expect(resSemMascara).not.toHaveProperty('email');
+      expect(resSemMascara).not.toHaveProperty('usuarioId');
+
+      const resComMascara = await authService.verificarIdentidadeRedefinicao('  anasilva  ', '529.982.247-25');
+      expect(resComMascara).toEqual({ valido: true });
+      expect(authRepository.encontrarPorUsuario).toHaveBeenCalledWith('anasilva');
+    });
+
+    test('rejeita login inexistente e CPF divergente com a mesma resposta segura', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValueOnce(null);
+      let erroLoginInexistente;
+      try {
+        await authService.verificarIdentidadeRedefinicao('naoexiste', '52998224725');
+      } catch (err) {
+        erroLoginInexistente = err;
+      }
+
+      authRepository.encontrarPorUsuario.mockResolvedValueOnce(usuarioBase);
+      let erroCpfDivergente;
+      try {
+        await authService.verificarIdentidadeRedefinicao('anasilva', '123.456.789-01');
+      } catch (err) {
+        erroCpfDivergente = err;
+      }
+
+      expect(erroLoginInexistente).toMatchObject({ statusCode: 400 });
+      expect(erroCpfDivergente).toMatchObject({ statusCode: 400 });
+      expect(erroLoginInexistente.message).toBe(erroCpfDivergente.message);
+    });
+
+    test('rejeita conta INATIVO na verificacao e na redefinicao apenas quando login e CPF conferem', async () => {
+      const contaInativa = { ...usuarioBase, perfil: 'INATIVO' };
+
+      // CPF errado em conta INATIVO nao deve revelar que a conta esta inativa
+      authRepository.encontrarPorUsuario.mockResolvedValueOnce(contaInativa);
+      await expect(
+        authService.verificarIdentidadeRedefinicao('anasilva', '12345678901')
+      ).rejects.toMatchObject({ statusCode: 400 });
+
+      // Login + CPF corretos em conta INATIVO devem bloquear com 403
+      authRepository.encontrarPorUsuario.mockResolvedValueOnce(contaInativa);
+      await expect(
+        authService.verificarIdentidadeRedefinicao('anasilva', '529.982.247-25')
+      ).rejects.toMatchObject({ statusCode: 403 });
+
+      authRepository.encontrarPorUsuario.mockResolvedValueOnce(contaInativa);
+      await expect(
+        authService.redefinirSenha('anasilva', '52998224725', 'Nova#2026Forte')
+      ).rejects.toMatchObject({ statusCode: 403 });
+      expect(authRepository.atualizarSenha).not.toHaveBeenCalled();
+    });
+
+    test('rejeita campos obrigatorios ausentes e CPF em formato invalido', async () => {
+      await expect(authService.verificarIdentidadeRedefinicao('', '52998224725'))
+        .rejects.toMatchObject({ statusCode: 400 });
+      await expect(authService.verificarIdentidadeRedefinicao('anasilva', '   '))
+        .rejects.toMatchObject({ statusCode: 400 });
+      await expect(authService.verificarIdentidadeRedefinicao('anasilva', '111.111.111-11'))
+        .rejects.toMatchObject({ statusCode: 400, message: 'CPF inválido.' });
+      await expect(authService.verificarIdentidadeRedefinicao('anasilva', '12345'))
+        .rejects.toMatchObject({ statusCode: 400, message: 'CPF inválido.' });
+      await expect(authService.redefinirSenha('anasilva', '52998224725', ''))
+        .rejects.toMatchObject({ statusCode: 400 });
+
+      expect(authRepository.encontrarPorUsuario).not.toHaveBeenCalled();
+    });
+
+    test('rejeita nova senha fraca ou contendo nome do usuario sem atualizar o banco', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue(usuarioBase);
+
+      await expect(authService.redefinirSenha('anasilva', '52998224725', 'Curta1!'))
+        .rejects.toMatchObject({ statusCode: 400, message: 'A senha deve possuir no mínimo 8 caracteres.' });
+      await expect(authService.redefinirSenha('anasilva', '52998224725', 'SemNumero!'))
+        .rejects.toMatchObject({ statusCode: 400, message: 'A senha deve possuir pelo menos um número.' });
+      await expect(authService.redefinirSenha('anasilva', '52998224725', 'SemEspecial9'))
+        .rejects.toMatchObject({ statusCode: 400, message: 'A senha deve possuir pelo menos um caractere especial.' });
+      await expect(authService.redefinirSenha('anasilva', '52998224725', 'Silva#2026'))
+        .rejects.toMatchObject({ statusCode: 400, message: 'A senha não pode conter seu nome ou sobrenome.' });
+
+      expect(authRepository.atualizarSenha).not.toHaveBeenCalled();
+    });
+
+    test('atualiza senha com hash bcrypt e propaga falha de persistencia', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue(usuarioBase);
+      authRepository.atualizarSenha.mockResolvedValueOnce({ id: usuarioBase.id });
+
+      const resultado = await authService.redefinirSenha('anasilva', '529.982.247-25', 'Segura#2026');
+      expect(resultado).toEqual({ redefinida: true });
+      expect(authRepository.atualizarSenha).toHaveBeenCalledTimes(1);
+
+      const [idAtualizado, novoHash] = authRepository.atualizarSenha.mock.calls[0];
+      expect(idAtualizado).toBe(usuarioBase.id);
+      expect(novoHash).not.toBe('Segura#2026');
+      expect(novoHash).toMatch(/^\$2[aby]\$10\$/);
+      await expect(bcrypt.compare('Segura#2026', novoHash)).resolves.toBe(true);
+
+      // Falha na persistencia
+      authRepository.atualizarSenha.mockRejectedValueOnce(new Error('Falha de escrita no banco'));
+      await expect(
+        authService.redefinirSenha('anasilva', '52998224725', 'Outra#2026')
+      ).rejects.toThrow('Falha de escrita no banco');
+    });
+  });
 });

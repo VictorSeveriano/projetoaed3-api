@@ -52,4 +52,60 @@ const cadastrar = async (req, res, next) => {
   }
 };
 
-module.exports = { login, cadastrar, verificarDisponibilidadeCadastro };
+const verificarIdentidadeRedefinicao = async (req, res, next) => {
+  try {
+    const { usuario, cpf } = req.body || {};
+    const resultado = await authService.verificarIdentidadeRedefinicao(usuario, cpf);
+    await auditoriaService.registrar(
+      { acao: 'VERIFICACAO_IDENTIDADE_SENHA', modulo: 'AUTH', resultado: 'SUCESSO' },
+      req,
+      { descricao: 'Identidade validada para redefinição de senha.' }
+    );
+    return success(res, resultado, 'Identidade verificada com sucesso.');
+  } catch (err) {
+    await auditoriaService.registrar(
+      { acao: 'VERIFICACAO_IDENTIDADE_SENHA_FALHA', modulo: 'AUTH', resultado: 'FALHA' },
+      req,
+      {
+        descricao: err.isOperational ? err.message : 'Erro interno ao validar identidade para redefinição.',
+        statusHttp: err.statusCode || 500,
+      }
+    );
+    next(err);
+  }
+};
+
+const redefinirSenha = async (req, res, next) => {
+  try {
+    const { usuario, cpf, novaSenha } = req.body || {};
+    const resultado = await authService.redefinirSenha(usuario, cpf, novaSenha);
+    await auditoriaService.registrar(
+      { acao: 'REDEFINICAO_SENHA', modulo: 'AUTH', resultado: 'SUCESSO' },
+      req,
+      { descricao: 'Senha redefinida com sucesso.' }
+    );
+    return success(
+      res,
+      resultado,
+      'Senha redefinida com sucesso! Você já pode fazer login com sua nova senha.'
+    );
+  } catch (err) {
+    await auditoriaService.registrar(
+      { acao: 'REDEFINICAO_SENHA_FALHA', modulo: 'AUTH', resultado: 'FALHA' },
+      req,
+      {
+        descricao: err.isOperational ? err.message : 'Erro interno ao redefinir senha.',
+        statusHttp: err.statusCode || 500,
+      }
+    );
+    next(err);
+  }
+};
+
+module.exports = {
+  login,
+  cadastrar,
+  verificarDisponibilidadeCadastro,
+  verificarIdentidadeRedefinicao,
+  redefinirSenha,
+};
