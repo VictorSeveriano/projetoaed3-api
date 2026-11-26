@@ -247,7 +247,6 @@ class AuthService {
       expiresIn: process.env.JWT_EXPIRES_IN || '8h',
     });
   }
-}
 
   /**
    * Verifica se o par (usuario, cpf) pertence a um usuário ativo.

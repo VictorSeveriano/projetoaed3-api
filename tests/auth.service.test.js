@@ -270,4 +270,80 @@ describe('AuthService cadastro availability', () => {
     })).rejects.toMatchObject({ statusCode: 400 });
     expect(authRepository.create).not.toHaveBeenCalled();
   });
+
+  describe('verificarIdentidade e redefinirSenha', () => {
+    const usuarioAtivo = {
+      id: 'usuario-id',
+      nome: 'Ana Silva',
+      usuario: 'anasilva',
+      cpf: '52998224725',
+      perfil: 'USUARIO',
+    };
+
+    test('verificarIdentidade confirma identidade com usuario e CPF formatado validos', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue(usuarioAtivo);
+
+      await expect(
+        authService.verificarIdentidade('anasilva', '529.982.247-25')
+      ).resolves.toEqual({ valido: true, usuarioId: 'usuario-id' });
+      expect(authRepository.encontrarPorUsuario).toHaveBeenCalledWith('anasilva');
+    });
+
+    test('verificarIdentidade rejeita quando usuario nao existe', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue(null);
+
+      await expect(
+        authService.verificarIdentidade('inexistente', '52998224725')
+      ).rejects.toMatchObject({ statusCode: 401 });
+    });
+
+    test('verificarIdentidade rejeita quando CPF nao corresponde ao usuario', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue(usuarioAtivo);
+
+      await expect(
+        authService.verificarIdentidade('anasilva', '111.222.333-44')
+      ).rejects.toMatchObject({ statusCode: 401 });
+    });
+
+    test('verificarIdentidade rejeita conta INATIVO', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue({ ...usuarioAtivo, perfil: 'INATIVO' });
+
+      await expect(
+        authService.verificarIdentidade('anasilva', '52998224725')
+      ).rejects.toMatchObject({ statusCode: 403 });
+    });
+
+    test('redefinirSenha atualiza senha com hash bcrypt quando usuario, CPF e nova senha sao validos', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue(usuarioAtivo);
+      authRepository.atualizarSenha.mockResolvedValue({ id: 'usuario-id' });
+
+      await expect(
+        authService.redefinirSenha('anasilva', '529.982.247-25', 'NovaSenha@2026')
+      ).resolves.toEqual({ sucesso: true });
+
+      expect(authRepository.atualizarSenha).toHaveBeenCalledTimes(1);
+      const [idChamado, hashSalvo] = authRepository.atualizarSenha.mock.calls[0];
+      expect(idChamado).toBe('usuario-id');
+      expect(hashSalvo).toMatch(/^\$2[aby]\$\d{2}\$/);
+      await expect(bcrypt.compare('NovaSenha@2026', hashSalvo)).resolves.toBe(true);
+    });
+
+    test('redefinirSenha rejeita CPF divergente sem alterar senha', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue(usuarioAtivo);
+
+      await expect(
+        authService.redefinirSenha('anasilva', '99999999999', 'NovaSenha@2026')
+      ).rejects.toMatchObject({ statusCode: 401 });
+      expect(authRepository.atualizarSenha).not.toHaveBeenCalled();
+    });
+
+    test('redefinirSenha rejeita senha fraca sem alterar senha', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue(usuarioAtivo);
+
+      await expect(
+        authService.redefinirSenha('anasilva', '52998224725', '123')
+      ).rejects.toMatchObject({ statusCode: 400 });
+      expect(authRepository.atualizarSenha).not.toHaveBeenCalled();
+    });
+  });
 });
