@@ -256,14 +256,16 @@ class AuthService {
     if (!usuario || !cpf) {
       throw new AppError('Login e CPF sao obrigatorios.', 400);
     }
-    const user = await authRepository.encontrarPorUsuario(String(usuario).trim());
-    if (!user) throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 401);
+    const loginLimpo = String(usuario).trim();
+    const user = authRepository.encontrarPorUsuarioInsensivel
+      ? await authRepository.encontrarPorUsuarioInsensivel(loginLimpo)
+      : await authRepository.encontrarPorUsuario(loginLimpo);
+    if (!user) throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 400);
     if (user.perfil === 'INATIVO') throw new AppError('Esta conta foi inativada.', 403);
 
-    const { normalizarCPF } = require('../utils/validators');
     const cpfNorm = normalizarCPF(cpf);
-    if (user.cpf !== cpfNorm) {
-      throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 401);
+    if (!cpfNorm || normalizarCPF(user.cpf) !== cpfNorm) {
+      throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 400);
     }
     return { valido: true, usuarioId: user.id };
   }
@@ -275,14 +277,16 @@ class AuthService {
     if (!usuario || !cpf || !novaSenha) {
       throw new AppError('Login, CPF e nova senha sao obrigatorios.', 400);
     }
-    const user = await authRepository.encontrarPorUsuario(String(usuario).trim());
-    if (!user) throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 401);
+    const loginLimpo = String(usuario).trim();
+    const user = authRepository.encontrarPorUsuarioInsensivel
+      ? await authRepository.encontrarPorUsuarioInsensivel(loginLimpo)
+      : await authRepository.encontrarPorUsuario(loginLimpo);
+    if (!user) throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 400);
     if (user.perfil === 'INATIVO') throw new AppError('Esta conta foi inativada.', 403);
 
-    const { normalizarCPF } = require('../utils/validators');
     const cpfNorm = normalizarCPF(cpf);
-    if (user.cpf !== cpfNorm) {
-      throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 401);
+    if (!cpfNorm || normalizarCPF(user.cpf) !== cpfNorm) {
+      throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 400);
     }
 
     const senhaError = validarSenha(novaSenha, user.nome);

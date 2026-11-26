@@ -280,11 +280,14 @@ describe('AuthService cadastro availability', () => {
       perfil: 'USUARIO',
     };
 
-    test('verificarIdentidade confirma identidade com usuario e CPF formatado validos', async () => {
-      authRepository.encontrarPorUsuario.mockResolvedValue(usuarioAtivo);
+    test('verificarIdentidade confirma identidade com usuario e CPF formatado validos mesmo se banco tiver mascara', async () => {
+      authRepository.encontrarPorUsuario.mockResolvedValue({
+        ...usuarioAtivo,
+        cpf: '529.982.247-25',
+      });
 
       await expect(
-        authService.verificarIdentidade('anasilva', '529.982.247-25')
+        authService.verificarIdentidade('anasilva', '52998224725')
       ).resolves.toEqual({ valido: true, usuarioId: 'usuario-id' });
       expect(authRepository.encontrarPorUsuario).toHaveBeenCalledWith('anasilva');
     });
@@ -294,7 +297,7 @@ describe('AuthService cadastro availability', () => {
 
       await expect(
         authService.verificarIdentidade('inexistente', '52998224725')
-      ).rejects.toMatchObject({ statusCode: 401 });
+      ).rejects.toMatchObject({ statusCode: 400 });
     });
 
     test('verificarIdentidade rejeita quando CPF nao corresponde ao usuario', async () => {
@@ -302,7 +305,7 @@ describe('AuthService cadastro availability', () => {
 
       await expect(
         authService.verificarIdentidade('anasilva', '111.222.333-44')
-      ).rejects.toMatchObject({ statusCode: 401 });
+      ).rejects.toMatchObject({ statusCode: 400 });
     });
 
     test('verificarIdentidade rejeita conta INATIVO', async () => {
@@ -333,7 +336,7 @@ describe('AuthService cadastro availability', () => {
 
       await expect(
         authService.redefinirSenha('anasilva', '99999999999', 'NovaSenha@2026')
-      ).rejects.toMatchObject({ statusCode: 401 });
+      ).rejects.toMatchObject({ statusCode: 400 });
       expect(authRepository.atualizarSenha).not.toHaveBeenCalled();
     });
 
