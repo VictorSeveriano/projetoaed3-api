@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const rateLimit = require('express-rate-limit');
-const { login, cadastrar, verificarDisponibilidadeCadastro } = require('./auth.controller');
+const { login, cadastrar, verificarDisponibilidadeCadastro, verificarIdentidade, redefinirSenha } = require('./auth.controller');
 const { validateFields } = require('../middlewares/validate');
 
 const router = Router();
@@ -26,5 +26,7 @@ router.use(authLimiter);
 router.post('/login',    loginLimiter, validateFields(['usuario', 'senha']),          login);
 router.post('/verificar-disponibilidade-cadastro', validateFields(['cpf', 'email', 'perfil']), verificarDisponibilidadeCadastro);
 router.post('/cadastrar', validateFields(['nome', 'cpf', 'celular', 'email', 'senha', 'perfil']), cadastrar);
+router.post('/verificar-identidade', loginLimiter, validateFields(['usuario', 'cpf']), verificarIdentidade);
+router.post('/redefinir-senha',      loginLimiter, validateFields(['usuario', 'cpf', 'novaSenha']), redefinirSenha);
 
 module.exports = router;

@@ -249,4 +249,50 @@ class AuthService {
   }
 }
 
+  /**
+   * Verifica se o par (usuario, cpf) pertence a um usuário ativo.
+   * Não retorna dados sensíveis — apenas confirma a identidade.
+   */
+  async verificarIdentidade(usuario, cpf) {
+    if (!usuario || !cpf) {
+      throw new AppError('Login e CPF sao obrigatorios.', 400);
+    }
+    const user = await authRepository.encontrarPorUsuario(String(usuario).trim());
+    if (!user) throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 401);
+    if (user.perfil === 'INATIVO') throw new AppError('Esta conta foi inativada.', 403);
+
+    const { normalizarCPF } = require('../utils/validators');
+    const cpfNorm = normalizarCPF(cpf);
+    if (user.cpf !== cpfNorm) {
+      throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 401);
+    }
+    return { valido: true, usuarioId: user.id };
+  }
+
+  /**
+   * Redefine a senha do usuário após validação de identidade (login + CPF).
+   */
+  async redefinirSenha(usuario, cpf, novaSenha) {
+    if (!usuario || !cpf || !novaSenha) {
+      throw new AppError('Login, CPF e nova senha sao obrigatorios.', 400);
+    }
+    const user = await authRepository.encontrarPorUsuario(String(usuario).trim());
+    if (!user) throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 401);
+    if (user.perfil === 'INATIVO') throw new AppError('Esta conta foi inativada.', 403);
+
+    const { normalizarCPF } = require('../utils/validators');
+    const cpfNorm = normalizarCPF(cpf);
+    if (user.cpf !== cpfNorm) {
+      throw new AppError('Dados invalidos. Verifique o login e o CPF informados.', 401);
+    }
+
+    const senhaError = validarSenha(novaSenha, user.nome);
+    if (senhaError) throw new AppError(senhaError, 400);
+
+    const senhaHash = await bcrypt.hash(novaSenha, 10);
+    await authRepository.atualizarSenha(user.id, senhaHash);
+    return { sucesso: true };
+  }
+}
+
 module.exports = new AuthService();
